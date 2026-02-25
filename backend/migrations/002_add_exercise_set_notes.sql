@@ -1,0 +1,2 @@
+ALTER TABLE exercise_sets
+ADD COLUMN IF NOT EXISTS notes TEXT;

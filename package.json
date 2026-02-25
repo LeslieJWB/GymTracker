@@ -1,0 +1,23 @@
+{
+  "name": "gymtracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GymTracker workspace scripts",
+  "scripts": {
+    "mobile": "npm --prefix mobile run start",
+    "backend": "npm --prefix backend run start",
+    "migrate": "npm --prefix backend run migrate",
+    "typecheck": "npm --prefix backend run typecheck",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "type": "module",
+  "dependencies": {
+    "expo": "^54.0.33",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  }
+}
