@@ -16,6 +16,9 @@ async function ensureMigrationsTable() {
   `);
 }
 async function run() {
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "98d7c6" }, body: JSON.stringify({ sessionId: "98d7c6", runId: "initial", hypothesisId: "H4", location: "src/migrate.ts:run", message: "Migration run started", data: { nodeEnv: process.env.NODE_ENV ?? null, cwd: process.cwd() }, timestamp: Date.now() }) }).catch(() => { });
+    // #endregion
     await ensureMigrationsTable();
     const files = (await readdir(migrationsDir))
         .filter((name) => name.endsWith(".sql"))
@@ -59,6 +62,20 @@ async function run() {
 }
 run()
     .catch((error) => {
+    const errorData = error && typeof error === "object" ?
+        {
+            name: "name" in error ? String(error.name) : null,
+            message: "message" in error ? String(error.message) : String(error),
+            code: "code" in error ? String(error.code) : null,
+            errno: "errno" in error ? Number(error.errno) : null,
+            syscall: "syscall" in error ? String(error.syscall) : null,
+            address: "address" in error ? String(error.address) : null,
+            port: "port" in error ? Number(error.port) : null
+        }
+        : { value: String(error) };
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "98d7c6" }, body: JSON.stringify({ sessionId: "98d7c6", runId: "initial", hypothesisId: "H1_H2_H3", location: "src/migrate.ts:catch", message: "Migration failed before process exit", data: errorData, timestamp: Date.now() }) }).catch(() => { });
+    // #endregion
     console.error("Migration failed:", error);
     process.exit(1);
 })
