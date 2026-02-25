@@ -38,30 +38,6 @@ type FoodImagePayload = {
   dataBase64: string;
 };
 
-function logAgentEvent(
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data: unknown
-): void {
-  fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "7859ad"
-    },
-    body: JSON.stringify({
-      sessionId: "7859ad",
-      runId: "initial",
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-}
-
 function toDateString(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -116,28 +92,8 @@ export default function App() {
     if (session?.access_token) {
       headers.set("Authorization", `Bearer ${session.access_token}`);
     }
-    const requestUrl = `${normalizedUrl}${path}`;
-    // #region agent log
-    if (path.startsWith("/exercise-items") || path.startsWith("/records/by-date")) {
-      logAgentEvent("H5", "mobile/App.tsx:121", "apiJson request start", {
-        path,
-        requestUrl,
-        method: init?.method ?? "GET"
-      });
-    }
-    // #endregion
-    const response = await fetch(requestUrl, { ...init, headers });
+    const response = await fetch(`${normalizedUrl}${path}`, { ...init, headers });
     const raw = await response.text();
-    // #region agent log
-    if (path.startsWith("/exercise-items") || path.startsWith("/records/by-date")) {
-      logAgentEvent("H5", "mobile/App.tsx:132", "apiJson response received", {
-        path,
-        status: response.status,
-        ok: response.ok,
-        bodyLength: raw.length
-      });
-    }
-    // #endregion
     if (!response.ok) {
       if (response.status === 401) {
         signOut().catch(() => {});
@@ -147,39 +103,7 @@ export default function App() {
     if (!raw) {
       return undefined as T;
     }
-    const parsed = JSON.parse(raw) as T;
-    // #region agent log
-    if (path.startsWith("/exercise-items")) {
-      const rows = Array.isArray(parsed) ? (parsed as ExerciseItem[]) : [];
-      const sample = rows.slice(0, 5).map((item) => ({
-        id: item.id,
-        imageUrl: item.imageUrl
-      }));
-      logAgentEvent("H1", "mobile/App.tsx:151", "exercise-items payload sample", {
-        count: rows.length,
-        sample
-      });
-    }
-    // #endregion
-    // #region agent log
-    if (path.startsWith("/records/by-date")) {
-      const maybeRecord = parsed as Partial<RecordDetail> | null;
-      const exercises = maybeRecord?.exercises ?? [];
-      logAgentEvent("H2", "mobile/App.tsx:163", "records/by-date payload image stats", {
-        isNull: maybeRecord === null,
-        exerciseCount: exercises.length,
-        nonNullImageCount: exercises.filter(
-          (exercise) => Boolean((exercise as { exerciseItemImageUrl?: string | null }).exerciseItemImageUrl)
-        ).length,
-        sample: exercises.slice(0, 5).map((exercise) => ({
-          id: (exercise as { id?: string }).id,
-          exerciseItemId: (exercise as { exerciseItemId?: string }).exerciseItemId,
-          exerciseItemImageUrl: (exercise as { exerciseItemImageUrl?: string | null }).exerciseItemImageUrl
-        }))
-      });
-    }
-    // #endregion
-    return parsed;
+    return JSON.parse(raw) as T;
   }
 
   function resetExerciseState(): void {
@@ -193,27 +117,13 @@ export default function App() {
 
   function applyExerciseImageFallback(detail: RecordDetail, itemsSource: ExerciseItem[] = exerciseItems): RecordDetail {
     const imageByExerciseItemId = new Map(itemsSource.map((item) => [item.id, item.imageUrl ?? null]));
-    const withFallback = {
+    return {
       ...detail,
       exercises: detail.exercises.map((exercise) => ({
         ...exercise,
         exerciseItemImageUrl: exercise.exerciseItemImageUrl ?? imageByExerciseItemId.get(exercise.exerciseItemId) ?? null
       }))
     };
-    // #region agent log
-    logAgentEvent("H3", "mobile/App.tsx:193", "fallback image mapping results", {
-      exerciseCount: detail.exercises.length,
-      sourceItemCount: itemsSource.length,
-      beforeNullishCount: detail.exercises.filter((exercise) => exercise.exerciseItemImageUrl == null).length,
-      afterNullishCount: withFallback.exercises.filter((exercise) => exercise.exerciseItemImageUrl == null).length,
-      sample: withFallback.exercises.slice(0, 5).map((exercise) => ({
-        id: exercise.id,
-        exerciseItemId: exercise.exerciseItemId,
-        exerciseItemImageUrl: exercise.exerciseItemImageUrl
-      }))
-    });
-    // #endregion
-    return withFallback;
   }
 
   async function loadFoodByDate(userId: string, date: string): Promise<{
