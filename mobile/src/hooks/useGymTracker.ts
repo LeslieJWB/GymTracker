@@ -44,25 +44,6 @@ export function useGymTracker() {
     const response = await fetch(`${normalizedUrl}${path}`, init);
     const raw = await response.text();
     if (!response.ok) {
-      // #region agent log
-      fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          runId: "initial",
-          hypothesisId: "H3",
-          location: "mobile/src/hooks/useGymTracker.ts:49",
-          message: "apiJson non-OK response",
-          data: {
-            normalizedUrl,
-            path,
-            status: response.status,
-            responseBody: raw.slice(0, 300)
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
       throw new Error(raw || `HTTP ${response.status}`);
     }
     if (!raw) {
@@ -92,46 +73,10 @@ export function useGymTracker() {
 
   async function loadHomeHistory(): Promise<void> {
     if (!user) {
-      // #region agent log
-      fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          runId: "initial",
-          hypothesisId: "H2",
-          location: "mobile/src/hooks/useGymTracker.ts:99",
-          message: "loadHomeHistory skipped because user is null",
-          data: { hasUser: false },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
       return;
     }
     const fromValue = historyFrom.trim();
     const toValue = historyTo.trim();
-    // #region agent log
-    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        runId: "initial",
-        hypothesisId: "H1",
-        location: "mobile/src/hooks/useGymTracker.ts:117",
-        message: "loadHomeHistory input values",
-        data: {
-          userId: user.id,
-          historyFrom,
-          historyTo,
-          fromValue,
-          toValue,
-          fromPatternOk: DATE_PATTERN.test(fromValue),
-          toPatternOk: DATE_PATTERN.test(toValue)
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
     if (!DATE_PATTERN.test(fromValue) || !DATE_PATTERN.test(toValue)) {
       const fallbackFrom = daysAgo(60);
       const fallbackTo = todayDate();
@@ -149,25 +94,6 @@ export function useGymTracker() {
     }
     setLoading(true);
     try {
-      // #region agent log
-      fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          runId: "initial",
-          hypothesisId: "H3",
-          location: "mobile/src/hooks/useGymTracker.ts:155",
-          message: "Calling records endpoint",
-          data: {
-            normalizedUrl,
-            userId: user.id,
-            fromValue,
-            toValue
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
       const rows = await apiJson<RecordSummary[]>(
         `/records?userId=${encodeURIComponent(user.id)}&from=${encodeURIComponent(
           fromValue
