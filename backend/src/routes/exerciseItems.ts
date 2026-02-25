@@ -3,7 +3,24 @@ import { pool } from "../db.js";
 
 export const exerciseItemsRouter = Router();
 
-exerciseItemsRouter.get("/exercise-items", async (req, res) => {
+const SOURCE_IMAGE_BASE_URL =
+  "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises";
+
+function toExerciseImageUrl(imagePath: string | null): string | null {
+  if (!imagePath) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(imagePath)) {
+    return imagePath;
+  }
+  const normalized = imagePath
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/^exercises\//i, "");
+  return normalized ? `${SOURCE_IMAGE_BASE_URL}/${normalized}` : null;
+}
+
+exerciseItemsRouter.get("/exercise-items", async (_req, res) => {
   try {
     const result = await pool.query<{
       id: string;
@@ -22,9 +39,7 @@ exerciseItemsRouter.get("/exercise-items", async (req, res) => {
         id: row.id,
         name: row.name,
         muscleGroup: row.muscle_group,
-        imageUrl: row.image_path
-          ? `${req.protocol}://${req.get("host")}/assets/${row.image_path.replace(/^\//, "")}`
-          : null
+        imageUrl: toExerciseImageUrl(row.image_path)
       }))
     );
   } catch (error) {

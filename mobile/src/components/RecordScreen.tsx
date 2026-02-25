@@ -27,6 +27,30 @@ type FoodImageDraft = FoodImagePayload & {
   previewUri: string;
 };
 
+function logAgentEvent(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: unknown
+): void {
+  fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "7859ad"
+    },
+    body: JSON.stringify({
+      sessionId: "7859ad",
+      runId: "initial",
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+}
+
 function sanitizeIntegerInput(value: string): string {
   return value.replace(/\D+/g, "");
 }
@@ -575,7 +599,29 @@ export function RecordScreen({
                   >
                     <View style={styles.exerciseHeaderLeft}>
                       {item.exerciseItemImageUrl ? (
-                        <Image source={{ uri: item.exerciseItemImageUrl }} style={styles.exerciseThumb} />
+                        <Image
+                          source={{ uri: item.exerciseItemImageUrl }}
+                          style={styles.exerciseThumb}
+                          onLoadStart={() => {
+                            // #region agent log
+                            logAgentEvent("H4", "mobile/src/components/RecordScreen.tsx:605", "exercise image load start", {
+                              exerciseId: item.id,
+                              exerciseItemId: item.exerciseItemId,
+                              uri: item.exerciseItemImageUrl
+                            });
+                            // #endregion
+                          }}
+                          onError={(event) => {
+                            // #region agent log
+                            logAgentEvent("H4", "mobile/src/components/RecordScreen.tsx:614", "exercise image load error", {
+                              exerciseId: item.id,
+                              exerciseItemId: item.exerciseItemId,
+                              uri: item.exerciseItemImageUrl,
+                              error: event.nativeEvent.error
+                            });
+                            // #endregion
+                          }}
+                        />
                       ) : (
                         <View style={styles.exerciseThumbPlaceholder}>
                           <Text style={styles.exerciseThumbPlaceholderText}>No Image</Text>
