@@ -68,7 +68,7 @@ If running on a physical device, update backend URL in the app UI from `localhos
 1. In Render, create a new **Web Service** from your GitHub repository.
 2. Set:
    - Root directory: `backend`
-   - Build command: `npm ci`
+   - Build command: `npm ci && npm run build`
    - Pre-deploy command: `npm run migrate`
    - Start command: `npm run start`
    - Health check path: `/health`
