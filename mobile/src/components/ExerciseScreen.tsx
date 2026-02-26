@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import { Dispatch, SetStateAction, useState } from "react";
 import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { appStyles } from "../styles/appStyles";
 import { BackButton } from "./BackButton";
@@ -79,26 +79,6 @@ export function ExerciseScreen({
     addSet();
     setShowAddSetComposer(false);
   }
-
-  useEffect(() => {
-    // #region agent log
-    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        runId: "initial",
-        hypothesisId: "H3",
-        location: "mobile/src/components/ExerciseScreen.tsx:flatlist-render",
-        message: "Exercise screen FlatList rendered",
-        data: {
-          setsCount: exerciseDetail?.sets.length ?? 0,
-          flatListScrollEnabled: false
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-  }, [exerciseDetail?.sets.length]);
 
   return (
     <>

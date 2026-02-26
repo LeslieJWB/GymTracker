@@ -9,3 +9,9 @@ mobile/.expo
 backend/.env
 backend/data/workouts.json
 backend/public/exercises
+
+mobile/.env
+
+backend/.env
+
+.cursor/*

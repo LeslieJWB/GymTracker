@@ -18,45 +18,9 @@ import {
 
 export const recordsRouter = Router();
 
-function logAgentEvent(
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data: unknown
-): void {
-  fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      runId: "initial",
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-}
-
 recordsRouter.get("/records", async (req, res) => {
-  // #region agent log
-  logAgentEvent("H4", "backend/src/index.ts:227", "Records endpoint received query", {
-    query: req.query
-  });
-  // #endregion
-
   const parsed = dateRangeSchema.safeParse(req.query);
   if (!parsed.success) {
-    // #region agent log
-    logAgentEvent("H5", "backend/src/index.ts:231", "Records query validation failed", {
-      query: req.query,
-      issues: parsed.error.issues.map((issue) => ({
-        path: issue.path.join("."),
-        code: issue.code,
-        message: issue.message
-      }))
-    });
-    // #endregion
     return res.status(400).json({
       error: "userId is required and dates must be YYYY-MM-DD when provided"
     });
@@ -65,14 +29,6 @@ recordsRouter.get("/records", async (req, res) => {
   const { userId } = parsed.data;
   const from = parsed.data.from ?? daysAgo(60);
   const to = parsed.data.to ?? todayDate();
-
-  // #region agent log
-  logAgentEvent("H1", "backend/src/index.ts:255", "Records query validation succeeded", {
-    userId,
-    from,
-    to
-  });
-  // #endregion
 
   if (from > to) {
     return res.status(400).json({ error: "'from' cannot be after 'to'" });
