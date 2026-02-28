@@ -465,16 +465,16 @@ const styles = StyleSheet.create({
   segmentedOption: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: radius.pill,
     alignItems: "center"
   },
   segmentedOptionActive: {
     backgroundColor: "#FEFEFA",
     shadowColor: "#78786C",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1
   },
   segmentedText: {
     fontSize: 15,

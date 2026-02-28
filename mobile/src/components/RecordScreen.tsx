@@ -278,6 +278,8 @@ export function RecordScreen({
     : null;
   const normalizedSavedBodyWeight = savedBodyWeightKg === null ? null : Number(savedBodyWeightKg.toFixed(2));
   const bodyWeightDirty = normalizedBodyWeightDraft !== normalizedSavedBodyWeight;
+  const checkInSaving = savingRecordTheme || savingBodyWeight;
+  const checkInDirty = themeDirty || bodyWeightDirty;
   const totalCaloriesKcal = recordDetail?.totalCaloriesKcal ?? 0;
   const totalProteinG = recordDetail?.totalProteinG ?? 0;
   const foodEntryCount = recordDetail?.foodConsumptions.length ?? 0;
@@ -532,89 +534,91 @@ export function RecordScreen({
 
   return (
     <>
-      <View style={styles.themeCard}>
-        <View style={styles.themeHeaderRow}>
-          <Text style={styles.themeLabel}>Day Theme</Text>
+      <View style={styles.dailyMetricsSection}>
+        <View style={styles.dailyMetricsHeader}>
+          <Text style={styles.dailyMetricsTitle}>Daily Overview</Text>
+          <View style={styles.dailyMetricsBadge}>
+            <Text style={styles.dailyMetricsBadgeText}>Auto</Text>
+          </View>
+        </View>
+        <Text style={styles.dailyMetricsHint}>
+          These values are calculated from today's workout and food logs.
+        </Text>
+        <View style={styles.statsStrip}>
+          <View style={styles.statsItem}>
+            <Text style={styles.statsLabel}>Total Volume</Text>
+            <Text style={styles.statsValue}>{Math.round(totalVolume)} kg</Text>
+          </View>
+          <View style={styles.statsItem}>
+            <Text style={styles.statsLabel}>Completed Sets</Text>
+            <Text style={styles.statsValue}>{totalSetCount}</Text>
+          </View>
+          <View style={styles.statsItem}>
+            <Text style={styles.statsLabel}>Calories</Text>
+            <Text style={styles.statsValue}>{Math.round(totalCaloriesKcal)} kcal</Text>
+          </View>
+          <View style={styles.statsItem}>
+            <Text style={styles.statsLabel}>Protein</Text>
+            <Text style={styles.statsValue}>{Math.round(totalProteinG)} g</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.checkInCard}>
+        <View style={styles.checkInHeaderRow}>
+          <Text style={styles.checkInTitle}>Daily Check-in</Text>
           <View
             style={[
               styles.themeStatusBadge,
-              savingRecordTheme
+              checkInSaving
                 ? styles.themeStatusSavingBadge
-                : themeDirty
+                : checkInDirty
                   ? styles.themeStatusUnsavedBadge
                   : styles.themeStatusSavedBadge
             ]}
           >
-            <Text style={styles.themeStatusBadgeText}>{savingRecordTheme ? "Saving..." : themeDirty ? "Unsaved" : "Saved"}</Text>
+            <Text style={styles.themeStatusBadgeText}>{checkInSaving ? "Saving..." : checkInDirty ? "Unsaved" : "Saved"}</Text>
           </View>
         </View>
-        <TextInput
-          style={styles.themeInput}
-          value={recordThemeDraft}
-          onChangeText={setRecordThemeDraft}
-          onBlur={() => {
-            if (themeDirty && !loading && !savingRecordTheme && user) {
-              saveRecordTheme();
-            }
-          }}
-          placeholder="e.g. pull, push, leg"
-          placeholderTextColor="#78786C"
-          editable={Boolean(user) && !loading}
-          maxLength={30}
-        />
-      </View>
-
-      <View style={styles.statsStrip}>
-        <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Total Volume</Text>
-          <Text style={styles.statsValue}>{Math.round(totalVolume)} kg</Text>
-        </View>
-        <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Completed Sets</Text>
-          <Text style={styles.statsValue}>{totalSetCount}</Text>
-        </View>
-        <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Calories</Text>
-          <Text style={styles.statsValue}>{Math.round(totalCaloriesKcal)} kcal</Text>
-        </View>
-        <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Protein</Text>
-          <Text style={styles.statsValue}>{Math.round(totalProteinG)} g</Text>
-        </View>
-      </View>
-
-      <View style={styles.weightCard}>
-        <View style={styles.weightHeaderRow}>
-          <Text style={styles.weightCardTitle}>Today's Weight</Text>
-          <View
-            style={[
-              styles.themeStatusBadge,
-              savingBodyWeight
-                ? styles.themeStatusSavingBadge
-                : bodyWeightDirty
-                  ? styles.themeStatusUnsavedBadge
-                  : styles.themeStatusSavedBadge
-            ]}
-          >
-            <Text style={styles.themeStatusBadgeText}>{savingBodyWeight ? "Saving..." : bodyWeightDirty ? "Unsaved" : "Saved"}</Text>
-          </View>
-        </View>
-        <View style={styles.weightInputRow}>
+        <Text style={styles.checkInHint}>Auto-saves when you leave each field.</Text>
+        <View style={styles.checkInField}>
+          <Text style={styles.checkInFieldLabel}>Day Theme</Text>
           <TextInput
-            style={styles.weightInput}
-            value={bodyWeightDraft}
-            onChangeText={(value) => setBodyWeightDraft(sanitizeWeightInput(value))}
-            keyboardType="decimal-pad"
-            placeholder="0.0"
-            placeholderTextColor="#78786C"
-            editable={Boolean(user) && !loading && !savingBodyWeight}
+            style={styles.themeInput}
+            value={recordThemeDraft}
+            onChangeText={setRecordThemeDraft}
             onBlur={() => {
-              if (bodyWeightDirty && isBodyWeightDraftValid && !savingBodyWeight && !loading && user) {
-                saveBodyWeight();
+              if (themeDirty && !loading && !savingRecordTheme && user) {
+                saveRecordTheme();
               }
             }}
+            placeholder="e.g. pull, push, leg"
+            placeholderTextColor="#78786C"
+            editable={Boolean(user) && !loading}
+            maxLength={30}
           />
-          <Text style={styles.weightUnitText}>kg</Text>
+        </View>
+        <View style={styles.checkInField}>
+          <Text style={styles.checkInFieldLabel}>Today's Weight</Text>
+          <View style={styles.weightInputRow}>
+            <TextInput
+              style={styles.weightInput}
+              value={bodyWeightDraft}
+              onChangeText={(value) => setBodyWeightDraft(sanitizeWeightInput(value))}
+              keyboardType="decimal-pad"
+              placeholder="0.0"
+              placeholderTextColor="#78786C"
+              editable={Boolean(user) && !loading && !savingBodyWeight}
+              onBlur={() => {
+                if (bodyWeightDirty && isBodyWeightDraftValid && !savingBodyWeight && !loading && user) {
+                  saveBodyWeight();
+                }
+              }}
+            />
+            <View style={styles.weightUnitPill}>
+              <Text style={styles.weightUnitText}>kg</Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -1460,31 +1464,97 @@ export function RecordScreen({
 }
 
 const styles = StyleSheet.create({
+  dailyMetricsSection: {
+    marginTop: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    backgroundColor: "#F4F0E8",
+    padding: 12
+  },
+  dailyMetricsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  dailyMetricsTitle: {
+    color: "#2C2C24",
+    fontSize: 17,
+    fontWeight: "800"
+  },
+  dailyMetricsBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: "#E8EEE4"
+  },
+  dailyMetricsBadgeText: {
+    color: "#5D7052",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  dailyMetricsHint: {
+    marginTop: 4,
+    color: "#78786C",
+    fontSize: 12
+  },
   statsStrip: {
-    marginTop: 6,
+    marginTop: 10,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8
+    gap: 10
   },
   statsItem: {
     width: "48%",
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#DED8CF",
+    borderColor: "#D8D1C6",
     backgroundColor: "#FEFEFA",
-    paddingHorizontal: 10,
-    paddingVertical: 10
+    paddingHorizontal: 12,
+    paddingVertical: 12
   },
   statsLabel: {
-    color: "#78786C",
-    fontSize: 11,
-    fontWeight: "600"
+    color: "#4A4A40",
+    fontSize: 12,
+    fontWeight: "700"
   },
   statsValue: {
     marginTop: 4,
     color: "#2C2C24",
     fontSize: 20,
     fontWeight: "800"
+  },
+  checkInCard: {
+    marginTop: 8,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: "#FEFEFA",
+    borderWidth: 1,
+    borderColor: "#DED8CF"
+  },
+  checkInHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  checkInTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#2C2C24"
+  },
+  checkInHint: {
+    marginTop: 4,
+    color: "#78786C",
+    fontSize: 12
+  },
+  checkInField: {
+    marginTop: 10
+  },
+  checkInFieldLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#4A4A40",
+    marginBottom: 6
   },
   weightCard: {
     marginTop: 8,
@@ -1519,13 +1589,21 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: "#DED8CF",
-    borderRadius: 12,
+    borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#FEFEFA",
+    backgroundColor: "#FFFFFFCC",
     color: "#2C2C24",
     fontSize: 16,
     fontWeight: "700"
+  },
+  weightUnitPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    backgroundColor: "#F6F2EA",
+    paddingHorizontal: 12,
+    paddingVertical: 8
   },
   weightUnitText: {
     fontSize: 15,
@@ -1613,10 +1691,10 @@ const styles = StyleSheet.create({
   themeInput: {
     borderWidth: 1,
     borderColor: "#DED8CF",
-    borderRadius: 12,
+    borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    backgroundColor: "#FEFEFA"
+    backgroundColor: "#FFFFFFCC"
   },
   themeHint: {
     marginTop: 6,
@@ -1711,14 +1789,17 @@ const styles = StyleSheet.create({
   },
   addFoodButton: {
     marginTop: 10,
-    borderRadius: 10,
-    backgroundColor: "#2C2C24",
-    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#5D7052",
+    backgroundColor: "#5D7052",
+    paddingVertical: 12,
     alignItems: "center"
   },
   addFoodButtonText: {
     color: "#FEFEFA",
-    fontWeight: "800"
+    fontWeight: "800",
+    fontSize: 16
   },
   emptyStateCard: {
     borderRadius: 12,
