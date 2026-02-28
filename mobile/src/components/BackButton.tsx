@@ -25,15 +25,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderWidth: 1,
-    borderColor: "#D4DCE8"
+    borderColor: "#DED8CF"
   },
   buttonDisabled: {
     opacity: 0.5
   },
   icon: {
-    color: "#1E293B",
+    color: "#4A4A40",
     fontSize: 18,
     fontWeight: "800",
     marginRight: 1

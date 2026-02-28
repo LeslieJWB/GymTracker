@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { appStyles } from "../styles/appStyles";
+import { palette, radius, shadows, textStyles } from "../styles/theme";
 import { RecordSummary } from "../types/workout";
 import { todayDate } from "../utils/date";
 
@@ -174,7 +175,7 @@ export function CalendarScreen({
 
       <View style={styles.legendRow}>
         <View style={styles.legendBadge} />
-        <Text style={appStyles.emptyText}>Green means at least 1 completed set logged</Text>
+        <Text style={appStyles.emptyText}>Marked days mean at least 1 completed set logged</Text>
       </View>
       {loading ? <Text style={styles.loadingText}>Loading month data...</Text> : null}
     </View>
@@ -188,9 +189,7 @@ const styles = StyleSheet.create({
     paddingTop: 12
   },
   title: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#0F172A"
+    ...textStyles.headingMd
   },
   summaryCard: {
     marginTop: 8,
@@ -198,12 +197,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    backgroundColor: "#0F172A",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 9 },
-    elevation: 8
+    backgroundColor: palette.primary,
+    ...shadows.soft
   },
   monthHeader: {
     flexDirection: "row",
@@ -213,26 +208,26 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     fontSize: 18,
-    fontWeight: "700",
-    color: "#FFFFFF"
+    fontFamily: textStyles.headingSemiBold.fontFamily,
+    color: palette.primaryForeground
   },
   monthNavButton: {
     borderWidth: 1.5,
-    borderColor: "#334155",
-    borderRadius: 10,
+    borderColor: `${palette.primaryForeground}80`,
+    borderRadius: radius.md,
     width: 42,
     height: 36,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1E293B"
+    backgroundColor: "#FFFFFF22"
   },
   monthNavButtonDisabled: {
     opacity: 0.5
   },
   monthNavText: {
     fontSize: 18,
-    fontWeight: "700",
-    color: "#E2E8F0"
+    fontFamily: textStyles.bodyBold.fontFamily,
+    color: palette.primaryForeground
   },
   metricRow: {
     flexDirection: "row",
@@ -240,33 +235,30 @@ const styles = StyleSheet.create({
   },
   metricPill: {
     flex: 1,
-    backgroundColor: "#1E293B",
-    borderRadius: 14,
+    backgroundColor: "#FFFFFF22",
+    borderRadius: radius.md,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#334155"
+    borderColor: `${palette.primaryForeground}4D`
   },
   metricPillValue: {
-    color: "#F8FAFC",
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: "800"
+    fontFamily: textStyles.bodyBold.fontFamily
   },
   metricPillLabel: {
-    color: "#94A3B8",
+    color: "#F3F4F1",
     marginTop: 2,
-    fontSize: 12
+    fontSize: 12,
+    fontFamily: textStyles.body.fontFamily
   },
   calendarCard: {
     borderWidth: 0,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    borderRadius: radius.lg,
+    backgroundColor: palette.surface,
     padding: 12,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4
+    ...shadows.soft
   },
   weekRow: {
     flexDirection: "row",
@@ -275,8 +267,8 @@ const styles = StyleSheet.create({
   weekLabel: {
     flex: 1,
     textAlign: "center",
-    color: "#64748B",
-    fontWeight: "700",
+    color: palette.mutedForeground,
+    fontFamily: textStyles.bodyBold.fontFamily,
     fontSize: 12
   },
   grid: {
@@ -292,11 +284,11 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 1,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 14,
+    borderColor: `${palette.border}90`,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5EE",
     position: "relative"
   },
   blankCell: {
@@ -304,15 +296,15 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent"
   },
   dayCellMarked: {
-    backgroundColor: "#22C55E",
-    borderColor: "#16A34A"
+    backgroundColor: palette.primary,
+    borderColor: palette.primary
   },
   dayCellToday: {
-    borderColor: "#1D4ED8"
+    borderColor: palette.secondary
   },
   dayCellFuture: {
-    backgroundColor: "#EEF2F7",
-    borderColor: "#D8E0EA"
+    backgroundColor: palette.muted,
+    borderColor: palette.border
   },
   dayContent: {
     flex: 1,
@@ -322,30 +314,30 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   dayText: {
-    color: "#0F172A",
-    fontWeight: "700",
+    color: palette.foreground,
+    fontFamily: textStyles.bodyBold.fontFamily,
     lineHeight: 18,
     textAlign: "center",
     includeFontPadding: false
   },
   dayTextMarked: {
-    color: "#FFFFFF"
+    color: palette.primaryForeground
   },
   dayTextFuture: {
-    color: "#94A3B8"
+    color: palette.mutedForeground
   },
   themeText: {
     marginTop: 1,
     fontSize: 9,
-    color: "#475569",
-    fontWeight: "700",
+    color: palette.mutedForeground,
+    fontFamily: textStyles.bodySemiBold.fontFamily,
     textTransform: "capitalize"
   },
   themeTextMarked: {
-    color: "#E2FFE7"
+    color: palette.primaryForeground
   },
   themeTextFuture: {
-    color: "#94A3B8"
+    color: palette.mutedForeground
   },
   legendRow: {
     flexDirection: "row",
@@ -357,11 +349,12 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 999,
-    backgroundColor: "#22C55E",
+    backgroundColor: palette.primary,
     borderWidth: 0
   },
   loadingText: {
     marginTop: 8,
-    color: "#64748B"
+    color: palette.mutedForeground,
+    fontFamily: textStyles.body.fontFamily
   }
 });

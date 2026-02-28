@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { LineChart } from "react-native-chart-kit";
+import { palette, radius, shadows, textStyles, withPressScale } from "../styles/theme";
 import {
   BodyWeightRecord,
   ExerciseDailyMetricsPoint,
@@ -89,19 +90,19 @@ function SingleLineCard({
             withVerticalLines={false}
             bezier
             chartConfig={{
-              backgroundGradientFrom: "#FFFFFF",
-              backgroundGradientTo: "#FFFFFF",
+              backgroundGradientFrom: "#FEFEFA",
+              backgroundGradientTo: "#FEFEFA",
                 decimalPlaces: decimalPlaces ?? 0,
               color: () => lineColor,
-              labelColor: () => "#64748B",
+              labelColor: () => palette.mutedForeground,
               propsForDots: {
                 r: "3",
                 strokeWidth: "1",
                 stroke: lineColor,
-                fill: "#FFFFFF"
+                fill: "#FEFEFA"
               },
               propsForBackgroundLines: {
-                stroke: "#EEF2F7"
+                stroke: "#EAE4DC"
               }
             }}
             style={styles.lineChart}
@@ -198,7 +199,7 @@ export function StatisticsScreen({
           onRefresh={() => {
             handlePullToRefresh().catch(() => {});
           }}
-          tintColor="#1D4ED8"
+          tintColor={palette.primary}
         />
       }
     >
@@ -212,7 +213,7 @@ export function StatisticsScreen({
         emptyText="No weight records yet."
         unitSuffix=" kg"
         decimalPlaces={1}
-        lineColor="#1D4ED8"
+        lineColor={palette.primary}
         points={weightRecords.map((row) => ({ date: row.date, value: row.weightKg }))}
       />
 
@@ -239,9 +240,10 @@ export function StatisticsScreen({
               filteredExerciseItems.map((item) => (
                 <Pressable
                   key={item.id}
-                  style={[
+                  style={({ pressed }) => [
                     styles.searchResultRow,
-                    selectedExerciseItemId === item.id ? styles.searchResultRowActive : null
+                    selectedExerciseItemId === item.id ? styles.searchResultRowActive : null,
+                    withPressScale(pressed)
                   ]}
                   onPress={() => {
                     selectExerciseForMetrics(item.id);
@@ -273,7 +275,7 @@ export function StatisticsScreen({
         title="Exercise Daily Volume"
         emptyText="No completed volume records for selected exercise."
         unitSuffix=""
-        lineColor="#0EA5E9"
+        lineColor={palette.secondary}
         points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.dailyVolume }))}
       />
       <SingleLineCard
@@ -281,14 +283,14 @@ export function StatisticsScreen({
         emptyText="No top set weight records for selected exercise."
         unitSuffix=" kg"
         decimalPlaces={1}
-        lineColor="#7C3AED"
+        lineColor={palette.primary}
         points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetWeight }))}
       />
       <SingleLineCard
         title="Exercise Top Set Volume"
         emptyText="No top set volume records for selected exercise."
         unitSuffix=""
-        lineColor="#F97316"
+        lineColor={palette.secondary}
         points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetVolume }))}
       />
 
@@ -296,14 +298,14 @@ export function StatisticsScreen({
         title="Calories Trend"
         emptyText="No calorie records yet."
         unitSuffix=" kcal"
-        lineColor="#EF4444"
+        lineColor={palette.destructive}
         points={nutritionCaloriesPoints}
       />
       <SingleLineCard
         title="Protein Trend"
         emptyText="No protein records yet."
         unitSuffix=" g"
-        lineColor="#16A34A"
+        lineColor={palette.primary}
         points={nutritionProteinPoints}
       />
     </ScrollView>
@@ -323,40 +325,39 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#0F172A"
+    ...textStyles.headingMd
   },
   refreshHintText: {
     marginTop: -4,
-    color: "#64748B",
+    color: palette.mutedForeground,
     fontSize: 12,
-    fontWeight: "600"
+    fontFamily: textStyles.bodySemiBold.fontFamily
   },
   chartCard: {
-    borderRadius: 16,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-    padding: 12
+    borderColor: `${palette.border}80`,
+    backgroundColor: "#FEFEFAEE",
+    padding: 12,
+    ...shadows.soft
   },
   lineChart: {
-    borderRadius: 12
+    borderRadius: radius.md
   },
   chartTitle: {
-    color: "#0F172A",
+    color: palette.foreground,
     fontSize: 17,
-    fontWeight: "800",
+    fontFamily: textStyles.headingSemiBold.fontFamily,
     marginBottom: 10
   },
   searchInput: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 10,
+    borderColor: palette.border,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#F8FAFC",
-    color: "#0F172A",
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFFCC",
+    color: palette.foreground,
     fontSize: 14
   },
   searchResultList: {
@@ -364,33 +365,34 @@ const styles = StyleSheet.create({
     gap: 6
   },
   searchResultRow: {
-    borderRadius: 10,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderColor: palette.border,
+    backgroundColor: "#FFFFFFD9",
     paddingHorizontal: 10,
     paddingVertical: 8
   },
   searchResultRowActive: {
-    borderColor: "#1D4ED8",
-    backgroundColor: "#EFF6FF"
+    borderColor: palette.primary,
+    backgroundColor: "#E8EEE4"
   },
   searchResultText: {
-    color: "#334155",
-    fontWeight: "600"
+    color: palette.accentForeground,
+    fontFamily: textStyles.bodySemiBold.fontFamily
   },
   searchResultTextActive: {
-    color: "#1D4ED8",
-    fontWeight: "800"
+    color: palette.primary,
+    fontFamily: textStyles.bodyBold.fontFamily
   },
   selectedExerciseLabel: {
     marginTop: 10,
     fontSize: 12,
-    color: "#1E293B",
-    fontWeight: "700"
+    color: palette.accentForeground,
+    fontFamily: textStyles.bodyBold.fontFamily
   },
   emptyText: {
-    color: "#64748B",
-    fontSize: 13
+    color: palette.mutedForeground,
+    fontSize: 13,
+    fontFamily: textStyles.body.fontFamily
   }
 });

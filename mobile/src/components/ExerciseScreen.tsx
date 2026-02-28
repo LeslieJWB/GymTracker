@@ -119,7 +119,7 @@ export function ExerciseScreen({
             }
           }}
           placeholder="How did this exercise feel?"
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor="#78786C"
         />
       </View>
 
@@ -183,7 +183,7 @@ export function ExerciseScreen({
                       }
                       keyboardType="decimal-pad"
                       placeholder="Weight"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor="#78786C"
                     />
                     <Text style={styles.unitLabel}>kg</Text>
                   </View>
@@ -215,7 +215,7 @@ export function ExerciseScreen({
                   saveSet(item.id);
                 }}
                 placeholder="Set note (optional)"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#78786C"
               />
               <Text style={styles.statusText}>
                 {savingSetIds[item.id]
@@ -267,7 +267,7 @@ export function ExerciseScreen({
                   onChangeText={(text) => setNewSetReps(sanitizeIntegerInput(text))}
                   keyboardType="numeric"
                   placeholder="Reps"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#78786C"
                 />
               </View>
               <View style={appStyles.col}>
@@ -278,7 +278,7 @@ export function ExerciseScreen({
                     onChangeText={(text) => setNewSetWeight(sanitizeWeightInput(text))}
                     keyboardType="decimal-pad"
                     placeholder="Weight"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#78786C"
                   />
                   <Text style={styles.unitLabel}>kg</Text>
                 </View>
@@ -324,8 +324,8 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -335,18 +335,18 @@ const styles = StyleSheet.create({
     width: 78,
     height: 78,
     borderRadius: 10,
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   exerciseHeaderImagePlaceholder: {
     width: 78,
     height: 78,
     borderRadius: 10,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#DED8CF",
     alignItems: "center",
     justifyContent: "center"
   },
   exerciseHeaderImagePlaceholderText: {
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 11,
     fontWeight: "700"
   },
@@ -354,13 +354,13 @@ const styles = StyleSheet.create({
     flex: 1
   },
   exerciseHeaderLabel: {
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 12,
     fontWeight: "700"
   },
   exerciseHeaderName: {
     marginTop: 2,
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 19,
     fontWeight: "800"
   },
@@ -368,22 +368,22 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 14,
     padding: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderWidth: 1,
-    borderColor: "#E2E8F0"
+    borderColor: "#DED8CF"
   },
   addSetCard: {
     marginTop: 12,
     borderRadius: 14,
     padding: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderWidth: 1,
-    borderColor: "#E2E8F0"
+    borderColor: "#DED8CF"
   },
   cardHeader: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#2C2C24",
     marginBottom: 6
   },
   cardHeaderRow: {
@@ -392,23 +392,23 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   },
   statusText: {
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 12,
     fontWeight: "700"
   },
   modernInput: {
     borderWidth: 1,
-    borderColor: "#D4DCE8",
+    borderColor: "#DED8CF",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    backgroundColor: "#F8FAFC"
+    backgroundColor: "#FEFEFA"
   },
   weightInputWrap: {
     borderWidth: 1,
-    borderColor: "#D4DCE8",
+    borderColor: "#DED8CF",
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FEFEFA",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   unitLabel: {
-    color: "#64748B",
+    color: "#78786C",
     fontWeight: "700"
   },
   saveNotesButton: {
@@ -429,24 +429,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#334155"
+    backgroundColor: "#4A4A40"
   },
   saveNotesButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "700"
   },
   emptyStateCard: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 12
   },
   setCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DED8CF",
     padding: 12
   },
   setTitleRow: {
@@ -459,10 +459,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: "#E8F0FF"
+    backgroundColor: "#E8EEE4"
   },
   metricPillText: {
-    color: "#1D4ED8",
+    color: "#5D7052",
     fontSize: 12,
     fontWeight: "700"
   },
@@ -476,10 +476,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: "center",
-    backgroundColor: "#334155"
+    backgroundColor: "#4A4A40"
   },
   inlineSaveButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "700"
   },
   inlineDeleteButton: {
@@ -488,10 +488,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: "center",
-    backgroundColor: "#FEE2E2"
+    backgroundColor: "#F6E4DF"
   },
   inlineDeleteButtonText: {
-    color: "#B91C1C",
+    color: "#8E3D34",
     fontWeight: "700"
   },
   addSetButton: {
@@ -499,10 +499,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#1D4ED8"
+    backgroundColor: "#5D7052"
   },
   addSetButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800"
   },
   newSetActionRow: {
@@ -515,10 +515,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   newSetCancelButtonText: {
-    color: "#334155",
+    color: "#4A4A40",
     fontWeight: "700"
   },
   newSetSaveButton: {
@@ -526,10 +526,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#1D4ED8"
+    backgroundColor: "#5D7052"
   },
   newSetSaveButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800"
   },
   deleteExerciseButton: {
@@ -537,12 +537,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F6E4DF",
     borderWidth: 1,
-    borderColor: "#FECACA"
+    borderColor: "#D9A79D"
   },
   deleteExerciseButtonText: {
-    color: "#B91C1C",
+    color: "#8E3D34",
     fontWeight: "700"
   }
 });

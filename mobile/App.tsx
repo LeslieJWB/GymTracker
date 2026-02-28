@@ -1,4 +1,7 @@
 import { StatusBar } from "expo-status-bar";
+import { useFonts } from "expo-font";
+import { Fraunces_600SemiBold, Fraunces_700Bold } from "@expo-google-fonts/fraunces";
+import { Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthScreen } from "./src/components/AuthScreen";
@@ -28,6 +31,7 @@ import {
 } from "./src/types/workout";
 import { DATE_PATTERN, daysAgo, todayDate } from "./src/utils/date";
 import { requestKey } from "./src/utils/request";
+import { organicShapes, palette, radius, shadows, textStyles, withPressScale } from "./src/styles/theme";
 
 const DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
 
@@ -62,6 +66,13 @@ function monthRange(monthCursor: Date): { from: string; to: string } {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Fraunces_600SemiBold,
+    Fraunces_700Bold,
+    Nunito_500Medium,
+    Nunito_600SemiBold,
+    Nunito_700Bold
+  });
   const { session, checkingSession, authError, signInWithProvider, signOut } = useAuthSession();
   const [screen, setScreen] = useState<Screen>("record");
   const [loading, setLoading] = useState(false);
@@ -1251,6 +1262,10 @@ export default function App() {
     loadCalendarHistory
   });
 
+  if (!fontsLoaded) {
+    return <SafeAreaView style={appStyles.safeArea} />;
+  }
+
   if (checkingSession) {
     return (
       <SafeAreaView style={appStyles.safeArea}>
@@ -1298,6 +1313,10 @@ export default function App() {
   return (
     <SafeAreaView style={appStyles.safeArea}>
       <StatusBar style="dark" />
+      <View pointerEvents="none" style={styles.backgroundWrap}>
+        <View style={[styles.blob, styles.blobA]} />
+        <View style={[styles.blob, styles.blobB]} />
+      </View>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={appStyles.flex}>
         {screen === "calendar" ? (
           <View style={appStyles.flex}>
@@ -1408,25 +1427,37 @@ export default function App() {
         ) : null}
         <View style={styles.bottomNav}>
           <Pressable
-            style={[styles.bottomNavItem, screen === "record" ? styles.bottomNavItemActive : null]}
+            style={({ pressed }) => [
+              styles.bottomNavItem,
+              screen === "record" ? styles.bottomNavItemActive : null,
+              withPressScale(pressed)
+            ]}
             onPress={() => {
               openDate(todayDate()).catch(() => {});
             }}
             disabled={loading || !user}
           >
-            <Text style={styles.bottomNavLabel}>Home</Text>
+            <Text style={[styles.bottomNavLabel, screen === "record" ? styles.bottomNavLabelActive : null]}>Home</Text>
           </Pressable>
           <Pressable
-            style={[styles.bottomNavItem, screen === "calendar" ? styles.bottomNavItemActive : null]}
+            style={({ pressed }) => [
+              styles.bottomNavItem,
+              screen === "calendar" ? styles.bottomNavItemActive : null,
+              withPressScale(pressed)
+            ]}
             onPress={() => {
               setScreen("calendar");
             }}
             disabled={loading || !user}
           >
-            <Text style={styles.bottomNavLabel}>Calendar</Text>
+            <Text style={[styles.bottomNavLabel, screen === "calendar" ? styles.bottomNavLabelActive : null]}>Calendar</Text>
           </Pressable>
           <Pressable
-            style={[styles.bottomNavItem, screen === "statistics" ? styles.bottomNavItemActive : null]}
+            style={({ pressed }) => [
+              styles.bottomNavItem,
+              screen === "statistics" ? styles.bottomNavItemActive : null,
+              withPressScale(pressed)
+            ]}
             onPress={() => {
               setScreen("statistics");
               if (weightHistory.length === 0 && nutritionHistory.length === 0) {
@@ -1435,16 +1466,20 @@ export default function App() {
             }}
             disabled={loading || !user}
           >
-            <Text style={styles.bottomNavLabel}>Statistics</Text>
+            <Text style={[styles.bottomNavLabel, screen === "statistics" ? styles.bottomNavLabelActive : null]}>Statistics</Text>
           </Pressable>
           <Pressable
-            style={[styles.bottomNavItem, screen === "profile" ? styles.bottomNavItemActive : null]}
+            style={({ pressed }) => [
+              styles.bottomNavItem,
+              screen === "profile" ? styles.bottomNavItemActive : null,
+              withPressScale(pressed)
+            ]}
             onPress={() => {
               setScreen("profile");
             }}
             disabled={loading || !user}
           >
-            <Text style={styles.bottomNavLabel}>Profile</Text>
+            <Text style={[styles.bottomNavLabel, screen === "profile" ? styles.bottomNavLabelActive : null]}>Profile</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -1453,6 +1488,30 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  backgroundWrap: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden"
+  },
+  blob: {
+    position: "absolute",
+    opacity: 0.2
+  },
+  blobA: {
+    ...organicShapes.blobA,
+    width: 280,
+    height: 280,
+    right: -120,
+    top: -80,
+    backgroundColor: "#E6DCCD"
+  },
+  blobB: {
+    ...organicShapes.blobB,
+    width: 230,
+    height: 230,
+    left: -100,
+    bottom: 40,
+    backgroundColor: "#E7EFE3"
+  },
   recordScrollContent: {
     ...appStyles.container,
     paddingBottom: 24
@@ -1460,26 +1519,32 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: "row",
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderTopColor: `${palette.border}AA`,
+    backgroundColor: "#FFFFFFC8",
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 10,
-    gap: 8
+    gap: 8,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    ...shadows.soft
   },
   bottomNavItem: {
     flex: 1,
-    borderRadius: 12,
-    paddingVertical: 8,
+    borderRadius: radius.pill,
+    paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center"
   },
   bottomNavItemActive: {
-    backgroundColor: "#EFF6FF"
+    backgroundColor: "#E8EEE4"
   },
   bottomNavLabel: {
     fontSize: 14,
-    fontWeight: "700",
-    color: "#334155"
+    color: palette.mutedForeground,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  bottomNavLabelActive: {
+    color: palette.primary
   }
 });

@@ -1,6 +1,7 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useEffect, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { radius, textStyles, withPressScale } from "../styles/theme";
 import type { UserProfile } from "../types/workout";
 
 type ProfileInput = {
@@ -83,7 +84,7 @@ function formatProvider(provider: string | null | undefined): string {
   return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
-const AVATAR_COLORS = ["#6366F1", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#3B82F6", "#EF4444"];
+const AVATAR_COLORS = ["#5D7052", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#5D7052", "#EF4444"];
 
 function getAvatarColor(profile: UserProfile | null): string {
   const seed = profile?.email || profile?.username || "";
@@ -164,7 +165,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
               value={draft.heightCm}
               onChangeText={(value) => setDraft((current) => ({ ...current, heightCm: digitsOnly(value) }))}
               placeholder="0"
-              placeholderTextColor="#C1C9D6"
+              placeholderTextColor="#A29F94"
               keyboardType="number-pad"
             />
             <View style={styles.unitBadge}>
@@ -201,7 +202,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
               value={draft.defaultBodyWeightKg}
               onChangeText={(value) => setDraft((current) => ({ ...current, defaultBodyWeightKg: digitsOnly(value) }))}
               placeholder="0"
-              placeholderTextColor="#C1C9D6"
+              placeholderTextColor="#A29F94"
               keyboardType="number-pad"
             />
             <View style={styles.unitBadge}>
@@ -230,7 +231,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
           value={draft.globalLlmPrompt}
           onChangeText={(value) => setDraft((current) => ({ ...current, globalLlmPrompt: value }))}
           placeholder="e.g. Focus on hypertrophy, keep rest times short..."
-          placeholderTextColor="#C1C9D6"
+          placeholderTextColor="#A29F94"
           multiline
           textAlignVertical="top"
         />
@@ -238,7 +239,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
 
       {/* Save */}
       <Pressable
-        style={({ pressed }) => [styles.saveButton, saving && styles.saveButtonDisabled, pressed && !saving && styles.saveButtonPressed]}
+        style={({ pressed }) => [styles.saveButton, saving && styles.saveButtonDisabled, pressed && !saving && styles.saveButtonPressed, withPressScale(pressed)]}
         disabled={saving}
         onPress={() =>
           onSave({
@@ -255,7 +256,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
 
       {/* Sign Out */}
       <Pressable
-        style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutButtonPressed]}
+        style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutButtonPressed, withPressScale(pressed)]}
         onPress={onSignOut}
       >
         <Text style={styles.signOutLabel}>Sign Out</Text>
@@ -312,7 +313,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F6FA"
+    backgroundColor: "#FDFCF8"
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -338,28 +339,28 @@ const styles = StyleSheet.create({
     elevation: 6
   },
   avatarText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontSize: 32,
     fontWeight: "700",
     letterSpacing: 1
   },
   heroName: {
     fontSize: 22,
-    fontWeight: "700",
-    color: "#0F172A",
+    fontFamily: textStyles.headingSemiBold.fontFamily,
+    color: "#2C2C24",
     marginBottom: 4
   },
   heroEmail: {
     fontSize: 14,
-    color: "#64748B"
+    color: "#78786C"
   },
 
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    backgroundColor: "#FEFEFA",
+    borderRadius: radius.lg,
     padding: 20,
     marginBottom: 16,
-    shadowColor: "#64748B",
+    shadowColor: "#78786C",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -367,13 +368,13 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     fontSize: 17,
-    fontWeight: "700",
-    color: "#0F172A",
+    fontFamily: textStyles.headingSemiBold.fontFamily,
+    color: "#2C2C24",
     marginBottom: 2
   },
   cardSubheader: {
     fontSize: 13,
-    color: "#94A3B8",
+    color: "#78786C",
     marginBottom: 16
   },
 
@@ -385,12 +386,12 @@ const styles = StyleSheet.create({
   },
   infoKey: {
     fontSize: 15,
-    color: "#64748B",
+    color: "#78786C",
     fontWeight: "500"
   },
   infoValue: {
     fontSize: 15,
-    color: "#0F172A",
+    color: "#2C2C24",
     fontWeight: "600",
     flexShrink: 1,
     textAlign: "right",
@@ -398,10 +399,10 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "#E8ECF2"
+    backgroundColor: "#DED8CF"
   },
   providerBadge: {
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#E6DCCD",
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 8
@@ -409,7 +410,7 @@ const styles = StyleSheet.create({
   providerBadgeText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#6366F1"
+    color: "#5D7052"
   },
 
   fieldGroup: {
@@ -418,22 +419,22 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#78786C",
     marginBottom: 8,
     textTransform: "uppercase",
     letterSpacing: 0.5
   },
   fieldInput: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
+    backgroundColor: "#FFFFFFCC",
+    borderRadius: radius.pill,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: "#0F172A",
+    color: "#2C2C24",
     fontWeight: "500",
     borderWidth: 1,
-    borderColor: "#EDF0F7"
+    borderColor: "#DED8CF"
   },
   unitRow: {
     flexDirection: "row",
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#EDF0F7"
+    borderColor: "#DED8CF"
   },
   unitBadgeText: {
     fontSize: 14,
@@ -457,7 +458,7 @@ const styles = StyleSheet.create({
   segmentedRow: {
     flexDirection: "row",
     backgroundColor: "#F1F5F9",
-    borderRadius: 12,
+    borderRadius: radius.pill,
     padding: 4,
     gap: 4
   },
@@ -468,8 +469,8 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   segmentedOptionActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#64748B",
+    backgroundColor: "#FEFEFA",
+    shadowColor: "#78786C",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -478,59 +479,59 @@ const styles = StyleSheet.create({
   segmentedText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#94A3B8"
+    color: "#78786C"
   },
   segmentedTextActive: {
-    color: "#0F172A"
+    color: "#2C2C24"
   },
 
   dateButton: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
+    backgroundColor: "#FFFFFFCC",
+    borderRadius: radius.pill,
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#EDF0F7"
+    borderColor: "#DED8CF"
   },
   dateText: {
     fontSize: 16,
-    color: "#0F172A",
+    color: "#2C2C24",
     fontWeight: "500"
   },
   datePlaceholder: {
     fontSize: 16,
-    color: "#C1C9D6"
+    color: "#A29F94"
   },
   dateChevron: {
     fontSize: 22,
-    color: "#94A3B8",
+    color: "#78786C",
     fontWeight: "600"
   },
 
   promptInput: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
+    backgroundColor: "#FFFFFFCC",
+    borderRadius: radius.md,
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 14,
     fontSize: 15,
-    color: "#0F172A",
+    color: "#2C2C24",
     minHeight: 110,
     lineHeight: 22,
     borderWidth: 1,
-    borderColor: "#EDF0F7"
+    borderColor: "#DED8CF"
   },
 
   saveButton: {
-    backgroundColor: "#3B82F6",
-    borderRadius: 14,
+    backgroundColor: "#5D7052",
+    borderRadius: radius.pill,
     paddingVertical: 16,
     alignItems: "center",
     marginBottom: 12,
-    shadowColor: "#3B82F6",
+    shadowColor: "#5D7052",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -540,29 +541,29 @@ const styles = StyleSheet.create({
     opacity: 0.6
   },
   saveButtonPressed: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#4F6146",
     transform: [{ scale: 0.98 }]
   },
   saveLabel: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "700",
     fontSize: 16,
     letterSpacing: 0.3
   },
 
   signOutButton: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 14,
+    backgroundColor: "#F6E4DF",
+    borderRadius: radius.pill,
     paddingVertical: 14,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#FECACA"
+    borderColor: "#D9A79D"
   },
   signOutButtonPressed: {
-    backgroundColor: "#FEE2E2"
+    backgroundColor: "#F2D7D0"
   },
   signOutLabel: {
-    color: "#DC2626",
+    color: "#A85448",
     fontWeight: "700",
     fontSize: 15
   },
@@ -573,11 +574,11 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    backgroundColor: "rgba(44, 44, 36, 0.28)",
     justifyContent: "flex-end"
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingBottom: 34
@@ -589,24 +590,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E8ECF2"
+    borderBottomColor: "#DED8CF"
   },
   spinnerContainer: {
     paddingHorizontal: 16
   },
   modalCancel: {
     fontSize: 16,
-    color: "#64748B",
+    color: "#78786C",
     fontWeight: "600"
   },
   modalTitle: {
     fontSize: 16,
-    color: "#0F172A",
+    color: "#2C2C24",
     fontWeight: "700"
   },
   modalDone: {
     fontSize: 16,
-    color: "#3B82F6",
+    color: "#5D7052",
     fontWeight: "700"
   }
 });

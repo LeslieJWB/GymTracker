@@ -142,19 +142,19 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: ACTION_WIDTH,
-    backgroundColor: "#DC2626"
+    backgroundColor: "#A85448"
   },
   actionButton: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#DC2626"
+    backgroundColor: "#A85448"
   },
   actionButtonDisabled: {
     opacity: 0.55
   },
   actionButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800",
     fontSize: 16,
     lineHeight: 18

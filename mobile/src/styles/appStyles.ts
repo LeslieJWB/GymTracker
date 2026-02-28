@@ -1,9 +1,10 @@
 import { StyleSheet } from "react-native";
+import { palette, radius, textStyles } from "./theme";
 
 export const appStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F7F8FC"
+    backgroundColor: palette.background
   },
   flex: {
     flex: 1
@@ -27,22 +28,23 @@ export const appStyles = StyleSheet.create({
     gap: 10
   },
   title: {
-    fontSize: 24,
-    fontWeight: "700",
+    ...textStyles.headingMd,
     marginBottom: 8
   },
   label: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: textStyles.bodyBold.fontFamily,
+    color: palette.accentForeground,
     marginTop: 8
   },
   input: {
     borderWidth: 1,
-    borderColor: "#D4D8E1",
-    borderRadius: 10,
+    borderColor: palette.border,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#FFFFFF"
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFFCC",
+    color: palette.foreground
   },
   row: {
     flexDirection: "row",
@@ -57,7 +59,7 @@ export const appStyles = StyleSheet.create({
     marginTop: 8
   },
   button: {
-    borderRadius: 10,
+    borderRadius: radius.pill,
     paddingVertical: 12,
     paddingHorizontal: 12,
     alignItems: "center",
@@ -70,43 +72,47 @@ export const appStyles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: "#1B6EF3"
+    backgroundColor: palette.primary
   },
   secondaryButton: {
     flex: 1,
-    backgroundColor: "#2E3A59"
+    backgroundColor: palette.secondary
   },
   dangerButton: {
     flex: 1,
-    backgroundColor: "#C0392B"
+    backgroundColor: palette.destructive
   },
   buttonText: {
     color: "#FFFFFF",
-    fontWeight: "700"
+    fontFamily: textStyles.bodyBold.fontFamily
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontFamily: textStyles.headingSemiBold.fontFamily,
+    color: palette.foreground,
     marginTop: 16,
     marginBottom: 6
   },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    backgroundColor: palette.surface,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: "#E5E7EE",
+    borderColor: `${palette.border}90`,
     padding: 12,
     marginBottom: 8
   },
   cardTitle: {
-    fontWeight: "700",
+    fontFamily: textStyles.bodyBold.fontFamily,
+    color: palette.foreground,
     marginBottom: 4
   },
   cardText: {
-    color: "#334155"
+    color: palette.accentForeground,
+    fontFamily: textStyles.body.fontFamily
   },
   emptyText: {
-    color: "#64748B"
+    color: palette.mutedForeground,
+    fontFamily: textStyles.body.fontFamily
   },
   listFooter: {
     paddingVertical: 8,
@@ -121,9 +127,9 @@ export const appStyles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#D8DEEA",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    borderColor: palette.border,
+    borderRadius: radius.md,
+    backgroundColor: palette.surface,
     padding: 8
   },
   chipRow: {
@@ -132,22 +138,23 @@ export const appStyles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 20,
+    borderColor: palette.border,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 8,
-    backgroundColor: "#FFFFFF"
+    backgroundColor: "#FFFFFFCC"
   },
   chipSelected: {
-    borderColor: "#1B6EF3",
-    backgroundColor: "#E8F0FF"
+    borderColor: palette.primary,
+    backgroundColor: "#E8EEE4"
   },
   chipText: {
-    color: "#334155"
+    color: palette.accentForeground,
+    fontFamily: textStyles.bodySemiBold.fontFamily
   },
   chipTextSelected: {
-    color: "#1D4ED8",
-    fontWeight: "700"
+    color: palette.primary,
+    fontFamily: textStyles.bodyBold.fontFamily
   }
 });

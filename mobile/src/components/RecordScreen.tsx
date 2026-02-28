@@ -557,7 +557,7 @@ export function RecordScreen({
             }
           }}
           placeholder="e.g. pull, push, leg"
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor="#78786C"
           editable={Boolean(user) && !loading}
           maxLength={30}
         />
@@ -606,7 +606,7 @@ export function RecordScreen({
             onChangeText={(value) => setBodyWeightDraft(sanitizeWeightInput(value))}
             keyboardType="decimal-pad"
             placeholder="kg"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#78786C"
             editable={Boolean(user) && !loading && !savingBodyWeight}
             onBlur={() => {
               if (bodyWeightDirty && isBodyWeightDraftValid && !savingBodyWeight && !loading && user) {
@@ -790,7 +790,7 @@ export function RecordScreen({
                                         }
                                         keyboardType="decimal-pad"
                                         placeholder="0"
-                                        placeholderTextColor="#94A3B8"
+                                        placeholderTextColor="#78786C"
                                         onBlur={() => saveSet(item.id, setItem.id)}
                                       />
                                       <TextInput
@@ -805,7 +805,7 @@ export function RecordScreen({
                                         }
                                         keyboardType="numeric"
                                         placeholder="0"
-                                        placeholderTextColor="#94A3B8"
+                                        placeholderTextColor="#78786C"
                                         onBlur={() => saveSet(item.id, setItem.id)}
                                       />
                                       <View style={styles.colNotes}>
@@ -893,7 +893,7 @@ export function RecordScreen({
               multiline
               numberOfLines={3}
               placeholder="e.g. 60g steel cut oats + 200ml milk"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#78786C"
               editable={!savingFoodConsumption}
             />
             <View style={styles.foodPhotoActions}>
@@ -970,7 +970,7 @@ export function RecordScreen({
               value={exerciseSearchTerm}
               onChangeText={setExerciseSearchTerm}
               placeholder="Search exercises..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#78786C"
               autoCorrect={false}
               autoCapitalize="none"
             />
@@ -1100,7 +1100,7 @@ export function RecordScreen({
                     });
                   }}
                   placeholder="e.g. Lower back felt tight in last 2 reps"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#78786C"
                   editable={!loading && !savingSetIdsByExerciseId[setNotesTarget.exerciseId]?.[setNotesTarget.setId]}
                   textAlignVertical="top"
                   maxLength={400}
@@ -1151,7 +1151,7 @@ export function RecordScreen({
                   value={exerciseNotesDraftById[exerciseNotesTarget.exerciseId] ?? ""}
                   onChangeText={(value) => updateExerciseNotesDraft(exerciseNotesTarget.exerciseId, value)}
                   placeholder="e.g. Keep elbows tucked and control eccentric"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#78786C"
                   editable={!loading && !savingExerciseNotesById[exerciseNotesTarget.exerciseId]}
                   textAlignVertical="top"
                   maxLength={400}
@@ -1427,19 +1427,19 @@ const styles = StyleSheet.create({
     width: "48%",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     paddingHorizontal: 10,
     paddingVertical: 10
   },
   statsLabel: {
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 11,
     fontWeight: "600"
   },
   statsValue: {
     marginTop: 4,
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 20,
     fontWeight: "800"
   },
@@ -1447,9 +1447,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 14,
     padding: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderWidth: 1,
-    borderColor: "#E2E8F0"
+    borderColor: "#DED8CF"
   },
   weightHeaderRow: {
     flexDirection: "row",
@@ -1460,11 +1460,11 @@ const styles = StyleSheet.create({
   weightCardTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A"
+    color: "#2C2C24"
   },
   weightCardHint: {
     marginTop: 6,
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 12
   },
   weightInputRow: {
@@ -1475,12 +1475,12 @@ const styles = StyleSheet.create({
   weightInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#D4DCE8",
+    borderColor: "#DED8CF",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#F8FAFC",
-    color: "#0F172A",
+    backgroundColor: "#FEFEFA",
+    color: "#2C2C24",
     fontSize: 16,
     fontWeight: "700"
   },
@@ -1489,10 +1489,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: "center",
-    backgroundColor: "#1D4ED8"
+    backgroundColor: "#5D7052"
   },
   dailySummaryButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800",
     fontSize: 15
   },
@@ -1500,14 +1500,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 14,
     padding: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderWidth: 1,
-    borderColor: "#E2E8F0"
+    borderColor: "#DED8CF"
   },
   themeLabel: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#2C2C24",
     marginBottom: 6
   },
   themeHeaderRow: {
@@ -1533,27 +1533,27 @@ const styles = StyleSheet.create({
   themeStatusBadgeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#334155"
+    color: "#4A4A40"
   },
   themeInput: {
     borderWidth: 1,
-    borderColor: "#D4DCE8",
+    borderColor: "#DED8CF",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    backgroundColor: "#F8FAFC"
+    backgroundColor: "#FEFEFA"
   },
   themeHint: {
     marginTop: 6,
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 12
   },
   foodCard: {
     marginTop: 8,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 12
   },
   foodCardHeader: {
@@ -1564,15 +1564,15 @@ const styles = StyleSheet.create({
   foodCardTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A"
+    color: "#2C2C24"
   },
   foodCardSubtitle: {
     marginTop: 2,
     fontSize: 12,
-    color: "#64748B"
+    color: "#78786C"
   },
   foodCardChevron: {
-    color: "#334155",
+    color: "#4A4A40",
     fontSize: 18,
     fontWeight: "700"
   },
@@ -1585,8 +1585,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 10
   },
   foodList: {
@@ -1596,9 +1596,9 @@ const styles = StyleSheet.create({
   foodRow: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DED8CF",
     padding: 10,
-    backgroundColor: "#F8FAFC"
+    backgroundColor: "#FEFEFA"
   },
   foodRowTop: {
     flexDirection: "row",
@@ -1609,51 +1609,51 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A"
+    color: "#2C2C24"
   },
   foodDeleteButton: {
     borderRadius: 8,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F6E4DF",
     paddingHorizontal: 10,
     paddingVertical: 6
   },
   foodDeleteButtonText: {
-    color: "#B91C1C",
+    color: "#8E3D34",
     fontWeight: "700",
     fontSize: 12
   },
   foodMacrosText: {
     marginTop: 6,
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 13,
     fontWeight: "700"
   },
   foodCommentText: {
     marginTop: 4,
-    color: "#334155",
+    color: "#4A4A40",
     fontSize: 13,
     lineHeight: 18
   },
   addFoodButton: {
     marginTop: 10,
     borderRadius: 10,
-    backgroundColor: "#0F172A",
+    backgroundColor: "#2C2C24",
     paddingVertical: 10,
     alignItems: "center"
   },
   addFoodButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800"
   },
   emptyStateCard: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 12
   },
   emptyStateTitle: {
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 4
@@ -1662,20 +1662,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 10
   },
   statusText: {
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 12,
     fontWeight: "700"
   },
   exerciseCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DED8CF",
     padding: 12,
     marginBottom: 10
   },
@@ -1698,18 +1698,18 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 8,
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   exerciseThumbPlaceholder: {
     width: 42,
     height: 42,
     borderRadius: 8,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#DED8CF",
     alignItems: "center",
     justifyContent: "center"
   },
   exerciseThumbPlaceholderText: {
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 8,
     fontWeight: "700"
   },
@@ -1717,13 +1717,13 @@ const styles = StyleSheet.create({
     flex: 1
   },
   exerciseTitle: {
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 18,
     fontWeight: "800"
   },
   exerciseSubtitle: {
     marginTop: 2,
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 12
   },
   exerciseMenuButton: {
@@ -1734,7 +1734,7 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   exerciseMenuButtonText: {
-    color: "#334155",
+    color: "#4A4A40",
     fontSize: 20,
     fontWeight: "700",
     lineHeight: 22
@@ -1748,7 +1748,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6
   },
   setHeaderText: {
-    color: "#94A3B8",
+    color: "#78786C",
     fontSize: 12,
     fontWeight: "700",
     textAlign: "center"
@@ -1761,7 +1761,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   setRowEven: {
-    backgroundColor: "#FFFFFF"
+    backgroundColor: "#FEFEFA"
   },
   setRowOdd: {
     backgroundColor: "#F1F5F9"
@@ -1774,13 +1774,13 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   setCellText: {
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 17,
     fontWeight: "800",
     textAlign: "center"
   },
   setRowInput: {
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 17,
     fontWeight: "700",
     textAlign: "center",
@@ -1814,14 +1814,14 @@ const styles = StyleSheet.create({
   notePill: {
     minWidth: 44,
     borderRadius: 8,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#DED8CF",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 4,
     paddingHorizontal: 8
   },
   notePillText: {
-    color: "#334155",
+    color: "#4A4A40",
     fontSize: 12,
     fontWeight: "700"
   },
@@ -1829,7 +1829,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#DED8CF",
     alignItems: "center",
     justifyContent: "center"
   },
@@ -1837,21 +1837,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#22C55E"
   },
   checkPillText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800"
   },
   addSetSimpleButton: {
     marginTop: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 10
   },
   addSetSimpleButtonText: {
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 17,
     fontWeight: "600"
   },
@@ -1860,10 +1860,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#1D4ED8"
+    backgroundColor: "#5D7052"
   },
   openAddModalButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800"
   },
   modalBackdrop: {
@@ -1876,11 +1876,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderRadius: 20,
     padding: 16,
     maxHeight: "90%",
-    shadowColor: "#0F172A",
+    shadowColor: "#2C2C24",
     shadowOpacity: 0.14,
     shadowRadius: 18,
     shadowOffset: {
@@ -1897,20 +1897,20 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A"
+    color: "#2C2C24"
   },
   modalCloseButton: {
     width: 34,
     height: 34,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#DED8CF",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8FAFC"
+    backgroundColor: "#FEFEFA"
   },
   modalCloseButtonText: {
-    color: "#334155",
+    color: "#4A4A40",
     fontSize: 18,
     fontWeight: "700",
     lineHeight: 18
@@ -1918,24 +1918,24 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     marginTop: 4,
     marginBottom: 8,
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 13
   },
   modalSection: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 12,
     marginTop: 10
   },
   modernInput: {
     borderWidth: 1,
-    borderColor: "#D4DCE8",
+    borderColor: "#DED8CF",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FEFEFA",
     marginTop: 8
   },
   foodTextInput: {
@@ -1951,54 +1951,54 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     paddingVertical: 10,
     alignItems: "center"
   },
   foodPhotoActionButtonText: {
-    color: "#334155",
+    color: "#4A4A40",
     fontWeight: "700"
   },
   foodImagePreviewWrap: {
     marginTop: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DED8CF",
     padding: 10,
-    backgroundColor: "#F8FAFC"
+    backgroundColor: "#FEFEFA"
   },
   foodImagePreview: {
     width: "100%",
     height: 180,
     borderRadius: 10,
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   clearFoodImageButton: {
     marginTop: 8,
     alignSelf: "flex-start",
     borderRadius: 8,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#DED8CF",
     paddingHorizontal: 10,
     paddingVertical: 6
   },
   clearFoodImageButtonText: {
-    color: "#334155",
+    color: "#4A4A40",
     fontWeight: "700"
   },
   foodComposerErrorText: {
     marginTop: 10,
-    color: "#DC2626",
+    color: "#A85448",
     fontSize: 13
   },
   searchInput: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#DED8CF",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#FFFFFF"
+    backgroundColor: "#FEFEFA"
   },
   searchList: {
     marginTop: 8,
@@ -2006,27 +2006,27 @@ const styles = StyleSheet.create({
   },
   searchResultRow: {
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DED8CF",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     padding: 12,
     marginBottom: 8
   },
   searchResultName: {
-    color: "#0F172A",
+    color: "#2C2C24",
     fontWeight: "700"
   },
   searchResultMeta: {
     marginTop: 2,
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 12
   },
   exerciseSelectionHeader: {
     marginTop: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 12,
     flexDirection: "row",
     gap: 12,
@@ -2036,7 +2036,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 10,
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   exerciseSelectionImagePlaceholder: {
     width: 72,
@@ -2044,10 +2044,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   exerciseSelectionImagePlaceholderText: {
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 11,
     fontWeight: "700"
   },
@@ -2055,21 +2055,21 @@ const styles = StyleSheet.create({
     flex: 1
   },
   exerciseSelectionLabel: {
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 12,
     fontWeight: "700"
   },
   exerciseSelectionName: {
     marginTop: 2,
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 17,
     fontWeight: "800"
   },
   emptySetCard: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
     padding: 12
   },
   loggedSetList: {
@@ -2094,10 +2094,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    backgroundColor: "#FEE2E2"
+    backgroundColor: "#F6E4DF"
   },
   deleteSetButtonText: {
-    color: "#B91C1C",
+    color: "#8E3D34",
     fontWeight: "700"
   },
   composerActionRow: {
@@ -2110,10 +2110,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   composerCancelButtonText: {
-    color: "#334155",
+    color: "#4A4A40",
     fontWeight: "700"
   },
   composerSaveButton: {
@@ -2121,10 +2121,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#1D4ED8"
+    backgroundColor: "#5D7052"
   },
   composerSaveButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800"
   },
   logSetButton: {
@@ -2132,10 +2132,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#1D4ED8"
+    backgroundColor: "#5D7052"
   },
   logSetButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800"
   },
   cancelButton: {
@@ -2144,10 +2144,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   cancelButtonText: {
-    color: "#334155",
+    color: "#4A4A40",
     fontWeight: "700"
   },
   saveExerciseButton: {
@@ -2156,10 +2156,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#1D4ED8"
+    backgroundColor: "#5D7052"
   },
   saveExerciseButtonText: {
-    color: "#FFFFFF",
+    color: "#FEFEFA",
     fontWeight: "800"
   },
   menuBackdrop: {
@@ -2168,7 +2168,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15, 23, 42, 0.4)"
   },
   menuSheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 16,
@@ -2180,26 +2180,26 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#DED8CF",
     marginBottom: 10
   },
   menuRow: {
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0"
+    borderBottomColor: "#DED8CF"
   },
   menuRowText: {
-    color: "#0F172A",
+    color: "#2C2C24",
     fontSize: 16,
     fontWeight: "600"
   },
   menuDeleteText: {
-    color: "#DC2626",
+    color: "#A85448",
     fontSize: 16,
     fontWeight: "500"
   },
   notesSheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 16,
@@ -2209,21 +2209,21 @@ const styles = StyleSheet.create({
   notesSheetTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A"
+    color: "#2C2C24"
   },
   notesSheetSubtitle: {
     marginTop: 6,
-    color: "#64748B",
+    color: "#78786C",
     fontSize: 13
   },
   notesInput: {
     marginTop: 12,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#DED8CF",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FEFEFA",
     minHeight: 120
   },
   notesActions: {
@@ -2232,7 +2232,7 @@ const styles = StyleSheet.create({
     marginTop: 12
   },
   adviceSheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FEFEFA",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 16,
@@ -2243,7 +2243,7 @@ const styles = StyleSheet.create({
   adviceTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#2C2C24",
     marginBottom: 12
   },
   adviceLoadingWrap: {
@@ -2251,7 +2251,7 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   adviceErrorText: {
-    color: "#DC2626",
+    color: "#A85448",
     fontSize: 14,
     marginBottom: 12
   },
@@ -2265,12 +2265,12 @@ const styles = StyleSheet.create({
   adviceSectionLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#78786C",
     marginBottom: 6
   },
   adviceSetRow: {
     fontSize: 15,
-    color: "#0F172A",
+    color: "#2C2C24",
     marginBottom: 4
   },
   adviceTextBlock: {
@@ -2278,7 +2278,7 @@ const styles = StyleSheet.create({
   },
   adviceParagraph: {
     fontSize: 14,
-    color: "#334155",
+    color: "#4A4A40",
     lineHeight: 20
   },
   adviceActions: {
@@ -2293,19 +2293,19 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   adviceButtonAccept: {
-    backgroundColor: "#0F172A"
+    backgroundColor: "#2C2C24"
   },
   adviceButtonDecline: {
-    backgroundColor: "#E2E8F0"
+    backgroundColor: "#DED8CF"
   },
   adviceButtonText: {
     fontSize: 16,
     fontWeight: "700"
   },
   adviceButtonTextAccept: {
-    color: "#FFFFFF"
+    color: "#FEFEFA"
   },
   adviceButtonTextDecline: {
-    color: "#0F172A"
+    color: "#2C2C24"
   }
 });
