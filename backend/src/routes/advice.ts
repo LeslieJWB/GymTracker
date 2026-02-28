@@ -98,6 +98,28 @@ function formatNowContext(): string {
   return `${now.toISOString()} (${partOfDay})`;
 }
 
+function themeContextBlock(theme: string | null): string {
+  if (!theme) {
+    return "Today's theme: not set";
+  }
+  return `Today's theme: ${theme}`;
+}
+
+async function getTodayTheme(userId: string, date: string): Promise<string | null> {
+  const result = await pool.query<{ theme: string | null }>(
+    `
+      SELECT theme
+      FROM records
+      WHERE user_id = $1
+        AND record_date = $2::date
+      LIMIT 1
+    `,
+    [userId, date]
+  );
+  const theme = result.rows[0]?.theme?.trim();
+  return theme && theme.length > 0 ? theme.slice(0, 80) : null;
+}
+
 function parseReview(raw: string): string | null {
   const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
   if (!cleaned) {
@@ -130,6 +152,8 @@ adviceRouter.post("/advice/exercise-plan", async (req, res) => {
   try {
     const appUser = await upsertUserFromAuth(req.auth);
     const promptProfile = await getPromptProfile(appUser.id, date);
+    const todayTheme = await getTodayTheme(appUser.id, date);
+    const themeContext = themeContextBlock(todayTheme);
     const rows = await pool.query<{
       record_date: string;
       reps: number;
@@ -200,6 +224,8 @@ adviceRouter.post("/advice/exercise-plan", async (req, res) => {
       requestContext: `You are a strength training coach. Generate a concrete workout plan for today.
 Exercise: ${exerciseName}
 Today's date: ${date}
+${themeContext}
+Priority rule: Treat today's theme as the user's intent for this day and align set recommendations and advice with it.
 The user's past sessions for this exercise (date | exercise-level note | per-set logs with set-level notes):
 ${historyText}
 
@@ -268,6 +294,8 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
   try {
     const appUser = await upsertUserFromAuth(req.auth);
     const promptProfile = await getPromptProfile(appUser.id, date);
+    const todayTheme = await getTodayTheme(appUser.id, date);
+    const themeContext = themeContextBlock(todayTheme);
 
     const todayCompletedResult = await pool.query<CompletedSetRow>(
       `
@@ -516,8 +544,10 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
       customPrompt: promptProfile.globalLlmPrompt,
       requestContext: `You are a fitness coach and nutrition reviewer. Provide a concise review for today's performance with emphasis on incremental progress.
 Today date: ${date}
+${themeContext}
 Current request timestamp and daypart: ${formatNowContext()}
 Important: Today's logs may be incomplete at this time, so mention missing/partial logging when relevant.
+Priority rule: Treat today's theme as authoritative day intent and calibrate the review tone and recommendations accordingly.
 
 Today's completed exercises details:
 ${todayExerciseText}
@@ -584,6 +614,8 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
   try {
     const appUser = await upsertUserFromAuth(req.auth);
     const promptProfile = await getPromptProfile(appUser.id, date);
+    const todayTheme = await getTodayTheme(appUser.id, date);
+    const themeContext = themeContextBlock(todayTheme);
 
     const todaySetRows = await pool.query<{
       exercise_notes: string | null;
@@ -690,8 +722,10 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
       requestContext: `You are a strength coach reviewing today's completed session for one exercise.
 Exercise: ${exerciseName}
 Today date: ${date}
+${themeContext}
 Current request timestamp and daypart: ${formatNowContext()}
 Important: The user may still be mid-workout, so mention if data appears incomplete.
+Priority rule: Treat today's theme as authoritative day intent and align feedback direction with it.
 
 Today's completed sets:
 ${todaySetsText}

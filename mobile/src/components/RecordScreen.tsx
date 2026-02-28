@@ -264,6 +264,19 @@ export function RecordScreen({
   const trimmedThemeDraft = recordThemeDraft.trim();
   const savedTheme = (recordDetail?.theme ?? "").trim();
   const themeDirty = trimmedThemeDraft !== savedTheme;
+  const trimmedBodyWeightDraft = bodyWeightDraft.trim();
+  const parsedBodyWeightDraft = Number(trimmedBodyWeightDraft.replace(",", "."));
+  const hasBodyWeightDraft = trimmedBodyWeightDraft.length > 0;
+  const isBodyWeightDraftValid =
+    hasBodyWeightDraft &&
+    Number.isFinite(parsedBodyWeightDraft) &&
+    parsedBodyWeightDraft >= 20 &&
+    parsedBodyWeightDraft <= 400;
+  const normalizedBodyWeightDraft = isBodyWeightDraftValid
+    ? Number(parsedBodyWeightDraft.toFixed(2))
+    : null;
+  const normalizedSavedBodyWeight = savedBodyWeightKg === null ? null : Number(savedBodyWeightKg.toFixed(2));
+  const bodyWeightDirty = normalizedBodyWeightDraft !== normalizedSavedBodyWeight;
   const totalCaloriesKcal = recordDetail?.totalCaloriesKcal ?? 0;
   const totalProteinG = recordDetail?.totalProteinG ?? 0;
   const foodEntryCount = recordDetail?.foodConsumptions.length ?? 0;
@@ -278,6 +291,16 @@ export function RecordScreen({
     }, 550);
     return () => clearTimeout(timeoutId);
   }, [themeDirty, loading, user, savingRecordTheme, saveRecordTheme]);
+
+  useEffect(() => {
+    if (!bodyWeightDirty || !isBodyWeightDraftValid || loading || !user || savingBodyWeight) {
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      saveBodyWeight();
+    }, 550);
+    return () => clearTimeout(timeoutId);
+  }, [bodyWeightDirty, isBodyWeightDraftValid, loading, user, savingBodyWeight, saveBodyWeight]);
 
   useEffect(() => {
     if (!adviceTarget || !user || !recordDetail) return;
@@ -563,9 +586,18 @@ export function RecordScreen({
       <View style={styles.weightCard}>
         <View style={styles.weightHeaderRow}>
           <Text style={styles.weightCardTitle}>Today's Weight</Text>
-          <Text style={styles.weightCardHint}>
-            {savedBodyWeightKg === null ? "Not saved yet" : `Saved: ${savedBodyWeightKg} kg`}
-          </Text>
+          <View
+            style={[
+              styles.themeStatusBadge,
+              savingBodyWeight
+                ? styles.themeStatusSavingBadge
+                : bodyWeightDirty
+                  ? styles.themeStatusUnsavedBadge
+                  : styles.themeStatusSavedBadge
+            ]}
+          >
+            <Text style={styles.themeStatusBadgeText}>{savingBodyWeight ? "Saving..." : bodyWeightDirty ? "Unsaved" : "Saved"}</Text>
+          </View>
         </View>
         <View style={styles.weightInputRow}>
           <TextInput
@@ -575,17 +607,15 @@ export function RecordScreen({
             keyboardType="decimal-pad"
             placeholder="kg"
             placeholderTextColor="#94A3B8"
-            editable={!savingBodyWeight}
-            onBlur={saveBodyWeight}
+            editable={Boolean(user) && !loading && !savingBodyWeight}
+            onBlur={() => {
+              if (bodyWeightDirty && isBodyWeightDraftValid && !savingBodyWeight && !loading && user) {
+                saveBodyWeight();
+              }
+            }}
           />
-          <TouchableOpacity
-            style={styles.weightSaveButton}
-            onPress={saveBodyWeight}
-            disabled={savingBodyWeight}
-          >
-            <Text style={styles.weightSaveButtonText}>{savingBodyWeight ? "Saving..." : "Save"}</Text>
-          </TouchableOpacity>
         </View>
+        <Text style={styles.weightCardHint}>Auto-saves for {selectedDate}</Text>
       </View>
 
       <TouchableOpacity
@@ -1433,9 +1463,9 @@ const styles = StyleSheet.create({
     color: "#0F172A"
   },
   weightCardHint: {
+    marginTop: 6,
     color: "#64748B",
-    fontSize: 12,
-    fontWeight: "600"
+    fontSize: 12
   },
   weightInputRow: {
     flexDirection: "row",
@@ -1453,16 +1483,6 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontSize: 16,
     fontWeight: "700"
-  },
-  weightSaveButton: {
-    borderRadius: 10,
-    backgroundColor: "#0F172A",
-    paddingHorizontal: 14,
-    paddingVertical: 11
-  },
-  weightSaveButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "800"
   },
   dailySummaryButton: {
     marginTop: 8,

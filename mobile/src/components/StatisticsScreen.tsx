@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Dimensions, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { LineChart } from "react-native-chart-kit";
 import {
   BodyWeightRecord,
@@ -15,7 +15,7 @@ type StatisticsScreenProps = {
   nutritionRecords: NutritionDailyPoint[];
   selectedExerciseItemId: string | null;
   exerciseMetricRecords: ExerciseDailyMetricsPoint[];
-  refreshStatistics: () => void;
+  refreshStatistics: () => Promise<void> | void;
   selectExerciseForMetrics: (exerciseItemId: string) => void;
 };
 
@@ -124,6 +124,8 @@ export function StatisticsScreen({
 }: StatisticsScreenProps) {
   const [exerciseSearchTerm, setExerciseSearchTerm] = useState("");
   const [exerciseDropdownVisible, setExerciseDropdownVisible] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshHint, setRefreshHint] = useState("Pull down to refresh.");
   const selectedExercise = useMemo(
     () => exerciseItems.find((item) => item.id === selectedExerciseItemId) ?? null,
     [exerciseItems, selectedExerciseItemId]
@@ -173,14 +175,37 @@ export function StatisticsScreen({
       value: row.totalProteinG
     }));
 
+  async function handlePullToRefresh(): Promise<void> {
+    if (loading || isRefreshing) {
+      return;
+    }
+    setIsRefreshing(true);
+    setRefreshHint("Refreshing...");
+    try {
+      await Promise.resolve(refreshStatistics());
+      setRefreshHint(`Refreshed at ${new Date().toLocaleTimeString()}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={() => {
+            handlePullToRefresh().catch(() => {});
+          }}
+          tintColor="#1D4ED8"
+        />
+      }
+    >
       <View style={styles.headerRow}>
         <Text style={styles.headerTitle}>Statistics</Text>
-        <Pressable style={styles.refreshButton} onPress={refreshStatistics} disabled={loading}>
-          <Text style={styles.refreshButtonText}>{loading ? "Loading..." : "Refresh"}</Text>
-        </Pressable>
       </View>
+      <Text style={styles.refreshHintText}>{refreshHint}</Text>
 
       <SingleLineCard
         title="Body Weight Trend"
@@ -302,16 +327,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0F172A"
   },
-  refreshButton: {
-    borderRadius: 10,
-    backgroundColor: "#0F172A",
-    paddingHorizontal: 12,
-    paddingVertical: 8
-  },
-  refreshButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 12
+  refreshHintText: {
+    marginTop: -4,
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600"
   },
   chartCard: {
     borderRadius: 16,
