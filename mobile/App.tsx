@@ -5,14 +5,19 @@ import { AuthScreen } from "./src/components/AuthScreen";
 import { CalendarScreen } from "./src/components/CalendarScreen";
 import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/components/RecordScreen.tsx";
 import { ProfileScreen } from "./src/components/ProfileScreen";
+import { StatisticsScreen } from "./src/components/StatisticsScreen";
 import { useAppLifecycleEffects } from "./src/hooks/useAppLifecycleEffects";
 import { useAuthSession } from "./src/hooks/useAuthSession";
 import { useRecordEffects } from "./src/hooks/useRecordEffects";
 import { appStyles } from "./src/styles/appStyles";
 import {
+  AdviceReviewResult,
+  BodyWeightRecord,
+  ExerciseDailyMetricsPoint,
   ExerciseDetail,
   ExerciseItem,
   FoodConsumption,
+  NutritionDailyPoint,
   RecordDetail,
   RecordSummary,
   Screen,
@@ -84,6 +89,14 @@ export default function App() {
   const [savingSetIdsByExerciseId, setSavingSetIdsByExerciseId] = useState<SavingSetIdsByExerciseId>({});
   const [savingFoodConsumption, setSavingFoodConsumption] = useState(false);
   const [deletingFoodIds, setDeletingFoodIds] = useState<DeletingFoodIds>({});
+  const [bodyWeightDraft, setBodyWeightDraft] = useState("");
+  const [savedBodyWeightKg, setSavedBodyWeightKg] = useState<number | null>(null);
+  const [savingBodyWeight, setSavingBodyWeight] = useState(false);
+  const [statisticsLoading, setStatisticsLoading] = useState(false);
+  const [weightHistory, setWeightHistory] = useState<BodyWeightRecord[]>([]);
+  const [nutritionHistory, setNutritionHistory] = useState<NutritionDailyPoint[]>([]);
+  const [statisticsExerciseItemId, setStatisticsExerciseItemId] = useState<string | null>(null);
+  const [exerciseMetricHistory, setExerciseMetricHistory] = useState<ExerciseDailyMetricsPoint[]>([]);
 
   const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL.trim().replace(/\/$/, ""), []);
 
@@ -136,6 +149,12 @@ export default function App() {
     );
   }
 
+  async function loadBodyWeightByDate(date: string): Promise<{ date: string; weightKg: number | null }> {
+    return apiJson<{ date: string; weightKg: number | null }>(
+      `/body-weight/by-date?date=${encodeURIComponent(date)}`
+    );
+  }
+
   async function bootstrap(): Promise<void> {
     if (!session?.access_token) {
       setUser(null);
@@ -143,6 +162,12 @@ export default function App() {
       setRecordDetail(null);
       setRecordSummaries([]);
       setCalendarSummaries([]);
+      setBodyWeightDraft("");
+      setSavedBodyWeightKg(null);
+      setWeightHistory([]);
+      setNutritionHistory([]);
+      setStatisticsExerciseItemId(null);
+      setExerciseMetricHistory([]);
       return;
     }
     setLoading(true);
@@ -159,12 +184,14 @@ export default function App() {
       setSelectedDate(today);
       setScreen("record");
       resetExerciseState();
-      const [detail, food] = await Promise.all([
+      const [detail, food, weightPayload] = await Promise.all([
         apiJson<Omit<RecordDetail, "foodConsumptions" | "totalCaloriesKcal" | "totalProteinG"> | null>(
           `/records/by-date?userId=${encodeURIComponent(bootUser.id)}&date=${encodeURIComponent(today)}`
         ),
-        loadFoodByDate(bootUser.id, today)
+        loadFoodByDate(bootUser.id, today),
+        loadBodyWeightByDate(today)
       ]);
+      const weight = weightPayload.weightKg;
       if (detail) {
         setRecordDetail(
           applyExerciseImageFallback({
@@ -188,6 +215,8 @@ export default function App() {
         });
         setRecordThemeDraft("");
       }
+      setSavedBodyWeightKg(weight);
+      setBodyWeightDraft(weight === null ? "" : String(weight));
     } catch (error) {
       Alert.alert("Failed to bootstrap", String(error));
     } finally {
@@ -276,11 +305,12 @@ export default function App() {
     setLoading(true);
     resetExerciseState();
     try {
-      const [detail, food] = await Promise.all([
+      const [detail, food, weight] = await Promise.all([
         apiJson<Omit<RecordDetail, "foodConsumptions" | "totalCaloriesKcal" | "totalProteinG"> | null>(
           `/records/by-date?userId=${encodeURIComponent(user.id)}&date=${encodeURIComponent(date)}`
         ),
-        loadFoodByDate(user.id, date)
+        loadFoodByDate(user.id, date),
+        loadBodyWeightByDate(date)
       ]);
       if (detail) {
         setRecordDetail(
@@ -305,6 +335,8 @@ export default function App() {
         });
         setRecordThemeDraft("");
       }
+      setSavedBodyWeightKg(weight.weightKg);
+      setBodyWeightDraft(weight.weightKg === null ? "" : String(weight.weightKg));
       setScreen("record");
     } catch (error) {
       Alert.alert("Failed to open record", String(error));
@@ -1090,6 +1122,107 @@ export default function App() {
     }
   }
 
+  async function saveBodyWeightByDate(date: string, draft: string): Promise<void> {
+    const normalized = draft.trim();
+    if (!normalized) {
+      Alert.alert("Missing weight", "Please enter your body weight in kg.");
+      return;
+    }
+    const numeric = Number(normalized.replace(",", "."));
+    if (!Number.isFinite(numeric) || numeric < 20 || numeric > 400) {
+      Alert.alert("Invalid weight", "Body weight must be between 20 and 400 kg.");
+      return;
+    }
+
+    setSavingBodyWeight(true);
+    try {
+      const payload = await apiJson<{ date: string; weightKg: number }>(
+        "/body-weight/by-date",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date,
+            weightKg: Number(numeric.toFixed(2))
+          })
+        }
+      );
+      setSavedBodyWeightKg(payload.weightKg);
+      setBodyWeightDraft(String(payload.weightKg));
+    } catch (error) {
+      Alert.alert("Failed to save weight", String(error));
+    } finally {
+      setSavingBodyWeight(false);
+    }
+  }
+
+  async function fetchDailySummary(date: string): Promise<AdviceReviewResult> {
+    return apiJson<AdviceReviewResult>("/advice/daily-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date })
+    });
+  }
+
+  async function fetchExerciseFeedback(input: {
+    exerciseId: string;
+    exerciseItemId: string;
+    exerciseName: string;
+    date: string;
+  }): Promise<AdviceReviewResult> {
+    return apiJson<AdviceReviewResult>("/advice/exercise-feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    });
+  }
+
+  async function loadStatisticsBase(): Promise<void> {
+    const from = daysAgo(365);
+    const to = todayDate();
+    setStatisticsLoading(true);
+    try {
+      const [weightPayload, nutritionPayload] = await Promise.all([
+        apiJson<{ records: BodyWeightRecord[] }>(
+          `/body-weight/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        ),
+        apiJson<{ records: NutritionDailyPoint[] }>(
+          `/statistics/nutrition-history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        )
+      ]);
+      setWeightHistory(weightPayload.records ?? []);
+      setNutritionHistory(nutritionPayload.records ?? []);
+    } catch (error) {
+      Alert.alert("Failed to load statistics", String(error));
+    } finally {
+      setStatisticsLoading(false);
+    }
+  }
+
+  async function loadExerciseMetrics(exerciseItemId: string): Promise<void> {
+    const from = daysAgo(365);
+    const to = todayDate();
+    setStatisticsExerciseItemId(exerciseItemId);
+    setStatisticsLoading(true);
+    try {
+      const payload = await apiJson<{ records: ExerciseDailyMetricsPoint[] }>(
+        `/statistics/exercise-history?exerciseItemId=${encodeURIComponent(exerciseItemId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      );
+      setExerciseMetricHistory(payload.records ?? []);
+    } catch (error) {
+      Alert.alert("Failed to load exercise metrics", String(error));
+    } finally {
+      setStatisticsLoading(false);
+    }
+  }
+
+  async function refreshStatistics(): Promise<void> {
+    await loadStatisticsBase();
+    if (statisticsExerciseItemId) {
+      await loadExerciseMetrics(statisticsExerciseItemId);
+    }
+  }
+
   useRecordEffects({
     exerciseDetailsById,
     expandedExerciseIds,
@@ -1231,6 +1364,15 @@ export default function App() {
               deleteFoodConsumption={(foodConsumptionId: string) => {
                 deleteFoodConsumption(foodConsumptionId).catch(() => {});
               }}
+              bodyWeightDraft={bodyWeightDraft}
+              setBodyWeightDraft={setBodyWeightDraft}
+              savedBodyWeightKg={savedBodyWeightKg}
+              savingBodyWeight={savingBodyWeight}
+              saveBodyWeight={() => {
+                saveBodyWeightByDate(selectedDate, bodyWeightDraft).catch(() => {});
+              }}
+              fetchDailySummary={(date) => fetchDailySummary(date)}
+              fetchExerciseFeedback={(input) => fetchExerciseFeedback(input)}
             />
           </ScrollView>
         ) : null}
@@ -1242,6 +1384,24 @@ export default function App() {
               onSave={saveProfile}
               onSignOut={() => {
                 signOut().catch(() => {});
+              }}
+            />
+          </View>
+        ) : null}
+        {screen === "statistics" ? (
+          <View style={appStyles.flex}>
+            <StatisticsScreen
+              loading={statisticsLoading}
+              exerciseItems={exerciseItems}
+              weightRecords={weightHistory}
+              nutritionRecords={nutritionHistory}
+              selectedExerciseItemId={statisticsExerciseItemId}
+              exerciseMetricRecords={exerciseMetricHistory}
+              refreshStatistics={() => {
+                refreshStatistics().catch(() => {});
+              }}
+              selectExerciseForMetrics={(exerciseItemId: string) => {
+                loadExerciseMetrics(exerciseItemId).catch(() => {});
               }}
             />
           </View>
@@ -1264,6 +1424,18 @@ export default function App() {
             disabled={loading || !user}
           >
             <Text style={styles.bottomNavLabel}>Calendar</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.bottomNavItem, screen === "statistics" ? styles.bottomNavItemActive : null]}
+            onPress={() => {
+              setScreen("statistics");
+              if (weightHistory.length === 0 && nutritionHistory.length === 0) {
+                loadStatisticsBase().catch(() => {});
+              }
+            }}
+            disabled={loading || !user}
+          >
+            <Text style={styles.bottomNavLabel}>Statistics</Text>
           </Pressable>
           <Pressable
             style={[styles.bottomNavItem, screen === "profile" ? styles.bottomNavItemActive : null]}

@@ -1,4 +1,4 @@
-export type Screen = "calendar" | "record" | "profile";
+export type Screen = "calendar" | "record" | "statistics" | "profile";
 
 export type User = {
   id: string;
@@ -59,6 +59,29 @@ export type FoodConsumption = {
   llmSource: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type BodyWeightRecord = {
+  date: string;
+  weightKg: number;
+};
+
+export type AdviceReviewResult = {
+  source: "gemini" | "fallback";
+  review: string;
+};
+
+export type ExerciseDailyMetricsPoint = {
+  date: string;
+  dailyVolume: number;
+  topSetWeight: number;
+  topSetVolume: number;
+};
+
+export type NutritionDailyPoint = {
+  date: string;
+  totalCaloriesKcal: number;
+  totalProteinG: number;
 };
 
 export type ExerciseItem = {

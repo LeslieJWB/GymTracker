@@ -12,6 +12,19 @@ export const byDateSchema = z.object({
     userId: idSchema,
     date: z.string().regex(datePattern)
 });
+export const byDateNoUserSchema = z.object({
+    date: z.string().regex(datePattern)
+});
+export const bodyWeightByDateSchema = byDateNoUserSchema.extend({
+    weightKg: z.number().min(20).max(400)
+});
+export const dateRangeNoUserSchema = z.object({
+    from: z.string().regex(datePattern).optional(),
+    to: z.string().regex(datePattern).optional()
+});
+export const exerciseHistorySchema = dateRangeNoUserSchema.extend({
+    exerciseItemId: idSchema
+});
 const recordThemeSchema = z
     .string()
     .trim()

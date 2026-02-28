@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { appStyles } from "../styles/appStyles";
 import { SwipeActionRow } from "./SwipeActionRow";
-import { ExerciseDetail, ExerciseItem, RecordDetail, SetDraft, SetDrafts, User } from "../types/workout";
+import { AdviceReviewResult, ExerciseDetail, ExerciseItem, RecordDetail, SetDraft, SetDrafts, User } from "../types/workout";
 
 export type NewExerciseSetDraft = {
   reps: number;
@@ -88,6 +88,18 @@ type RecordScreenProps = {
     image?: FoodImagePayload;
   }) => Promise<boolean>;
   deleteFoodConsumption: (foodConsumptionId: string) => void;
+  bodyWeightDraft: string;
+  setBodyWeightDraft: (value: string) => void;
+  savedBodyWeightKg: number | null;
+  savingBodyWeight: boolean;
+  saveBodyWeight: () => void;
+  fetchDailySummary: (date: string) => Promise<AdviceReviewResult>;
+  fetchExerciseFeedback: (input: {
+    exerciseId: string;
+    exerciseItemId: string;
+    exerciseName: string;
+    date: string;
+  }) => Promise<AdviceReviewResult>;
 };
 
 export function RecordScreen({
@@ -121,7 +133,14 @@ export function RecordScreen({
   savingFoodConsumption,
   deletingFoodIds,
   addFoodConsumption,
-  deleteFoodConsumption
+  deleteFoodConsumption,
+  bodyWeightDraft,
+  setBodyWeightDraft,
+  savedBodyWeightKg,
+  savingBodyWeight,
+  saveBodyWeight,
+  fetchDailySummary,
+  fetchExerciseFeedback
 }: RecordScreenProps) {
   const [showExerciseSearchModal, setShowExerciseSearchModal] = useState(false);
   const [exerciseSearchTerm, setExerciseSearchTerm] = useState("");
@@ -141,6 +160,18 @@ export function RecordScreen({
     advice: string;
   } | null>(null);
   const [adviceError, setAdviceError] = useState<string | null>(null);
+  const [dailySummaryVisible, setDailySummaryVisible] = useState(false);
+  const [dailySummaryLoading, setDailySummaryLoading] = useState(false);
+  const [dailySummaryError, setDailySummaryError] = useState<string | null>(null);
+  const [dailySummaryResult, setDailySummaryResult] = useState<AdviceReviewResult | null>(null);
+  const [feedbackTarget, setFeedbackTarget] = useState<{
+    exerciseId: string;
+    exerciseItemId: string;
+    exerciseItemName: string;
+  } | null>(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackResult, setFeedbackResult] = useState<AdviceReviewResult | null>(null);
   const [foodSectionExpanded, setFoodSectionExpanded] = useState(false);
   const [showFoodComposerModal, setShowFoodComposerModal] = useState(false);
   const [foodTextDraft, setFoodTextDraft] = useState("");
@@ -268,6 +299,45 @@ export function RecordScreen({
         setAdviceLoading(false);
       });
   }, [adviceTarget]);
+
+  useEffect(() => {
+    if (!feedbackTarget || !recordDetail) {
+      return;
+    }
+    setFeedbackLoading(true);
+    setFeedbackError(null);
+    setFeedbackResult(null);
+    fetchExerciseFeedback({
+      exerciseId: feedbackTarget.exerciseId,
+      exerciseItemId: feedbackTarget.exerciseItemId,
+      exerciseName: feedbackTarget.exerciseItemName,
+      date: selectedDate
+    })
+      .then((payload) => {
+        setFeedbackResult(payload);
+        setFeedbackLoading(false);
+      })
+      .catch((error) => {
+        setFeedbackError(String(error));
+        setFeedbackLoading(false);
+      });
+  }, [feedbackTarget]);
+
+  function openDailySummaryModal(): void {
+    setDailySummaryVisible(true);
+    setDailySummaryLoading(true);
+    setDailySummaryError(null);
+    setDailySummaryResult(null);
+    fetchDailySummary(selectedDate)
+      .then((payload) => {
+        setDailySummaryResult(payload);
+        setDailySummaryLoading(false);
+      })
+      .catch((error) => {
+        setDailySummaryError(String(error));
+        setDailySummaryLoading(false);
+      });
+  }
 
   function openExerciseSearchModal(): void {
     setExerciseSearchTerm("");
@@ -438,29 +508,6 @@ export function RecordScreen({
 
   return (
     <>
-      <View style={appStyles.headerRow}>
-        <Text style={styles.headerTitle}>Log Workout</Text>
-      </View>
-
-      <View style={styles.statsStrip}>
-        <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Volume</Text>
-          <Text style={styles.statsValue}>{Math.round(totalVolume)} kg</Text>
-        </View>
-        <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Sets</Text>
-          <Text style={styles.statsValue}>{totalSetCount}</Text>
-        </View>
-        <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Calories</Text>
-          <Text style={styles.statsValue}>{Math.round(totalCaloriesKcal)} kcal</Text>
-        </View>
-        <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Protein</Text>
-          <Text style={styles.statsValue}>{Math.round(totalProteinG)} g</Text>
-        </View>
-      </View>
-
       <View style={styles.themeCard}>
         <View style={styles.themeHeaderRow}>
           <Text style={styles.themeLabel}>Day Theme</Text>
@@ -493,6 +540,61 @@ export function RecordScreen({
         />
         <Text style={styles.themeHint}>Auto-saves for {selectedDate}</Text>
       </View>
+
+      <View style={styles.statsStrip}>
+        <View style={styles.statsItem}>
+          <Text style={styles.statsLabel}>Total Volume</Text>
+          <Text style={styles.statsValue}>{Math.round(totalVolume)} kg</Text>
+        </View>
+        <View style={styles.statsItem}>
+          <Text style={styles.statsLabel}>Completed Sets</Text>
+          <Text style={styles.statsValue}>{totalSetCount}</Text>
+        </View>
+        <View style={styles.statsItem}>
+          <Text style={styles.statsLabel}>Calories</Text>
+          <Text style={styles.statsValue}>{Math.round(totalCaloriesKcal)} kcal</Text>
+        </View>
+        <View style={styles.statsItem}>
+          <Text style={styles.statsLabel}>Protein</Text>
+          <Text style={styles.statsValue}>{Math.round(totalProteinG)} g</Text>
+        </View>
+      </View>
+
+      <View style={styles.weightCard}>
+        <View style={styles.weightHeaderRow}>
+          <Text style={styles.weightCardTitle}>Today's Weight</Text>
+          <Text style={styles.weightCardHint}>
+            {savedBodyWeightKg === null ? "Not saved yet" : `Saved: ${savedBodyWeightKg} kg`}
+          </Text>
+        </View>
+        <View style={styles.weightInputRow}>
+          <TextInput
+            style={styles.weightInput}
+            value={bodyWeightDraft}
+            onChangeText={(value) => setBodyWeightDraft(sanitizeWeightInput(value))}
+            keyboardType="decimal-pad"
+            placeholder="kg"
+            placeholderTextColor="#94A3B8"
+            editable={!savingBodyWeight}
+            onBlur={saveBodyWeight}
+          />
+          <TouchableOpacity
+            style={styles.weightSaveButton}
+            onPress={saveBodyWeight}
+            disabled={savingBodyWeight}
+          >
+            <Text style={styles.weightSaveButtonText}>{savingBodyWeight ? "Saving..." : "Save"}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={styles.dailySummaryButton}
+        onPress={openDailySummaryModal}
+        disabled={loading}
+      >
+        <Text style={styles.dailySummaryButtonText}>Get AI Summary</Text>
+      </TouchableOpacity>
 
       <View style={styles.foodCard}>
         <Pressable
@@ -732,7 +834,6 @@ export function RecordScreen({
         })
       )}
 
-      <Text style={appStyles.sectionTitle}>Add Exercise</Text>
       <TouchableOpacity style={styles.openAddModalButton} onPress={openExerciseSearchModal} disabled={loading || !user}>
         <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
       </TouchableOpacity>
@@ -908,6 +1009,22 @@ export function RecordScreen({
                 const target = exerciseMenuTarget;
                 closeExerciseMenu();
                 if (target) {
+                  setFeedbackTarget({
+                    exerciseId: target.id,
+                    exerciseItemId: target.exerciseItemId,
+                    exerciseItemName: target.exerciseItemName
+                  });
+                }
+              }}
+            >
+              <Text style={styles.menuRowText}>Get AI Feedback</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuRow}
+              onPress={() => {
+                const target = exerciseMenuTarget;
+                closeExerciseMenu();
+                if (target) {
                   deleteExerciseInRecord(target.id);
                 }
               }}
@@ -1033,6 +1150,144 @@ export function RecordScreen({
       </Modal>
 
       <Modal
+        visible={dailySummaryVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setDailySummaryVisible(false);
+          setDailySummaryLoading(false);
+          setDailySummaryError(null);
+          setDailySummaryResult(null);
+        }}
+      >
+        <View style={styles.menuBackdrop}>
+          <Pressable
+            style={styles.modalBackdropTapTarget}
+            onPress={() => {
+              setDailySummaryVisible(false);
+              setDailySummaryLoading(false);
+              setDailySummaryError(null);
+              setDailySummaryResult(null);
+            }}
+          />
+          <View style={styles.adviceSheet}>
+            <View style={styles.menuHandle} />
+            <Text style={styles.adviceTitle}>AI Summary: {selectedDate}</Text>
+            {dailySummaryLoading ? (
+              <View style={styles.adviceLoadingWrap}>
+                <Text style={styles.statusText}>Loading...</Text>
+              </View>
+            ) : dailySummaryError ? (
+              <>
+                <Text style={styles.adviceErrorText}>{dailySummaryError}</Text>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setDailySummaryVisible(false);
+                    setDailySummaryError(null);
+                    setDailySummaryResult(null);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            ) : dailySummaryResult ? (
+              <>
+                <ScrollView style={styles.adviceScroll} nestedScrollEnabled>
+                  <View style={styles.adviceTextBlock}>
+                    <Text style={styles.adviceSectionLabel}>
+                      Review ({dailySummaryResult.source === "gemini" ? "AI" : "Fallback"})
+                    </Text>
+                    <Text style={styles.adviceParagraph}>{dailySummaryResult.review}</Text>
+                  </View>
+                </ScrollView>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setDailySummaryVisible(false);
+                    setDailySummaryError(null);
+                    setDailySummaryResult(null);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={feedbackTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setFeedbackTarget(null);
+          setFeedbackLoading(false);
+          setFeedbackError(null);
+          setFeedbackResult(null);
+        }}
+      >
+        <View style={styles.menuBackdrop}>
+          <Pressable
+            style={styles.modalBackdropTapTarget}
+            onPress={() => {
+              setFeedbackTarget(null);
+              setFeedbackLoading(false);
+              setFeedbackError(null);
+              setFeedbackResult(null);
+            }}
+          />
+          <View style={styles.adviceSheet}>
+            <View style={styles.menuHandle} />
+            <Text style={styles.adviceTitle}>
+              AI Feedback: {feedbackTarget?.exerciseItemName ?? "Exercise"}
+            </Text>
+            {feedbackLoading ? (
+              <View style={styles.adviceLoadingWrap}>
+                <Text style={styles.statusText}>Loading...</Text>
+              </View>
+            ) : feedbackError ? (
+              <>
+                <Text style={styles.adviceErrorText}>{feedbackError}</Text>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setFeedbackTarget(null);
+                    setFeedbackError(null);
+                    setFeedbackResult(null);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            ) : feedbackResult ? (
+              <>
+                <ScrollView style={styles.adviceScroll} nestedScrollEnabled>
+                  <View style={styles.adviceTextBlock}>
+                    <Text style={styles.adviceSectionLabel}>
+                      Review ({feedbackResult.source === "gemini" ? "AI" : "Fallback"})
+                    </Text>
+                    <Text style={styles.adviceParagraph}>{feedbackResult.review}</Text>
+                  </View>
+                </ScrollView>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setFeedbackTarget(null);
+                    setFeedbackError(null);
+                    setFeedbackResult(null);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={adviceTarget !== null}
         transparent
         animationType="fade"
@@ -1132,38 +1387,94 @@ export function RecordScreen({
 }
 
 const styles = StyleSheet.create({
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0F172A"
-  },
   statsStrip: {
     marginTop: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-    padding: 10,
     flexDirection: "row",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: 8
   },
   statsItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 4
+    width: "48%",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 10
   },
   statsLabel: {
+    color: "#64748B",
+    fontSize: 11,
+    fontWeight: "600"
+  },
+  statsValue: {
+    marginTop: 4,
+    color: "#0F172A",
+    fontSize: 20,
+    fontWeight: "800"
+  },
+  weightCard: {
+    marginTop: 8,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0"
+  },
+  weightHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8
+  },
+  weightCardTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A"
+  },
+  weightCardHint: {
     color: "#64748B",
     fontSize: 12,
     fontWeight: "600"
   },
-  statsValue: {
-    marginTop: 2,
+  weightInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  weightInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#D4DCE8",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#F8FAFC",
     color: "#0F172A",
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: "700"
+  },
+  weightSaveButton: {
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    paddingHorizontal: 14,
+    paddingVertical: 11
+  },
+  weightSaveButtonText: {
+    color: "#FFFFFF",
     fontWeight: "800"
+  },
+  dailySummaryButton: {
+    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center",
+    backgroundColor: "#1D4ED8"
+  },
+  dailySummaryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 15
   },
   themeCard: {
     marginTop: 6,

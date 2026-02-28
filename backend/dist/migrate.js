@@ -59,17 +59,6 @@ async function run() {
 }
 run()
     .catch((error) => {
-    const errorData = error && typeof error === "object" ?
-        {
-            name: "name" in error ? String(error.name) : null,
-            message: "message" in error ? String(error.message) : String(error),
-            code: "code" in error ? String(error.code) : null,
-            errno: "errno" in error ? Number(error.errno) : null,
-            syscall: "syscall" in error ? String(error.syscall) : null,
-            address: "address" in error ? String(error.address) : null,
-            port: "port" in error ? Number(error.port) : null
-        }
-        : { value: String(error) };
     console.error("Migration failed:", error);
     process.exit(1);
 })

@@ -78,18 +78,26 @@ function calculateAge(dateOfBirth) {
     }
     return age >= 0 ? age : null;
 }
-export async function getPromptProfile(userId) {
+export async function getPromptProfile(userId, asOfDate) {
     const result = await pool.query(`
       SELECT
         date_of_birth::text,
         default_body_weight_kg::text,
+        (
+          SELECT bwr.weight_kg::text
+          FROM body_weight_records bwr
+          WHERE bwr.user_id = users.id
+            AND bwr.record_date <= COALESCE($2::date, CURRENT_DATE)
+          ORDER BY bwr.record_date DESC
+          LIMIT 1
+        ) AS latest_weight_kg,
         height_cm::text,
         gender,
         global_llm_prompt
       FROM users
       WHERE id = $1
       LIMIT 1
-    `, [userId]);
+    `, [userId, asOfDate ?? null]);
     const row = result.rows[0];
     if (!row) {
         return {
@@ -102,7 +110,11 @@ export async function getPromptProfile(userId) {
     }
     return {
         age: calculateAge(row.date_of_birth),
-        defaultBodyWeightKg: row.default_body_weight_kg ? Number(row.default_body_weight_kg) : null,
+        defaultBodyWeightKg: row.latest_weight_kg
+            ? Number(row.latest_weight_kg)
+            : row.default_body_weight_kg
+                ? Number(row.default_body_weight_kg)
+                : null,
         heightCm: row.height_cm ? Number(row.height_cm) : null,
         gender: row.gender,
         globalLlmPrompt: row.global_llm_prompt

@@ -197,7 +197,7 @@ foodRouter.post("/records/by-date/food", async (req, res) => {
     }
     const { date, text, image } = parsed.data;
     const appUser = await upsertUserFromAuth(req.auth);
-    const promptProfile = await getPromptProfile(appUser.id);
+    const promptProfile = await getPromptProfile(appUser.id, date);
     const endpoint = "POST /records/by-date/food";
     const key = idempotencyHeader(req);
     if (key) {
