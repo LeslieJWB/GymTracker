@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
 import { makeRedirectUri } from "expo-auth-session";
 import type { Session } from "@supabase/supabase-js";
+import sessionUrlProvider from "expo-auth-session/build/SessionUrlProvider";
 import { assertSupabaseConfig, supabase } from "../lib/supabase";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -11,6 +13,17 @@ type Provider = "google" | "apple";
 function parseFragmentParams(url: string): URLSearchParams {
   const fragment = url.split("#")[1] ?? "";
   return new URLSearchParams(fragment);
+}
+
+function resolveAuthRedirectUri(): string {
+  if (Constants.appOwnership === "expo") {
+    try {
+      return sessionUrlProvider.getDefaultReturnUrl();
+    } catch {
+      return makeRedirectUri({ scheme: "gymtracker", path: "auth/callback" });
+    }
+  }
+  return makeRedirectUri({ scheme: "gymtracker", path: "auth/callback" });
 }
 
 export function useAuthSession() {
@@ -51,7 +64,7 @@ export function useAuthSession() {
     }
 
     setAuthError(null);
-    const redirectTo = makeRedirectUri({ scheme: "gymtracker" });
+    const redirectTo = resolveAuthRedirectUri();
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -64,7 +77,14 @@ export function useAuthSession() {
       return false;
     }
 
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    const authUrlToOpen = data.url;
+    let result: Awaited<ReturnType<typeof WebBrowser.openAuthSessionAsync>>;
+    try {
+      result = await WebBrowser.openAuthSessionAsync(authUrlToOpen, redirectTo);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Failed to open auth session.");
+      return false;
+    }
     if (result.type !== "success" || !result.url) {
       setAuthError("Sign-in was cancelled.");
       return false;
