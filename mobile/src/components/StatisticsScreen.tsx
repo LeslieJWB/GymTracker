@@ -194,6 +194,7 @@ export function StatisticsScreen({
   return (
     <ScrollView
       contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
