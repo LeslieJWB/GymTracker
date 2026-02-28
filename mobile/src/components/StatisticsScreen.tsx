@@ -127,6 +127,7 @@ export function StatisticsScreen({
   const [exerciseDropdownVisible, setExerciseDropdownVisible] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshHint, setRefreshHint] = useState("Pull down to refresh.");
+  const [statisticsTab, setStatisticsTab] = useState<"exercise" | "food" | "body">("exercise");
   const selectedExercise = useMemo(
     () => exerciseItems.find((item) => item.id === selectedExerciseItemId) ?? null,
     [exerciseItems, selectedExerciseItemId]
@@ -203,111 +204,145 @@ export function StatisticsScreen({
         />
       }
     >
-      <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Statistics</Text>
-      </View>
       <Text style={styles.refreshHintText}>{refreshHint}</Text>
 
-      <SingleLineCard
-        title="Body Weight Trend"
-        emptyText="No weight records yet."
-        unitSuffix=" kg"
-        decimalPlaces={1}
-        lineColor={palette.primary}
-        points={weightRecords.map((row) => ({ date: row.date, value: row.weightKg }))}
-      />
-
-      <View style={styles.chartCard}>
-        <Text style={styles.chartTitle}>Exercise Trend</Text>
-        <TextInput
-          style={styles.searchInput}
-          value={exerciseSearchTerm}
-          onChangeText={setExerciseSearchTerm}
-          onFocus={() => setExerciseDropdownVisible(true)}
-          onBlur={() => {
-            setTimeout(() => setExerciseDropdownVisible(false), 140);
-          }}
-          placeholder="Search exercise..."
-          placeholderTextColor="#94A3B8"
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-        {exerciseDropdownVisible ? (
-          <View style={styles.searchResultList}>
-            {filteredExerciseItems.length === 0 ? (
-              <Text style={styles.emptyText}>No exercise matches your search.</Text>
-            ) : (
-              filteredExerciseItems.map((item) => (
-                <Pressable
-                  key={item.id}
-                  style={({ pressed }) => [
-                    styles.searchResultRow,
-                    selectedExerciseItemId === item.id ? styles.searchResultRowActive : null,
-                    withPressScale(pressed)
-                  ]}
-                  onPress={() => {
-                    selectExerciseForMetrics(item.id);
-                    setExerciseSearchTerm(item.name);
-                    setExerciseDropdownVisible(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.searchResultText,
-                      selectedExerciseItemId === item.id ? styles.searchResultTextActive : null
-                    ]}
-                  >
-                    {item.name}
-                  </Text>
-                </Pressable>
-              ))
-            )}
-          </View>
-        ) : null}
-        {selectedExercise ? (
-          <Text style={styles.selectedExerciseLabel}>Selected: {selectedExercise.name}</Text>
-        ) : (
-          <Text style={styles.emptyText}>Select an exercise to view trend charts.</Text>
-        )}
+      <View style={styles.tabBar}>
+        <Pressable
+          style={[styles.tabButton, statisticsTab === "exercise" ? styles.tabButtonActive : null]}
+          onPress={() => setStatisticsTab("exercise")}
+        >
+          <Text style={[styles.tabButtonText, statisticsTab === "exercise" ? styles.tabButtonTextActive : null]}>
+            Exercise
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabButton, statisticsTab === "food" ? styles.tabButtonActive : null]}
+          onPress={() => setStatisticsTab("food")}
+        >
+          <Text style={[styles.tabButtonText, statisticsTab === "food" ? styles.tabButtonTextActive : null]}>
+            Food Log
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabButton, statisticsTab === "body" ? styles.tabButtonActive : null]}
+          onPress={() => setStatisticsTab("body")}
+        >
+          <Text style={[styles.tabButtonText, statisticsTab === "body" ? styles.tabButtonTextActive : null]}>
+            Body
+          </Text>
+        </Pressable>
       </View>
 
-      <SingleLineCard
-        title="Exercise Daily Volume"
-        emptyText="No completed volume records for selected exercise."
-        unitSuffix=""
-        lineColor={palette.secondary}
-        points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.dailyVolume }))}
-      />
-      <SingleLineCard
-        title="Exercise Top Set Weight"
-        emptyText="No top set weight records for selected exercise."
-        unitSuffix=" kg"
-        decimalPlaces={1}
-        lineColor={palette.primary}
-        points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetWeight }))}
-      />
-      <SingleLineCard
-        title="Exercise Top Set Volume"
-        emptyText="No top set volume records for selected exercise."
-        unitSuffix=""
-        lineColor={palette.secondary}
-        points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetVolume }))}
-      />
+      {statisticsTab === "body" ? (
+        <SingleLineCard
+          title="Body Weight Trend"
+          emptyText="No weight records yet."
+          unitSuffix=" kg"
+          decimalPlaces={1}
+          lineColor={palette.primary}
+          points={weightRecords.map((row) => ({ date: row.date, value: row.weightKg }))}
+        />
+      ) : null}
 
-      <SingleLineCard
-        title="Calories Trend"
-        emptyText="No calorie records yet."
-        unitSuffix=" kcal"
-        lineColor={palette.destructive}
-        points={nutritionCaloriesPoints}
-      />
-      <SingleLineCard
-        title="Protein Trend"
-        emptyText="No protein records yet."
-        unitSuffix=" g"
-        lineColor={palette.primary}
-        points={nutritionProteinPoints}
-      />
+      {statisticsTab === "exercise" ? (
+        <>
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Exercise Trend</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={exerciseSearchTerm}
+              onChangeText={setExerciseSearchTerm}
+              onFocus={() => setExerciseDropdownVisible(true)}
+              onBlur={() => {
+                setTimeout(() => setExerciseDropdownVisible(false), 140);
+              }}
+              placeholder="Search exercise..."
+              placeholderTextColor="#94A3B8"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {exerciseDropdownVisible ? (
+              <View style={styles.searchResultList}>
+                {filteredExerciseItems.length === 0 ? (
+                  <Text style={styles.emptyText}>No exercise matches your search.</Text>
+                ) : (
+                  filteredExerciseItems.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      style={({ pressed }) => [
+                        styles.searchResultRow,
+                        selectedExerciseItemId === item.id ? styles.searchResultRowActive : null,
+                        withPressScale(pressed)
+                      ]}
+                      onPress={() => {
+                        selectExerciseForMetrics(item.id);
+                        setExerciseSearchTerm(item.name);
+                        setExerciseDropdownVisible(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.searchResultText,
+                          selectedExerciseItemId === item.id ? styles.searchResultTextActive : null
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </View>
+            ) : null}
+            {selectedExercise ? (
+              <Text style={styles.selectedExerciseLabel}>Selected: {selectedExercise.name}</Text>
+            ) : (
+              <Text style={styles.emptyText}>Select an exercise to view trend charts.</Text>
+            )}
+          </View>
+
+          <SingleLineCard
+            title="Exercise Daily Volume"
+            emptyText="No completed volume records for selected exercise."
+            unitSuffix=""
+            lineColor={palette.secondary}
+            points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.dailyVolume }))}
+          />
+          <SingleLineCard
+            title="Exercise Top Set Weight"
+            emptyText="No top set weight records for selected exercise."
+            unitSuffix=" kg"
+            decimalPlaces={1}
+            lineColor={palette.primary}
+            points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetWeight }))}
+          />
+          <SingleLineCard
+            title="Exercise Top Set Volume"
+            emptyText="No top set volume records for selected exercise."
+            unitSuffix=""
+            lineColor={palette.secondary}
+            points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetVolume }))}
+          />
+        </>
+      ) : null}
+
+      {statisticsTab === "food" ? (
+        <>
+          <SingleLineCard
+            title="Calories Trend"
+            emptyText="No calorie records yet."
+            unitSuffix=" kcal"
+            lineColor={palette.destructive}
+            points={nutritionCaloriesPoints}
+          />
+          <SingleLineCard
+            title="Protein Trend"
+            emptyText="No protein records yet."
+            unitSuffix=" g"
+            lineColor={palette.primary}
+            points={nutritionProteinPoints}
+          />
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -319,19 +354,36 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     gap: 10
   },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between"
-  },
-  headerTitle: {
-    ...textStyles.headingMd
-  },
   refreshHintText: {
-    marginTop: -4,
     color: palette.mutedForeground,
     fontSize: 12,
     fontFamily: textStyles.bodySemiBold.fontFamily
+  },
+  tabBar: {
+    flexDirection: "row",
+    gap: 8,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: `${palette.border}A0`,
+    backgroundColor: "#F3EEE6",
+    padding: 4
+  },
+  tabButton: {
+    flex: 1,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    paddingVertical: 10
+  },
+  tabButtonActive: {
+    backgroundColor: palette.primary
+  },
+  tabButtonText: {
+    color: palette.accentForeground,
+    fontSize: 13,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  tabButtonTextActive: {
+    color: palette.primaryForeground
   },
   chartCard: {
     borderRadius: radius.lg,

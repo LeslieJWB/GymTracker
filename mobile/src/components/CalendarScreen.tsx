@@ -75,10 +75,6 @@ export function CalendarScreen({
 
   return (
     <View style={styles.container}>
-      <View style={appStyles.headerRow}>
-        <Text style={styles.title}>Calendar</Text>
-      </View>
-
       <View style={styles.summaryCard}>
         <View style={styles.monthHeader}>
           <TouchableOpacity
@@ -188,11 +184,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12
   },
-  title: {
-    ...textStyles.headingMd
-  },
   summaryCard: {
-    marginTop: 8,
     marginBottom: 12,
     borderRadius: 20,
     paddingHorizontal: 14,

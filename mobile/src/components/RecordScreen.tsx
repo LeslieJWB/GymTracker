@@ -172,6 +172,7 @@ export function RecordScreen({
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackResult, setFeedbackResult] = useState<AdviceReviewResult | null>(null);
+  const [recordDetailTab, setRecordDetailTab] = useState<"exercise" | "food">("exercise");
   const [foodSectionExpanded, setFoodSectionExpanded] = useState(false);
   const [showFoodComposerModal, setShowFoodComposerModal] = useState(false);
   const [foodTextDraft, setFoodTextDraft] = useState("");
@@ -561,7 +562,6 @@ export function RecordScreen({
           editable={Boolean(user) && !loading}
           maxLength={30}
         />
-        <Text style={styles.themeHint}>Auto-saves for {selectedDate}</Text>
       </View>
 
       <View style={styles.statsStrip}>
@@ -605,7 +605,7 @@ export function RecordScreen({
             value={bodyWeightDraft}
             onChangeText={(value) => setBodyWeightDraft(sanitizeWeightInput(value))}
             keyboardType="decimal-pad"
-            placeholder="kg"
+            placeholder="0.0"
             placeholderTextColor="#78786C"
             editable={Boolean(user) && !loading && !savingBodyWeight}
             onBlur={() => {
@@ -614,8 +614,8 @@ export function RecordScreen({
               }
             }}
           />
+          <Text style={styles.weightUnitText}>kg</Text>
         </View>
-        <Text style={styles.weightCardHint}>Auto-saves for {selectedDate}</Text>
       </View>
 
       <TouchableOpacity
@@ -626,80 +626,119 @@ export function RecordScreen({
         <Text style={styles.dailySummaryButtonText}>Get AI Summary</Text>
       </TouchableOpacity>
 
-      <View style={styles.foodCard}>
+      <View style={styles.logTabBar}>
         <Pressable
-          style={styles.foodCardHeader}
-          onPress={() => setFoodSectionExpanded((current) => !current)}
+          style={[
+            styles.logTabButton,
+            recordDetailTab === "exercise" ? styles.logTabButtonActive : null
+          ]}
+          onPress={() => setRecordDetailTab("exercise")}
         >
-          <View>
-            <Text style={styles.foodCardTitle}>Food Consumption</Text>
-            <Text style={styles.foodCardSubtitle}>
-              {foodEntryCount} {foodEntryLabel} for {selectedDate}
-            </Text>
-          </View>
-          <Text style={styles.foodCardChevron}>{foodSectionExpanded ? "▾" : "▸"}</Text>
+          <Text
+            style={[
+              styles.logTabButtonText,
+              recordDetailTab === "exercise" ? styles.logTabButtonTextActive : null
+            ]}
+          >
+            Exercise Log
+          </Text>
         </Pressable>
-
-        {foodSectionExpanded ? (
-          <>
-            <Text style={styles.foodPrivacyHint}>
-              Photos are analyzed for nutrition but are not stored after analysis.
-            </Text>
-            {(recordDetail?.foodConsumptions ?? []).length === 0 ? (
-              <View style={styles.emptyFoodCard}>
-                <Text style={appStyles.emptyText}>No food logged yet for this day.</Text>
-              </View>
-            ) : (
-              <View style={styles.foodList}>
-                {(recordDetail?.foodConsumptions ?? []).map((entry) => (
-                  <View key={entry.id} style={styles.foodRow}>
-                    <View style={styles.foodRowTop}>
-                      <Text style={styles.foodDescription}>{entry.description}</Text>
-                      <TouchableOpacity
-                        style={styles.foodDeleteButton}
-                        onPress={() => deleteFoodConsumption(entry.id)}
-                        disabled={deletingFoodIds[entry.id] || loading}
-                      >
-                        <Text style={styles.foodDeleteButtonText}>
-                          {deletingFoodIds[entry.id] ? "..." : "Delete"}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.foodMacrosText}>
-                      {Math.round(entry.caloriesKcal)} kcal • {Math.round(entry.proteinG)} g protein
-                    </Text>
-                    <Text style={styles.foodCommentText}>{entry.comment}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.addFoodButton}
-              onPress={openFoodComposerModal}
-              disabled={!user || loading || savingFoodConsumption}
-            >
-              <Text style={styles.addFoodButtonText}>+ Add Food Consumption</Text>
-            </TouchableOpacity>
-          </>
-        ) : null}
+        <Pressable
+          style={[styles.logTabButton, recordDetailTab === "food" ? styles.logTabButtonActive : null]}
+          onPress={() => {
+            setRecordDetailTab("food");
+            setFoodSectionExpanded(true);
+          }}
+        >
+          <Text
+            style={[
+              styles.logTabButtonText,
+              recordDetailTab === "food" ? styles.logTabButtonTextActive : null
+            ]}
+          >
+            Food Log
+          </Text>
+        </Pressable>
       </View>
 
-      <Text style={appStyles.sectionTitle}>Exercises</Text>
-      {(recordDetail?.exercises ?? []).length === 0 ? (
-        <View style={styles.emptyStateCard}>
-          <Text style={styles.emptyStateTitle}>No exercises yet</Text>
-          <Text style={appStyles.emptyText}>Tap Add Exercise to start your workout log.</Text>
-        </View>
-      ) : (
-        (recordDetail?.exercises ?? []).map((item) => {
-          const detail = exerciseDetailsById[item.id];
-          const setDrafts = setDraftsByExerciseId[item.id] ?? {};
-          const savingSetIds = savingSetIdsByExerciseId[item.id] ?? {};
-          const isExpanded = expandedIds.has(item.id);
+      {recordDetailTab === "food" ? (
+        <View style={styles.foodCard}>
+          <Pressable
+            style={styles.foodCardHeader}
+            onPress={() => setFoodSectionExpanded((current) => !current)}
+          >
+            <View>
+              <Text style={styles.foodCardTitle}>Food Log</Text>
+              <Text style={styles.foodCardSubtitle}>
+                {foodEntryCount} {foodEntryLabel} for {selectedDate}
+              </Text>
+            </View>
+            <Text style={styles.foodCardChevron}>{foodSectionExpanded ? "▾" : "▸"}</Text>
+          </Pressable>
 
-          return (
-              <View key={item.id} style={styles.exerciseCard}>
+          {foodSectionExpanded ? (
+            <>
+              <Text style={styles.foodPrivacyHint}>
+                Photos are analyzed for nutrition but are not stored after analysis.
+              </Text>
+              {(recordDetail?.foodConsumptions ?? []).length === 0 ? (
+                <View style={styles.emptyFoodCard}>
+                  <Text style={appStyles.emptyText}>No food logged yet for this day.</Text>
+                </View>
+              ) : (
+                <View style={styles.foodList}>
+                  {(recordDetail?.foodConsumptions ?? []).map((entry) => (
+                    <View key={entry.id} style={styles.foodRow}>
+                      <View style={styles.foodRowTop}>
+                        <Text style={styles.foodDescription}>{entry.description}</Text>
+                        <TouchableOpacity
+                          style={styles.foodDeleteButton}
+                          onPress={() => deleteFoodConsumption(entry.id)}
+                          disabled={deletingFoodIds[entry.id] || loading}
+                        >
+                          <Text style={styles.foodDeleteButtonText}>
+                            {deletingFoodIds[entry.id] ? "..." : "Delete"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.foodMacrosText}>
+                        {Math.round(entry.caloriesKcal)} kcal • {Math.round(entry.proteinG)} g protein
+                      </Text>
+                      <Text style={styles.foodCommentText}>{entry.comment}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.addFoodButton}
+                onPress={openFoodComposerModal}
+                disabled={!user || loading || savingFoodConsumption}
+              >
+                <Text style={styles.addFoodButtonText}>+ Add Food Log</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </View>
+      ) : null}
+
+      {recordDetailTab === "exercise" ? (
+        <>
+          <Text style={appStyles.sectionTitle}>Exercises</Text>
+          {(recordDetail?.exercises ?? []).length === 0 ? (
+            <View style={styles.emptyStateCard}>
+              <Text style={styles.emptyStateTitle}>No exercises yet</Text>
+              <Text style={appStyles.emptyText}>Tap Add Exercise to start your workout log.</Text>
+            </View>
+          ) : (
+            (recordDetail?.exercises ?? []).map((item) => {
+              const detail = exerciseDetailsById[item.id];
+              const setDrafts = setDraftsByExerciseId[item.id] ?? {};
+              const savingSetIds = savingSetIdsByExerciseId[item.id] ?? {};
+              const isExpanded = expandedIds.has(item.id);
+
+              return (
+                <View key={item.id} style={styles.exerciseCard}>
                 <View style={styles.exerciseCardHeader}>
                   <Pressable
                     style={styles.exerciseHeaderTapArea}
@@ -860,13 +899,17 @@ export function RecordScreen({
                   </>
                 ) : null}
               </View>
-          );
-        })
-      )}
+              );
+            })
+          )}
+        </>
+      ) : null}
 
-      <TouchableOpacity style={styles.openAddModalButton} onPress={openExerciseSearchModal} disabled={loading || !user}>
-        <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
-      </TouchableOpacity>
+      {recordDetailTab === "exercise" ? (
+        <TouchableOpacity style={styles.openAddModalButton} onPress={openExerciseSearchModal} disabled={loading || !user}>
+          <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <Modal
         visible={showFoodComposerModal}
@@ -1484,6 +1527,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700"
   },
+  weightUnitText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#4A4A40"
+  },
   dailySummaryButton: {
     marginTop: 8,
     borderRadius: 12,
@@ -1495,6 +1543,33 @@ const styles = StyleSheet.create({
     color: "#FEFEFA",
     fontWeight: "800",
     fontSize: 15
+  },
+  logTabBar: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    backgroundColor: "#F6F2EA",
+    padding: 4
+  },
+  logTabButton: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: "center"
+  },
+  logTabButtonActive: {
+    backgroundColor: "#5D7052"
+  },
+  logTabButtonText: {
+    color: "#4A4A40",
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  logTabButtonTextActive: {
+    color: "#F3F4F1"
   },
   themeCard: {
     marginTop: 6,
