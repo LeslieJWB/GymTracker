@@ -387,6 +387,14 @@ export function RecordScreen({
     await addSet(exerciseId);
   }
 
+  function openAdviceSheetForExercise(item: { id: string; exerciseItemId: string; exerciseItemName: string }): void {
+    setAdviceTarget({
+      exerciseId: item.id,
+      exerciseItemId: item.exerciseItemId,
+      exerciseItemName: item.exerciseItemName
+    });
+  }
+
   function openExerciseMenu(item: { id: string; exerciseItemId: string; exerciseItemName: string }): void {
     setExerciseMenuTarget({ id: item.id, exerciseItemId: item.exerciseItemId, exerciseItemName: item.exerciseItemName });
   }
@@ -897,6 +905,15 @@ export function RecordScreen({
                         >
                           <Text style={styles.addSetSimpleButtonText}>+ Add Set</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.addSetSimpleButton}
+                          onPress={() => {
+                            openAdviceSheetForExercise(item);
+                          }}
+                          disabled={loading || !user}
+                        >
+                          <Text style={styles.addSetSimpleButtonText}>Add AI Recommended Sets</Text>
+                        </TouchableOpacity>
 
                       </>
                     )}
@@ -1070,15 +1087,11 @@ export function RecordScreen({
                 const target = exerciseMenuTarget;
                 closeExerciseMenu();
                 if (target) {
-                  setAdviceTarget({
-                    exerciseId: target.id,
-                    exerciseItemId: target.exerciseItemId,
-                    exerciseItemName: target.exerciseItemName
-                  });
+                  openAdviceSheetForExercise(target);
                 }
               }}
             >
-              <Text style={styles.menuRowText}>Get AI Advice</Text>
+              <Text style={styles.menuRowText}>Add AI Recommended Sets</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.menuRow}

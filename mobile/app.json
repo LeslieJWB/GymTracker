@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "AI Fitness Tracker",
     "slug": "mobile",
     "scheme": "gymtracker",
     "version": "1.0.0",
@@ -19,7 +19,7 @@
         "NSCameraUsageDescription": "Allow GymTracker to take food photos for nutrition analysis.",
         "NSPhotoLibraryUsageDescription": "Allow GymTracker to select food photos for nutrition analysis."
       },
-      "bundleIdentifier": "com.anonymous.mobile"
+      "bundleIdentifier": "com.lesliejiang.gymtracker"
     },
     "android": {
       "adaptiveIcon": {
