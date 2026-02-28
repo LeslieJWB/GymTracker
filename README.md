@@ -61,7 +61,7 @@ If running on a physical device, update backend URL in the app UI from `localhos
 
 1. Ensure `backend/.env` is not committed and secrets are only stored in Render environment variables.
 2. Rotate any exposed API keys before production rollout.
-3. Keep `ENABLE_BOOTSTRAP_USER=false` in production.
+3. Ensure only authenticated endpoints are exposed in production.
 
 ### 2) Create the Render web service
 
@@ -84,7 +84,6 @@ Set these variables in Render:
 - `GEMINI_API_KEY=<optional-but-recommended-for-advice-and-food-endpoints>`
 - `ALLOWED_ORIGINS=<comma-separated-origins-that-can-call-your-api>`
 - `TRUST_PROXY=true`
-- `ENABLE_BOOTSTRAP_USER=false`
 
 Notes:
 
@@ -110,10 +109,9 @@ Notes:
 - `GET /me`
 - `GET /me/profile`
 - `PUT /me/profile`
-- `GET /users/bootstrap` (dev-only when `ENABLE_BOOTSTRAP_USER=true`)
 - `GET /exercise-items`
-- `GET /records?userId=...&from=YYYY-MM-DD&to=YYYY-MM-DD`
-- `GET /records/by-date?userId=...&date=YYYY-MM-DD`
+- `GET /records?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /records/by-date?date=YYYY-MM-DD`
 - `GET /records/:recordId`
 - `POST /records/by-date/exercises`
 - `POST /records/:recordId/exercises`

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { pool, withTransaction } from "../db.js";
+import { requireAuth } from "../middleware/auth.js";
+import { upsertUserFromAuth } from "../shared/authUsers.js";
 import { daysAgo, todayDate } from "../shared/dates.js";
 import {
   findIdempotentResponse,
@@ -8,25 +10,28 @@ import {
   saveIdempotentResponse
 } from "../shared/idempotency.js";
 import {
-  byDateSchema,
+  byDateNoUserSchema,
   createExerciseByDateSchema,
   createExerciseSchema,
-  dateRangeSchema,
+  dateRangeNoUserSchema,
   idSchema,
   patchRecordThemeByDateSchema
 } from "../shared/validation.js";
 
 export const recordsRouter = Router();
+recordsRouter.use(requireAuth);
 
 recordsRouter.get("/records", async (req, res) => {
-  const parsed = dateRangeSchema.safeParse(req.query);
+  if (!req.auth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const parsed = dateRangeNoUserSchema.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({
-      error: "userId is required and dates must be YYYY-MM-DD when provided"
+      error: "dates must be YYYY-MM-DD when provided"
     });
   }
 
-  const { userId } = parsed.data;
   const from = parsed.data.from ?? daysAgo(60);
   const to = parsed.data.to ?? todayDate();
 
@@ -35,6 +40,7 @@ recordsRouter.get("/records", async (req, res) => {
   }
 
   try {
+    const appUser = await upsertUserFromAuth(req.auth);
     const result = await pool.query<{
       record_id: string;
       record_date: string;
@@ -58,7 +64,7 @@ recordsRouter.get("/records", async (req, res) => {
         GROUP BY r.id, r.record_date, r.theme
         ORDER BY r.record_date DESC
       `,
-      [userId, from, to]
+      [appUser.id, from, to]
     );
 
     return res.json(
@@ -76,13 +82,17 @@ recordsRouter.get("/records", async (req, res) => {
 });
 
 recordsRouter.get("/records/by-date", async (req, res) => {
-  const parsed = byDateSchema.safeParse(req.query);
+  if (!req.auth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const parsed = byDateNoUserSchema.safeParse(req.query);
   if (!parsed.success) {
-    return res.status(400).json({ error: "userId and date are required" });
+    return res.status(400).json({ error: "date is required" });
   }
 
-  const { userId, date } = parsed.data;
+  const { date } = parsed.data;
   try {
+    const appUser = await upsertUserFromAuth(req.auth);
     const recordResult = await pool.query<{ id: string; record_date: string; theme: string | null }>(
       `
         SELECT id, record_date::text, theme
@@ -90,7 +100,7 @@ recordsRouter.get("/records/by-date", async (req, res) => {
         WHERE user_id = $1 AND record_date = $2::date
         LIMIT 1
       `,
-      [userId, date]
+      [appUser.id, date]
     );
     if (recordResult.rowCount === 0) {
       return res.json(null);
@@ -129,7 +139,7 @@ recordsRouter.get("/records/by-date", async (req, res) => {
     return res.json({
       recordId,
       date,
-      userId,
+      userId: appUser.id,
       theme: recordResult.rows[0].theme,
       exercises: detail.rows.map((row) => ({
         id: row.exercise_id,
@@ -148,20 +158,25 @@ recordsRouter.get("/records/by-date", async (req, res) => {
 });
 
 recordsRouter.get("/records/:recordId", async (req, res) => {
+  if (!req.auth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   const recordId = req.params.recordId;
   if (!idSchema.safeParse(recordId).success) {
     return res.status(400).json({ error: "Invalid recordId" });
   }
 
   try {
-    const result = await pool.query<{ user_id: string; record_date: string; theme: string | null }>(
+    const appUser = await upsertUserFromAuth(req.auth);
+    const result = await pool.query<{ record_date: string; theme: string | null }>(
       `
-        SELECT user_id, record_date::text, theme
+        SELECT record_date::text, theme
         FROM records
         WHERE id = $1
+          AND user_id = $2
         LIMIT 1
       `,
-      [recordId]
+      [recordId, appUser.id]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Record not found" });
@@ -200,7 +215,7 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
 
     return res.json({
       recordId,
-      userId: base.user_id,
+      userId: appUser.id,
       date: base.record_date,
       theme: base.theme,
       exercises: detail.rows.map((row) => ({
@@ -220,13 +235,17 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
 });
 
 recordsRouter.patch("/records/by-date/theme", async (req, res) => {
+  if (!req.auth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   const parsed = patchRecordThemeByDateSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
 
-  const { userId, date, theme } = parsed.data;
+  const { date, theme } = parsed.data;
   try {
+    const appUser = await upsertUserFromAuth(req.auth);
     const result = await pool.query<{
       id: string;
       record_date: string;
@@ -241,14 +260,14 @@ recordsRouter.patch("/records/by-date/theme", async (req, res) => {
           updated_at = now()
         RETURNING id, record_date::text, theme
       `,
-      [randomUUID(), userId, date, theme]
+      [randomUUID(), appUser.id, date, theme]
     );
 
     const row = result.rows[0];
     return res.json({
       recordId: row.id,
       date: row.record_date,
-      userId,
+      userId: appUser.id,
       theme: row.theme
     });
   } catch (error) {
@@ -257,16 +276,20 @@ recordsRouter.patch("/records/by-date/theme", async (req, res) => {
 });
 
 recordsRouter.post("/records/by-date/exercises", async (req, res) => {
+  if (!req.auth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   const parsed = createExerciseByDateSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
 
-  const { userId, date, exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+  const { date, exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+  const appUser = await upsertUserFromAuth(req.auth);
   const key = idempotencyHeader(req);
   const endpoint = "POST /records/by-date/exercises";
   if (key) {
-    const existing = await findIdempotentResponse(userId, endpoint, key);
+    const existing = await findIdempotentResponse(appUser.id, endpoint, key);
     if (existing) {
       return res.status(existing.status).json(existing.body);
     }
@@ -282,7 +305,7 @@ recordsRouter.post("/records/by-date/exercises", async (req, res) => {
           DO UPDATE SET updated_at = now()
           RETURNING id, record_date::text
         `,
-        [randomUUID(), userId, date]
+        [randomUUID(), appUser.id, date]
       );
       const recordId = recordResult.rows[0].id;
       const exerciseId = randomUUID();
@@ -336,7 +359,7 @@ recordsRouter.post("/records/by-date/exercises", async (req, res) => {
     });
 
     if (key) {
-      await saveIdempotentResponse(userId, endpoint, key, 201, payload);
+      await saveIdempotentResponse(appUser.id, endpoint, key, 201, payload);
     }
 
     return res.status(201).json(payload);
@@ -346,6 +369,9 @@ recordsRouter.post("/records/by-date/exercises", async (req, res) => {
 });
 
 recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
+  if (!req.auth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   const recordId = req.params.recordId;
   if (!idSchema.safeParse(recordId).success) {
     return res.status(400).json({ error: "Invalid recordId" });
@@ -354,11 +380,12 @@ recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
-  const { userId, exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+  const { exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+  const appUser = await upsertUserFromAuth(req.auth);
   const endpoint = "POST /records/:recordId/exercises";
   const key = idempotencyHeader(req);
   if (key) {
-    const existing = await findIdempotentResponse(userId, endpoint, key);
+    const existing = await findIdempotentResponse(appUser.id, endpoint, key);
     if (existing) {
       return res.status(existing.status).json(existing.body);
     }
@@ -372,7 +399,7 @@ recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
         WHERE id = $1 AND user_id = $2
         LIMIT 1
       `,
-      [recordId, userId]
+      [recordId, appUser.id]
     );
     if (recordCheck.rowCount === 0) {
       return res.status(404).json({ error: "Record not found for user" });
@@ -429,7 +456,7 @@ recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
     });
 
     if (key) {
-      await saveIdempotentResponse(userId, endpoint, key, 201, payload);
+      await saveIdempotentResponse(appUser.id, endpoint, key, 201, payload);
     }
 
     return res.status(201).json(payload);

@@ -12,7 +12,6 @@ import { healthRouter } from "./routes/health.js";
 import { meRouter } from "./routes/me.js";
 import { recordsRouter } from "./routes/records.js";
 import { statisticsRouter } from "./routes/statistics.js";
-import { usersRouter } from "./routes/users.js";
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -41,7 +40,6 @@ app.use("/assets", express.static(publicDir));
 
 app.use(healthRouter);
 app.use(meRouter);
-app.use(usersRouter);
 app.use(exerciseItemsRouter);
 app.use(recordsRouter);
 app.use(exercisesRouter);

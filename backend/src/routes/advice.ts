@@ -542,12 +542,11 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
     const prompt = buildStructuredPrompt({
       profile: promptProfile,
       customPrompt: promptProfile.globalLlmPrompt,
-      requestContext: `You are a fitness coach and nutrition reviewer. Provide a concise review for today's performance with emphasis on incremental progress.
+      requestContext: `You are a fitness coach and nutrition reviewer. Provide a concise review for today's performance.
 Today date: ${date}
 ${themeContext}
 Current request timestamp and daypart: ${formatNowContext()}
-Important: Today's logs may be incomplete at this time, so mention missing/partial logging when relevant.
-Priority rule: Treat today's theme as authoritative day intent and calibrate the review tone and recommendations accordingly.
+The user might indicate he/she does not plan to exercise today by setting the theme as "rest" or other words, in which case you should not ask the user to log exercises.
 
 Today's completed exercises details:
 ${todayExerciseText}

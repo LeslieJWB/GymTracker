@@ -104,39 +104,6 @@ function idempotencyHeader(req: express.Request): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-async function ensureDefaultUser(): Promise<{
-  id: string;
-  username: string;
-  displayName: string | null;
-}> {
-  const defaultId = "11111111-1111-1111-1111-111111111111";
-  const defaultUsername = "default_user";
-  const defaultDisplayName = "Default User";
-  await pool.query(
-    `
-      INSERT INTO users (id, username, display_name)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (username) DO NOTHING
-    `,
-    [defaultId, defaultUsername, defaultDisplayName]
-  );
-  const result = await pool.query<{
-    id: string;
-    username: string;
-    display_name: string | null;
-  }>(
-    `
-      SELECT id, username, display_name
-      FROM users
-      WHERE username = $1
-      LIMIT 1
-    `,
-    [defaultUsername]
-  );
-  const row = result.rows[0];
-  return { id: row.id, username: row.username, displayName: row.display_name };
-}
-
 async function getOrCreateRecord(
   userId: string,
   date: string
@@ -210,15 +177,6 @@ function buildFallbackAdvice(targetDate: string, rows: string[]): string {
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
-});
-
-app.get("/users/bootstrap", async (_req, res) => {
-  try {
-    const user = await ensureDefaultUser();
-    return res.json(user);
-  } catch (error) {
-    return res.status(500).json({ error: String(error) });
-  }
 });
 
 app.get("/exercise-items", async (req, res) => {
