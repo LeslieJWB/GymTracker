@@ -93,24 +93,6 @@ function idempotencyHeader(req) {
     const trimmed = key.trim();
     return trimmed.length > 0 ? trimmed : null;
 }
-async function ensureDefaultUser() {
-    const defaultId = "11111111-1111-1111-1111-111111111111";
-    const defaultUsername = "default_user";
-    const defaultDisplayName = "Default User";
-    await pool.query(`
-      INSERT INTO users (id, username, display_name)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (username) DO NOTHING
-    `, [defaultId, defaultUsername, defaultDisplayName]);
-    const result = await pool.query(`
-      SELECT id, username, display_name
-      FROM users
-      WHERE username = $1
-      LIMIT 1
-    `, [defaultUsername]);
-    const row = result.rows[0];
-    return { id: row.id, username: row.username, displayName: row.display_name };
-}
 async function getOrCreateRecord(userId, date) {
     const result = await pool.query(`
       INSERT INTO records (id, user_id, record_date)
@@ -155,15 +137,6 @@ function buildFallbackAdvice(targetDate, rows) {
 }
 app.get("/health", (_req, res) => {
     res.json({ ok: true });
-});
-app.get("/users/bootstrap", async (_req, res) => {
-    try {
-        const user = await ensureDefaultUser();
-        return res.json(user);
-    }
-    catch (error) {
-        return res.status(500).json({ error: String(error) });
-    }
 });
 app.get("/exercise-items", async (req, res) => {
     try {

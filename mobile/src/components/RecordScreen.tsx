@@ -3,7 +3,16 @@ import * as ImagePicker from "expo-image-picker";
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { appStyles } from "../styles/appStyles";
 import { SwipeActionRow } from "./SwipeActionRow";
-import { AdviceReviewResult, ExerciseDetail, ExerciseItem, RecordDetail, SetDraft, SetDrafts, User } from "../types/workout";
+import {
+  AdviceReviewResult,
+  DailyNutritionTargets,
+  ExerciseDetail,
+  ExerciseItem,
+  RecordDetail,
+  SetDraft,
+  SetDrafts,
+  User
+} from "../types/workout";
 
 export type NewExerciseSetDraft = {
   reps: number;
@@ -100,6 +109,7 @@ type RecordScreenProps = {
     exerciseName: string;
     date: string;
   }) => Promise<AdviceReviewResult>;
+  dailyNutritionTargets: DailyNutritionTargets | null;
 };
 
 export function RecordScreen({
@@ -140,7 +150,8 @@ export function RecordScreen({
   savingBodyWeight,
   saveBodyWeight,
   fetchDailySummary,
-  fetchExerciseFeedback
+  fetchExerciseFeedback,
+  dailyNutritionTargets
 }: RecordScreenProps) {
   const [showExerciseSearchModal, setShowExerciseSearchModal] = useState(false);
   const [exerciseSearchTerm, setExerciseSearchTerm] = useState("");
@@ -282,6 +293,12 @@ export function RecordScreen({
   const checkInDirty = themeDirty || bodyWeightDirty;
   const totalCaloriesKcal = recordDetail?.totalCaloriesKcal ?? 0;
   const totalProteinG = recordDetail?.totalProteinG ?? 0;
+  const calorieTarget = dailyNutritionTargets?.recommendedCaloriesKcal ?? null;
+  const proteinTarget = dailyNutritionTargets?.recommendedProteinG ?? null;
+  const calorieProgress = calorieTarget && calorieTarget > 0 ? totalCaloriesKcal / calorieTarget : null;
+  const proteinProgress = proteinTarget && proteinTarget > 0 ? totalProteinG / proteinTarget : null;
+  const calorieOverflow = calorieTarget ? Math.max(0, Math.round(totalCaloriesKcal - calorieTarget)) : 0;
+  const proteinOverflow = proteinTarget ? Math.max(0, Math.round(totalProteinG - proteinTarget)) : 0;
   const foodEntryCount = recordDetail?.foodConsumptions.length ?? 0;
   const foodEntryLabel = foodEntryCount === 1 ? "entry" : "entries";
 
@@ -549,9 +566,7 @@ export function RecordScreen({
             <Text style={styles.dailyMetricsBadgeText}>Auto</Text>
           </View>
         </View>
-        <Text style={styles.dailyMetricsHint}>
-          These values are calculated from today's workout and food logs.
-        </Text>
+        <Text style={styles.dailyMetricsHint}>These values are calculated from today&apos;s workout and food logs.</Text>
         <View style={styles.statsStrip}>
           <View style={styles.statsItem}>
             <Text style={styles.statsLabel}>Total Volume</Text>
@@ -561,13 +576,50 @@ export function RecordScreen({
             <Text style={styles.statsLabel}>Completed Sets</Text>
             <Text style={styles.statsValue}>{totalSetCount}</Text>
           </View>
-          <View style={styles.statsItem}>
-            <Text style={styles.statsLabel}>Calories</Text>
-            <Text style={styles.statsValue}>{Math.round(totalCaloriesKcal)} kcal</Text>
+        </View>
+        <View style={styles.nutritionProgressCard}>
+          <View style={styles.nutritionProgressSection}>
+            <Text style={styles.nutritionProgressTitle}>Calorie Progress</Text>
+            <View style={styles.progressRow}>
+              <Text style={styles.progressNumbers}>
+                {Math.round(totalCaloriesKcal)} / {calorieTarget ? Math.round(calorieTarget) : "--"} kcal
+              </Text>
+              {calorieOverflow > 0 ? <Text style={styles.progressOverflow}>+{calorieOverflow} kcal</Text> : null}
+            </View>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  styles.progressFillCalories,
+                  { width: `${Math.max(0, Math.min(100, Math.round((calorieProgress ?? 0) * 100)))}%` }
+                ]}
+              />
+            </View>
+            <Text style={styles.progressMeta}>
+              {calorieTarget ? `${Math.round((calorieProgress ?? 0) * 100)}% of target` : "Daily target pending"}
+            </Text>
           </View>
-          <View style={styles.statsItem}>
-            <Text style={styles.statsLabel}>Protein</Text>
-            <Text style={styles.statsValue}>{Math.round(totalProteinG)} g</Text>
+          <View style={[styles.nutritionProgressSection, styles.nutritionProgressSectionDivider]}>
+            <Text style={styles.nutritionProgressTitle}>Protein Progress</Text>
+            <View style={styles.progressRow}>
+              <Text style={styles.progressNumbers}>
+                {Math.round(totalProteinG)} / {proteinTarget ? Math.round(proteinTarget) : "--"} g
+              </Text>
+              {proteinOverflow > 0 ? <Text style={styles.progressOverflow}>+{proteinOverflow} g</Text> : null}
+            </View>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  styles.progressFillProtein,
+                  { width: `${Math.max(0, Math.min(100, Math.round((proteinProgress ?? 0) * 100)))}%` }
+                ]}
+              />
+            </View>
+            <Text style={styles.progressMeta}>
+              {proteinTarget ? `${Math.round((proteinProgress ?? 0) * 100)}% of target` : "Daily target pending"}
+            </Text>
+            {dailyNutritionTargets?.comment ? <Text style={styles.progressComment}>{dailyNutritionTargets.comment}</Text> : null}
           </View>
         </View>
       </View>
@@ -1536,6 +1588,73 @@ const styles = StyleSheet.create({
     color: "#2C2C24",
     fontSize: 20,
     fontWeight: "800"
+  },
+  nutritionProgressCard: {
+    marginTop: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#D8D1C6",
+    backgroundColor: "#FEFEFA",
+    paddingHorizontal: 12,
+    paddingVertical: 12
+  },
+  nutritionProgressSection: {
+    width: "100%"
+  },
+  nutritionProgressSectionDivider: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E8E2D8"
+  },
+  nutritionProgressTitle: {
+    color: "#4A4A40",
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  progressRow: {
+    marginTop: 6,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  progressNumbers: {
+    color: "#2C2C24",
+    fontSize: 16,
+    fontWeight: "800"
+  },
+  progressOverflow: {
+    color: "#A85448",
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  progressTrack: {
+    marginTop: 8,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: "#F0EBE5",
+    overflow: "hidden"
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999
+  },
+  progressFillCalories: {
+    backgroundColor: "#C18C5D"
+  },
+  progressFillProtein: {
+    backgroundColor: "#5D7052"
+  },
+  progressMeta: {
+    marginTop: 6,
+    color: "#78786C",
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  progressComment: {
+    marginTop: 6,
+    color: "#4A4A40",
+    fontSize: 12
   },
   checkInCard: {
     marginTop: 8,

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { gemini } from "../config.js";
 import { pool, withTransaction } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
-import { getPromptProfile, upsertUserFromAuth } from "../shared/authUsers.js";
+import { getPromptProfile, upsertUserFromAuth, type PromptProfile } from "../shared/authUsers.js";
 import {
   findIdempotentResponse,
   idempotencyHeader,
@@ -92,7 +92,7 @@ function parseFoodAnalysis(raw: string): FoodAnalysis | null {
 async function analyzeFoodConsumption(
   text: string | null,
   image: { mimeType: string; dataBase64: string } | undefined,
-  promptProfile: { age: number | null; defaultBodyWeightKg: number | null; heightCm: number | null; gender: string | null; globalLlmPrompt: string | null }
+  promptProfile: PromptProfile
 ): Promise<FoodAnalysis> {
   const fallbackDescription =
     text?.trim() ||

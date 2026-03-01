@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { pool } from "../db.js";
@@ -18,6 +19,9 @@ const exercisePlanSchema = z.object({
     date: z.string().regex(datePattern)
 });
 const dailySummarySchema = z.object({
+    date: z.string().regex(datePattern)
+});
+const dailyNutritionTargetsSchema = z.object({
     date: z.string().regex(datePattern)
 });
 const exerciseFeedbackSchema = z.object({
@@ -75,6 +79,23 @@ function formatNowContext() {
                     : "night";
     return `${now.toISOString()} (${partOfDay})`;
 }
+function themeContextBlock(theme) {
+    if (!theme) {
+        return "Today's theme: not set";
+    }
+    return `Today's theme: ${theme}`;
+}
+async function getTodayTheme(userId, date) {
+    const result = await pool.query(`
+      SELECT theme
+      FROM records
+      WHERE user_id = $1
+        AND record_date = $2::date
+      LIMIT 1
+    `, [userId, date]);
+    const theme = result.rows[0]?.theme?.trim();
+    return theme && theme.length > 0 ? theme.slice(0, 80) : null;
+}
 function parseReview(raw) {
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
     if (!cleaned) {
@@ -91,6 +112,43 @@ function parseReview(raw) {
     }
     return cleaned.slice(0, 4000);
 }
+function fallbackNutritionTargets(weightKg) {
+    if (weightKg && Number.isFinite(weightKg) && weightKg > 0) {
+        return {
+            recommendedCaloriesKcal: Math.round(weightKg * 42),
+            recommendedProteinG: Math.round(weightKg * 2),
+            comment: "Default targets based on your body weight."
+        };
+    }
+    return {
+        recommendedCaloriesKcal: 2200,
+        recommendedProteinG: 140,
+        comment: "Default targets based on generic defaults."
+    };
+}
+function parseDailyNutritionTargets(raw) {
+    const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+    if (!cleaned) {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(cleaned);
+        const calories = Number(parsed.recommendedCaloriesKcal);
+        const protein = Number(parsed.recommendedProteinG);
+        if (!Number.isFinite(calories) || !Number.isFinite(protein)) {
+            return null;
+        }
+        const comment = typeof parsed.comment === "string" ? parsed.comment.trim().slice(0, 500) : null;
+        return {
+            recommendedCaloriesKcal: Math.round(Math.min(6000, Math.max(800, calories))),
+            recommendedProteinG: Math.round(Math.min(400, Math.max(30, protein))),
+            comment: comment && comment.length > 0 ? comment : null
+        };
+    }
+    catch {
+        return null;
+    }
+}
 adviceRouter.post("/advice/exercise-plan", async (req, res) => {
     if (!req.auth) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -104,6 +162,8 @@ adviceRouter.post("/advice/exercise-plan", async (req, res) => {
     try {
         const appUser = await upsertUserFromAuth(req.auth);
         const promptProfile = await getPromptProfile(appUser.id, date);
+        const todayTheme = await getTodayTheme(appUser.id, date);
+        const themeContext = themeContextBlock(todayTheme);
         const rows = await pool.query(`
       SELECT r.record_date::text, es.reps, es.weight::text, es.set_order, e.notes AS exercise_notes, es.notes AS set_notes
       FROM records r
@@ -158,6 +218,8 @@ adviceRouter.post("/advice/exercise-plan", async (req, res) => {
             requestContext: `You are a strength training coach. Generate a concrete workout plan for today.
 Exercise: ${exerciseName}
 Today's date: ${date}
+${themeContext}
+Priority rule: Treat today's theme as the user's intent for this day and align set recommendations and advice with it.
 The user's past sessions for this exercise (date | exercise-level note | per-set logs with set-level notes):
 ${historyText}
 
@@ -218,6 +280,8 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
     try {
         const appUser = await upsertUserFromAuth(req.auth);
         const promptProfile = await getPromptProfile(appUser.id, date);
+        const todayTheme = await getTodayTheme(appUser.id, date);
+        const themeContext = themeContextBlock(todayTheme);
         const todayCompletedResult = await pool.query(`
         SELECT
           e.id AS exercise_id,
@@ -381,10 +445,11 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
         const prompt = buildStructuredPrompt({
             profile: promptProfile,
             customPrompt: promptProfile.globalLlmPrompt,
-            requestContext: `You are a fitness coach and nutrition reviewer. Provide a concise review for today's performance with emphasis on incremental progress.
+            requestContext: `You are a fitness coach and nutrition reviewer. Provide a concise review for today's performance.
 Today date: ${date}
+${themeContext}
 Current request timestamp and daypart: ${formatNowContext()}
-Important: Today's logs may be incomplete at this time, so mention missing/partial logging when relevant.
+The user might indicate he/she does not plan to exercise today by setting the theme as "rest" or other words, in which case you should not ask the user to log exercises.
 
 Today's completed exercises details:
 ${todayExerciseText}
@@ -429,6 +494,223 @@ Respond with ONLY a single JSON object:
         return res.status(500).json({ error: String(error) });
     }
 });
+adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const parsed = dailyNutritionTargetsSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    const { date } = parsed.data;
+    try {
+        const appUser = await upsertUserFromAuth(req.auth);
+        const promptProfile = await getPromptProfile(appUser.id, date);
+        const userCalorieOverride = promptProfile.dailyCalorieTargetKcal;
+        const userProteinOverride = promptProfile.dailyProteinTargetG;
+        const recordResult = await pool.query(`
+        SELECT
+          daily_calorie_target_kcal::text,
+          daily_protein_target_g::text,
+          daily_target_comment,
+          daily_target_source
+        FROM records
+        WHERE user_id = $1
+          AND record_date = $2::date
+        LIMIT 1
+      `, [appUser.id, date]);
+        const existing = recordResult.rows[0];
+        const todayTheme = await getTodayTheme(appUser.id, date);
+        const themeContext = themeContextBlock(todayTheme);
+        const effectiveWeightKg = promptProfile.defaultBodyWeightKg;
+        const fallbackTargets = fallbackNutritionTargets(effectiveWeightKg);
+        const persistTargets = async (targetPayload) => {
+            await pool.query(`
+          INSERT INTO records (
+            id,
+            user_id,
+            record_date,
+            daily_calorie_target_kcal,
+            daily_protein_target_g,
+            daily_target_source,
+            daily_target_comment
+          )
+          VALUES ($1, $2, $3::date, $4, $5, $6, $7)
+          ON CONFLICT (user_id, record_date)
+          DO UPDATE SET
+            daily_calorie_target_kcal = $4,
+            daily_protein_target_g = $5,
+            daily_target_source = $6,
+            daily_target_comment = $7,
+            updated_at = now()
+        `, [
+                randomUUID(),
+                appUser.id,
+                date,
+                targetPayload.recommendedCaloriesKcal,
+                targetPayload.recommendedProteinG,
+                targetPayload.source,
+                targetPayload.comment
+            ]);
+        };
+        const cachedCalories = existing?.daily_calorie_target_kcal ? Number(existing.daily_calorie_target_kcal) : null;
+        const cachedProtein = existing?.daily_protein_target_g ? Number(existing.daily_protein_target_g) : null;
+        const needsCaloriesFromLlm = userCalorieOverride === null && cachedCalories === null;
+        const needsProteinFromLlm = userProteinOverride === null && cachedProtein === null;
+        if (!needsCaloriesFromLlm && !needsProteinFromLlm) {
+            const responsePayload = {
+                source: (userCalorieOverride !== null || userProteinOverride !== null
+                    ? "override"
+                    : existing?.daily_target_source ?? "fallback"),
+                recommendedCaloriesKcal: userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,
+                recommendedProteinG: userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+                comment: userCalorieOverride !== null || userProteinOverride !== null
+                    ? "Using your custom daily nutrition targets from profile settings."
+                    : existing?.daily_target_comment ?? fallbackTargets.comment
+            };
+            await persistTargets(responsePayload);
+            return res.json(responsePayload);
+        }
+        if (!gemini) {
+            const responsePayload = {
+                source: "fallback",
+                recommendedCaloriesKcal: needsCaloriesFromLlm
+                    ? fallbackTargets.recommendedCaloriesKcal
+                    : userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,
+                recommendedProteinG: needsProteinFromLlm
+                    ? fallbackTargets.recommendedProteinG
+                    : userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+                comment: "AI targets unavailable. Using fallback estimates."
+            };
+            await persistTargets(responsePayload);
+            return res.json(responsePayload);
+        }
+        const prompt = buildStructuredPrompt({
+            profile: promptProfile,
+            customPrompt: promptProfile.globalLlmPrompt,
+            requestContext: `You are a nutrition coach creating daily intake targets.
+Date: ${date}
+${themeContext}
+Current request timestamp and daypart: ${formatNowContext()}
+Current effective body weight (kg): ${effectiveWeightKg ?? "unknown"}
+
+Provide targets for today's calorie and protein intake.
+Respect user profile context.
+Return ONLY a single JSON object with this exact shape:
+{"recommendedCaloriesKcal":<number>,"recommendedProteinG":<number>,"comment":"<short rationale>"}
+Rules:
+- recommendedCaloriesKcal must be between 800 and 6000.
+- recommendedProteinG must be between 30 and 400.
+- Keep comment practical and under 2 sentences.`
+        });
+        const response = await gemini.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt
+        });
+        const raw = response.text?.trim();
+        if (!raw) {
+            const responsePayload = {
+                source: "fallback",
+                recommendedCaloriesKcal: needsCaloriesFromLlm
+                    ? fallbackTargets.recommendedCaloriesKcal
+                    : userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,
+                recommendedProteinG: needsProteinFromLlm
+                    ? fallbackTargets.recommendedProteinG
+                    : userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+                comment: fallbackTargets.comment
+            };
+            await persistTargets(responsePayload);
+            return res.json(responsePayload);
+        }
+        const targets = parseDailyNutritionTargets(raw);
+        if (!targets) {
+            const responsePayload = {
+                source: "fallback",
+                recommendedCaloriesKcal: needsCaloriesFromLlm
+                    ? fallbackTargets.recommendedCaloriesKcal
+                    : userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,
+                recommendedProteinG: needsProteinFromLlm
+                    ? fallbackTargets.recommendedProteinG
+                    : userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+                comment: fallbackTargets.comment
+            };
+            await persistTargets(responsePayload);
+            return res.json(responsePayload);
+        }
+        const responsePayload = {
+            source: (userCalorieOverride !== null || userProteinOverride !== null ? "override" : "gemini"),
+            recommendedCaloriesKcal: needsCaloriesFromLlm
+                ? targets.recommendedCaloriesKcal
+                : userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,
+            recommendedProteinG: needsProteinFromLlm
+                ? targets.recommendedProteinG
+                : userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+            comment: targets.comment
+        };
+        await persistTargets(responsePayload);
+        return res.json(responsePayload);
+    }
+    catch {
+        try {
+            const appUser = await upsertUserFromAuth(req.auth);
+            const promptProfile = await getPromptProfile(appUser.id, date);
+            const fallbackTargets = fallbackNutritionTargets(promptProfile.defaultBodyWeightKg);
+            const recordResult = await pool.query(`
+          SELECT
+            daily_calorie_target_kcal::text,
+            daily_protein_target_g::text
+          FROM records
+          WHERE user_id = $1
+            AND record_date = $2::date
+          LIMIT 1
+        `, [appUser.id, date]);
+            const existing = recordResult.rows[0];
+            const responsePayload = {
+                source: (promptProfile.dailyCalorieTargetKcal !== null || promptProfile.dailyProteinTargetG !== null
+                    ? "override"
+                    : "fallback"),
+                recommendedCaloriesKcal: promptProfile.dailyCalorieTargetKcal ??
+                    (existing?.daily_calorie_target_kcal ? Number(existing.daily_calorie_target_kcal) : null) ??
+                    fallbackTargets.recommendedCaloriesKcal,
+                recommendedProteinG: promptProfile.dailyProteinTargetG ??
+                    (existing?.daily_protein_target_g ? Number(existing.daily_protein_target_g) : null) ??
+                    fallbackTargets.recommendedProteinG,
+                comment: fallbackTargets.comment
+            };
+            await pool.query(`
+          INSERT INTO records (
+            id,
+            user_id,
+            record_date,
+            daily_calorie_target_kcal,
+            daily_protein_target_g,
+            daily_target_source,
+            daily_target_comment
+          )
+          VALUES ($1, $2, $3::date, $4, $5, $6, $7)
+          ON CONFLICT (user_id, record_date)
+          DO UPDATE SET
+            daily_calorie_target_kcal = $4,
+            daily_protein_target_g = $5,
+            daily_target_source = $6,
+            daily_target_comment = $7,
+            updated_at = now()
+        `, [
+                randomUUID(),
+                appUser.id,
+                date,
+                responsePayload.recommendedCaloriesKcal,
+                responsePayload.recommendedProteinG,
+                responsePayload.source,
+                responsePayload.comment
+            ]);
+            return res.json(responsePayload);
+        }
+        catch (innerError) {
+            return res.status(500).json({ error: String(innerError) });
+        }
+    }
+});
 adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
     if (!req.auth) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -445,6 +727,8 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
     try {
         const appUser = await upsertUserFromAuth(req.auth);
         const promptProfile = await getPromptProfile(appUser.id, date);
+        const todayTheme = await getTodayTheme(appUser.id, date);
+        const themeContext = themeContextBlock(todayTheme);
         const todaySetRows = await pool.query(`
         SELECT
           e.notes AS exercise_notes,
@@ -518,8 +802,10 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
             requestContext: `You are a strength coach reviewing today's completed session for one exercise.
 Exercise: ${exerciseName}
 Today date: ${date}
+${themeContext}
 Current request timestamp and daypart: ${formatNowContext()}
 Important: The user may still be mid-workout, so mention if data appears incomplete.
+Priority rule: Treat today's theme as authoritative day intent and align feedback direction with it.
 
 Today's completed sets:
 ${todaySetsText}

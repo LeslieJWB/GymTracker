@@ -94,6 +94,8 @@ export type PromptProfile = {
   defaultBodyWeightKg: number | null;
   heightCm: number | null;
   gender: string | null;
+  dailyCalorieTargetKcal: number | null;
+  dailyProteinTargetG: number | null;
   globalLlmPrompt: string | null;
 };
 
@@ -123,6 +125,8 @@ export async function getPromptProfile(userId: string, asOfDate?: string): Promi
     latest_weight_kg: string | null;
     height_cm: string | null;
     gender: string | null;
+    daily_calorie_target_kcal: string | null;
+    daily_protein_target_g: string | null;
     global_llm_prompt: string | null;
   }>(
     `
@@ -139,6 +143,8 @@ export async function getPromptProfile(userId: string, asOfDate?: string): Promi
         ) AS latest_weight_kg,
         height_cm::text,
         gender,
+        daily_calorie_target_kcal::text,
+        daily_protein_target_g::text,
         global_llm_prompt
       FROM users
       WHERE id = $1
@@ -153,6 +159,8 @@ export async function getPromptProfile(userId: string, asOfDate?: string): Promi
       defaultBodyWeightKg: null,
       heightCm: null,
       gender: null,
+      dailyCalorieTargetKcal: null,
+      dailyProteinTargetG: null,
       globalLlmPrompt: null
     };
   }
@@ -166,6 +174,8 @@ export async function getPromptProfile(userId: string, asOfDate?: string): Promi
         : null,
     heightCm: row.height_cm ? Number(row.height_cm) : null,
     gender: row.gender,
+    dailyCalorieTargetKcal: row.daily_calorie_target_kcal ? Number(row.daily_calorie_target_kcal) : null,
+    dailyProteinTargetG: row.daily_protein_target_g ? Number(row.daily_protein_target_g) : null,
     globalLlmPrompt: row.global_llm_prompt
   };
 }

@@ -1,24 +1,30 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { pool, withTransaction } from "../db.js";
+import { requireAuth } from "../middleware/auth.js";
+import { upsertUserFromAuth } from "../shared/authUsers.js";
 import { daysAgo, todayDate } from "../shared/dates.js";
 import { findIdempotentResponse, idempotencyHeader, saveIdempotentResponse } from "../shared/idempotency.js";
-import { byDateSchema, createExerciseByDateSchema, createExerciseSchema, dateRangeSchema, idSchema, patchRecordThemeByDateSchema } from "../shared/validation.js";
+import { byDateNoUserSchema, createExerciseByDateSchema, createExerciseSchema, dateRangeNoUserSchema, idSchema, patchRecordThemeByDateSchema } from "../shared/validation.js";
 export const recordsRouter = Router();
+recordsRouter.use(requireAuth);
 recordsRouter.get("/records", async (req, res) => {
-    const parsed = dateRangeSchema.safeParse(req.query);
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const parsed = dateRangeNoUserSchema.safeParse(req.query);
     if (!parsed.success) {
         return res.status(400).json({
-            error: "userId is required and dates must be YYYY-MM-DD when provided"
+            error: "dates must be YYYY-MM-DD when provided"
         });
     }
-    const { userId } = parsed.data;
     const from = parsed.data.from ?? daysAgo(60);
     const to = parsed.data.to ?? todayDate();
     if (from > to) {
         return res.status(400).json({ error: "'from' cannot be after 'to'" });
     }
     try {
+        const appUser = await upsertUserFromAuth(req.auth);
         const result = await pool.query(`
         SELECT
           r.id AS record_id,
@@ -34,7 +40,7 @@ recordsRouter.get("/records", async (req, res) => {
           AND r.record_date <= $3::date
         GROUP BY r.id, r.record_date, r.theme
         ORDER BY r.record_date DESC
-      `, [userId, from, to]);
+      `, [appUser.id, from, to]);
         return res.json(result.rows.map((row) => ({
             recordId: row.record_id,
             date: row.record_date,
@@ -48,18 +54,30 @@ recordsRouter.get("/records", async (req, res) => {
     }
 });
 recordsRouter.get("/records/by-date", async (req, res) => {
-    const parsed = byDateSchema.safeParse(req.query);
-    if (!parsed.success) {
-        return res.status(400).json({ error: "userId and date are required" });
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
     }
-    const { userId, date } = parsed.data;
+    const parsed = byDateNoUserSchema.safeParse(req.query);
+    if (!parsed.success) {
+        return res.status(400).json({ error: "date is required" });
+    }
+    const { date } = parsed.data;
     try {
+        const appUser = await upsertUserFromAuth(req.auth);
         const recordResult = await pool.query(`
-        SELECT id, record_date::text, theme
+        SELECT
+          id,
+          record_date::text,
+          theme,
+          check_in_initialized,
+          daily_calorie_target_kcal::text,
+          daily_protein_target_g::text,
+          daily_target_source,
+          daily_target_comment
         FROM records
         WHERE user_id = $1 AND record_date = $2::date
         LIMIT 1
-      `, [userId, date]);
+      `, [appUser.id, date]);
         if (recordResult.rowCount === 0) {
             return res.json(null);
         }
@@ -84,8 +102,17 @@ recordsRouter.get("/records/by-date", async (req, res) => {
         return res.json({
             recordId,
             date,
-            userId,
+            userId: appUser.id,
             theme: recordResult.rows[0].theme,
+            checkInInitialized: recordResult.rows[0].check_in_initialized,
+            dailyCalorieTargetKcal: recordResult.rows[0].daily_calorie_target_kcal
+                ? Number(recordResult.rows[0].daily_calorie_target_kcal)
+                : null,
+            dailyProteinTargetG: recordResult.rows[0].daily_protein_target_g
+                ? Number(recordResult.rows[0].daily_protein_target_g)
+                : null,
+            dailyTargetSource: recordResult.rows[0].daily_target_source,
+            dailyTargetComment: recordResult.rows[0].daily_target_comment,
             exercises: detail.rows.map((row) => ({
                 id: row.exercise_id,
                 exerciseItemId: row.exercise_item_id,
@@ -103,17 +130,29 @@ recordsRouter.get("/records/by-date", async (req, res) => {
     }
 });
 recordsRouter.get("/records/:recordId", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const recordId = req.params.recordId;
     if (!idSchema.safeParse(recordId).success) {
         return res.status(400).json({ error: "Invalid recordId" });
     }
     try {
+        const appUser = await upsertUserFromAuth(req.auth);
         const result = await pool.query(`
-        SELECT user_id, record_date::text, theme
+        SELECT
+          record_date::text,
+          theme,
+          check_in_initialized,
+          daily_calorie_target_kcal::text,
+          daily_protein_target_g::text,
+          daily_target_source,
+          daily_target_comment
         FROM records
         WHERE id = $1
+          AND user_id = $2
         LIMIT 1
-      `, [recordId]);
+      `, [recordId, appUser.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Record not found" });
         }
@@ -137,9 +176,14 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
       `, [recordId]);
         return res.json({
             recordId,
-            userId: base.user_id,
+            userId: appUser.id,
             date: base.record_date,
             theme: base.theme,
+            checkInInitialized: base.check_in_initialized,
+            dailyCalorieTargetKcal: base.daily_calorie_target_kcal ? Number(base.daily_calorie_target_kcal) : null,
+            dailyProteinTargetG: base.daily_protein_target_g ? Number(base.daily_protein_target_g) : null,
+            dailyTargetSource: base.daily_target_source,
+            dailyTargetComment: base.daily_target_comment,
             exercises: detail.rows.map((row) => ({
                 id: row.exercise_id,
                 exerciseItemId: row.exercise_item_id,
@@ -157,27 +201,43 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
     }
 });
 recordsRouter.patch("/records/by-date/theme", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const parsed = patchRecordThemeByDateSchema.safeParse(req.body);
     if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const { userId, date, theme } = parsed.data;
+    const { date, theme } = parsed.data;
     try {
+        const appUser = await upsertUserFromAuth(req.auth);
         const result = await pool.query(`
-        INSERT INTO records (id, user_id, record_date, theme)
-        VALUES ($1, $2, $3::date, $4)
+        INSERT INTO records (
+          id,
+          user_id,
+          record_date,
+          theme,
+          check_in_initialized
+        )
+        VALUES ($1, $2, $3::date, $4, true)
         ON CONFLICT (user_id, record_date)
         DO UPDATE SET
           theme = $4,
+          check_in_initialized = true,
           updated_at = now()
-        RETURNING id, record_date::text, theme
-      `, [randomUUID(), userId, date, theme]);
+        RETURNING
+          id,
+          record_date::text,
+          theme,
+          check_in_initialized
+      `, [randomUUID(), appUser.id, date, theme]);
         const row = result.rows[0];
         return res.json({
             recordId: row.id,
             date: row.record_date,
-            userId,
-            theme: row.theme
+            userId: appUser.id,
+            theme: row.theme,
+            checkInInitialized: row.check_in_initialized
         });
     }
     catch (error) {
@@ -185,15 +245,19 @@ recordsRouter.patch("/records/by-date/theme", async (req, res) => {
     }
 });
 recordsRouter.post("/records/by-date/exercises", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const parsed = createExerciseByDateSchema.safeParse(req.body);
     if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const { userId, date, exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+    const { date, exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+    const appUser = await upsertUserFromAuth(req.auth);
     const key = idempotencyHeader(req);
     const endpoint = "POST /records/by-date/exercises";
     if (key) {
-        const existing = await findIdempotentResponse(userId, endpoint, key);
+        const existing = await findIdempotentResponse(appUser.id, endpoint, key);
         if (existing) {
             return res.status(existing.status).json(existing.body);
         }
@@ -206,7 +270,7 @@ recordsRouter.post("/records/by-date/exercises", async (req, res) => {
           ON CONFLICT (user_id, record_date)
           DO UPDATE SET updated_at = now()
           RETURNING id, record_date::text
-        `, [randomUUID(), userId, date]);
+        `, [randomUUID(), appUser.id, date]);
             const recordId = recordResult.rows[0].id;
             const exerciseId = randomUUID();
             await client.query(`
@@ -243,7 +307,7 @@ recordsRouter.post("/records/by-date/exercises", async (req, res) => {
             };
         });
         if (key) {
-            await saveIdempotentResponse(userId, endpoint, key, 201, payload);
+            await saveIdempotentResponse(appUser.id, endpoint, key, 201, payload);
         }
         return res.status(201).json(payload);
     }
@@ -252,6 +316,9 @@ recordsRouter.post("/records/by-date/exercises", async (req, res) => {
     }
 });
 recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const recordId = req.params.recordId;
     if (!idSchema.safeParse(recordId).success) {
         return res.status(400).json({ error: "Invalid recordId" });
@@ -260,11 +327,12 @@ recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
     if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const { userId, exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+    const { exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+    const appUser = await upsertUserFromAuth(req.auth);
     const endpoint = "POST /records/:recordId/exercises";
     const key = idempotencyHeader(req);
     if (key) {
-        const existing = await findIdempotentResponse(userId, endpoint, key);
+        const existing = await findIdempotentResponse(appUser.id, endpoint, key);
         if (existing) {
             return res.status(existing.status).json(existing.body);
         }
@@ -275,7 +343,7 @@ recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
         FROM records
         WHERE id = $1 AND user_id = $2
         LIMIT 1
-      `, [recordId, userId]);
+      `, [recordId, appUser.id]);
         if (recordCheck.rowCount === 0) {
             return res.status(404).json({ error: "Record not found for user" });
         }
@@ -314,7 +382,7 @@ recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
             };
         });
         if (key) {
-            await saveIdempotentResponse(userId, endpoint, key, 201, payload);
+            await saveIdempotentResponse(appUser.id, endpoint, key, 201, payload);
         }
         return res.status(201).json(payload);
     }

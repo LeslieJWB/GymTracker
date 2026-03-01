@@ -3,7 +3,20 @@ import { useFonts } from "expo-font";
 import { Fraunces_600SemiBold, Fraunces_700Bold } from "@expo-google-fonts/fraunces";
 import { Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import { AuthScreen } from "./src/components/AuthScreen";
 import { CalendarScreen } from "./src/components/CalendarScreen";
 import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/components/RecordScreen.tsx";
@@ -16,6 +29,7 @@ import { appStyles } from "./src/styles/appStyles";
 import {
   AdviceReviewResult,
   BodyWeightRecord,
+  DailyNutritionTargets,
   ExerciseDailyMetricsPoint,
   ExerciseDetail,
   ExerciseItem,
@@ -65,6 +79,28 @@ function monthRange(monthCursor: Date): { from: string; to: string } {
   };
 }
 
+function sanitizeWeightInput(value: string): string {
+  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
+  const [whole, ...decimals] = normalized.split(".");
+  if (decimals.length === 0) {
+    return whole;
+  }
+  return `${whole}.${decimals.join("")}`;
+}
+
+function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories: number; protein: number } {
+  if (weightKg !== null && Number.isFinite(weightKg) && weightKg > 0) {
+    return {
+      calories: Math.round(weightKg * 42),
+      protein: Math.round(weightKg * 2)
+    };
+  }
+  return {
+    calories: 2200,
+    protein: 140
+  };
+}
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
@@ -108,6 +144,20 @@ export default function App() {
   const [nutritionHistory, setNutritionHistory] = useState<NutritionDailyPoint[]>([]);
   const [statisticsExerciseItemId, setStatisticsExerciseItemId] = useState<string | null>(null);
   const [exerciseMetricHistory, setExerciseMetricHistory] = useState<ExerciseDailyMetricsPoint[]>([]);
+  const [dailyNutritionTargets, setDailyNutritionTargets] = useState<DailyNutritionTargets | null>(null);
+  const [dailyTargetsDate, setDailyTargetsDate] = useState<string | null>(null);
+  const [dailyCheckInThemeDraft, setDailyCheckInThemeDraft] = useState("");
+  const [dailyCheckInWeightDraft, setDailyCheckInWeightDraft] = useState("");
+  const [dailyCheckInSubmitting, setDailyCheckInSubmitting] = useState(false);
+  const [onboardingGender, setOnboardingGender] = useState("");
+  const [onboardingDefaultWeight, setOnboardingDefaultWeight] = useState("");
+  const [onboardingHeight, setOnboardingHeight] = useState("");
+  const [onboardingCalorieTarget, setOnboardingCalorieTarget] = useState("");
+  const [onboardingProteinTarget, setOnboardingProteinTarget] = useState("");
+  const [onboardingDateOfBirth, setOnboardingDateOfBirth] = useState("");
+  const [onboardingLlmPrompt, setOnboardingLlmPrompt] = useState("");
+  const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
+  const [onboardingError, setOnboardingError] = useState<string | null>(null);
 
   const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL.trim().replace(/\/$/, ""), []);
 
@@ -179,6 +229,15 @@ export default function App() {
       setNutritionHistory([]);
       setStatisticsExerciseItemId(null);
       setExerciseMetricHistory([]);
+      setDailyNutritionTargets(null);
+      setDailyTargetsDate(null);
+      setDailyCheckInThemeDraft("");
+      setDailyCheckInWeightDraft("");
+      setOnboardingGender("");
+      setOnboardingDefaultWeight("");
+      setOnboardingHeight("");
+      setOnboardingDateOfBirth("");
+      setOnboardingLlmPrompt("");
       return;
     }
     setLoading(true);
@@ -191,6 +250,15 @@ export default function App() {
       setUser(bootUser);
       setProfile(profilePayload);
       setExerciseItems(items);
+      if (!profilePayload.profileInitialized) {
+        setRecordDetail(null);
+        setRecordThemeDraft("");
+        setSavedBodyWeightKg(null);
+        setBodyWeightDraft("");
+        setDailyNutritionTargets(null);
+        setDailyTargetsDate(null);
+        return;
+      }
       const today = todayDate();
       setSelectedDate(today);
       setScreen("record");
@@ -213,21 +281,42 @@ export default function App() {
           }, items)
         );
         setRecordThemeDraft(detail.theme ?? "");
+        if (detail.dailyCalorieTargetKcal !== null && detail.dailyProteinTargetG !== null) {
+          setDailyNutritionTargets({
+            source: detail.dailyTargetSource ?? "fallback",
+            recommendedCaloriesKcal: detail.dailyCalorieTargetKcal,
+            recommendedProteinG: detail.dailyProteinTargetG,
+            comment: detail.dailyTargetComment
+          });
+          setDailyTargetsDate(today);
+        } else {
+          setDailyNutritionTargets(null);
+          setDailyTargetsDate(null);
+        }
       } else {
         setRecordDetail({
           recordId: "",
           date: today,
           userId: bootUser.id,
           theme: null,
+          checkInInitialized: false,
+          dailyCalorieTargetKcal: null,
+          dailyProteinTargetG: null,
+          dailyTargetComment: null,
+          dailyTargetSource: null,
           exercises: [],
           foodConsumptions: food.entries,
           totalCaloriesKcal: food.totalCaloriesKcal,
           totalProteinG: food.totalProteinG
         });
         setRecordThemeDraft("");
+        setDailyNutritionTargets(null);
+        setDailyTargetsDate(null);
       }
       setSavedBodyWeightKg(weight);
       setBodyWeightDraft(weight === null ? "" : String(weight));
+      setDailyCheckInThemeDraft(detail?.theme ?? "");
+      setDailyCheckInWeightDraft(weight === null ? "" : String(weight));
     } catch (error) {
       Alert.alert("Failed to bootstrap", String(error));
     } finally {
@@ -239,16 +328,41 @@ export default function App() {
     heightCm: number | null;
     gender: string | null;
     defaultBodyWeightKg: number | null;
+    dailyCalorieTargetKcal: number | null;
+    dailyProteinTargetG: number | null;
     dateOfBirth: string | null;
     globalLlmPrompt: string | null;
-  }): Promise<void> {
+    profileInitialized?: boolean;
+  }, options?: { showSuccessAlert?: boolean }): Promise<void> {
+    const showSuccessAlert = options?.showSuccessAlert ?? true;
     setSavingProfile(true);
     try {
+      if (
+        payload.dailyCalorieTargetKcal !== null &&
+        (!Number.isFinite(payload.dailyCalorieTargetKcal) ||
+          payload.dailyCalorieTargetKcal < 800 ||
+          payload.dailyCalorieTargetKcal > 6000)
+      ) {
+        Alert.alert("Invalid calorie target", "Daily calorie target must be between 800 and 6000 kcal.");
+        return;
+      }
+      if (
+        payload.dailyProteinTargetG !== null &&
+        (!Number.isFinite(payload.dailyProteinTargetG) ||
+          payload.dailyProteinTargetG < 30 ||
+          payload.dailyProteinTargetG > 400)
+      ) {
+        Alert.alert("Invalid protein target", "Daily protein target must be between 30 and 400 g.");
+        return;
+      }
       const next = await apiJson<UserProfile>("/me/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      const overrideChanged =
+        profile?.dailyCalorieTargetKcal !== next.dailyCalorieTargetKcal ||
+        profile?.dailyProteinTargetG !== next.dailyProteinTargetG;
       setProfile(next);
       setUser({
         id: next.id,
@@ -257,7 +371,30 @@ export default function App() {
         email: next.email,
         authProvider: next.authProvider
       });
-      Alert.alert("Profile saved");
+      if (overrideChanged) {
+        setDailyNutritionTargets(null);
+        setDailyTargetsDate(null);
+        if (screen === "record" && selectedDate === todayDate()) {
+          fetchDailyNutritionTargets(selectedDate)
+            .then((targets) => {
+              setDailyNutritionTargets(targets);
+              setDailyTargetsDate(selectedDate);
+            })
+            .catch(() => {
+              const fallback = fallbackNutritionTargetsFromWeight(savedBodyWeightKg);
+              setDailyNutritionTargets({
+                source: "fallback",
+                recommendedCaloriesKcal: fallback.calories,
+                recommendedProteinG: fallback.protein,
+                comment: "Auto fallback used because AI target generation was unavailable."
+              });
+              setDailyTargetsDate(selectedDate);
+            });
+        }
+      }
+      if (showSuccessAlert) {
+        Alert.alert("Profile saved");
+      }
     } catch (error) {
       Alert.alert("Failed to save profile", String(error));
     } finally {
@@ -333,21 +470,42 @@ export default function App() {
           })
         );
         setRecordThemeDraft(detail.theme ?? "");
+        if (detail.dailyCalorieTargetKcal !== null && detail.dailyProteinTargetG !== null) {
+          setDailyNutritionTargets({
+            source: detail.dailyTargetSource ?? "fallback",
+            recommendedCaloriesKcal: detail.dailyCalorieTargetKcal,
+            recommendedProteinG: detail.dailyProteinTargetG,
+            comment: detail.dailyTargetComment
+          });
+          setDailyTargetsDate(date);
+        } else {
+          setDailyNutritionTargets(null);
+          setDailyTargetsDate(null);
+        }
       } else {
         setRecordDetail({
           recordId: "",
           date,
           userId: user.id,
           theme: null,
+          checkInInitialized: false,
+          dailyCalorieTargetKcal: null,
+          dailyProteinTargetG: null,
+          dailyTargetComment: null,
+          dailyTargetSource: null,
           exercises: [],
           foodConsumptions: food.entries,
           totalCaloriesKcal: food.totalCaloriesKcal,
           totalProteinG: food.totalProteinG
         });
         setRecordThemeDraft("");
+        setDailyNutritionTargets(null);
+        setDailyTargetsDate(null);
       }
       setSavedBodyWeightKg(weight.weightKg);
       setBodyWeightDraft(weight.weightKg === null ? "" : String(weight.weightKg));
+      setDailyCheckInThemeDraft(detail?.theme ?? "");
+      setDailyCheckInWeightDraft(weight.weightKg === null ? "" : String(weight.weightKg));
       setScreen("record");
     } catch (error) {
       Alert.alert("Failed to open record", String(error));
@@ -1160,10 +1318,137 @@ export default function App() {
       );
       setSavedBodyWeightKg(payload.weightKg);
       setBodyWeightDraft(String(payload.weightKg));
+      if (date === todayDate()) {
+        try {
+          const targets = await fetchDailyNutritionTargets(date);
+          setDailyNutritionTargets(targets);
+          setDailyTargetsDate(date);
+        } catch {
+          setDailyNutritionTargets(null);
+          setDailyTargetsDate(null);
+        }
+      }
     } catch (error) {
       Alert.alert("Failed to save weight", String(error));
     } finally {
       setSavingBodyWeight(false);
+    }
+  }
+
+  async function fetchDailyNutritionTargets(date: string): Promise<DailyNutritionTargets> {
+    return apiJson<DailyNutritionTargets>("/advice/daily-nutrition-targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date })
+    });
+  }
+
+  async function getLatestRecordedBodyWeightKg(date: string): Promise<number | null> {
+    const payload = await apiJson<{ records: BodyWeightRecord[] }>(
+      `/body-weight/history?from=${encodeURIComponent(daysAgo(3650))}&to=${encodeURIComponent(date)}`
+    );
+    const latest = payload.records[payload.records.length - 1];
+    return latest?.weightKg ?? null;
+  }
+
+  async function submitDailyCheckInForToday(): Promise<void> {
+    if (!user || !profile || selectedDate !== todayDate()) {
+      return;
+    }
+    const trimmedTheme = dailyCheckInThemeDraft.trim();
+    if (!trimmedTheme) {
+      Alert.alert("Theme required", "Please provide today's theme before continuing.");
+      return;
+    }
+
+    let weightToPersist: number | null = null;
+    const typedWeight = dailyCheckInWeightDraft.trim();
+    if (typedWeight.length > 0) {
+      const numeric = Number(typedWeight.replace(",", "."));
+      if (!Number.isFinite(numeric) || numeric < 20 || numeric > 400) {
+        Alert.alert("Invalid weight", "Body weight must be between 20 and 400 kg.");
+        return;
+      }
+      weightToPersist = Number(numeric.toFixed(2));
+    } else {
+      const latestRecorded = await getLatestRecordedBodyWeightKg(selectedDate);
+      weightToPersist = latestRecorded ?? profile.defaultBodyWeightKg ?? null;
+      if (weightToPersist === null) {
+        Alert.alert("Weight required", "Please enter today's body weight or set a default body weight in onboarding.");
+        return;
+      }
+    }
+
+    setDailyCheckInSubmitting(true);
+    try {
+      const updatedRecord = await apiJson<{
+        recordId: string;
+        date: string;
+        userId: string;
+        theme: string | null;
+        checkInInitialized: boolean;
+      }>(
+        "/records/by-date/theme",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: selectedDate,
+            theme: trimmedTheme
+          })
+        }
+      );
+      setRecordThemeDraft(updatedRecord.theme ?? "");
+      setRecordDetail((current) => {
+        if (!current || current.date !== selectedDate) {
+          return current;
+        }
+        return {
+          ...current,
+          recordId: updatedRecord.recordId || current.recordId,
+          theme: updatedRecord.theme,
+          checkInInitialized: updatedRecord.checkInInitialized
+        };
+      });
+      setRecordSummaries((rows) =>
+        rows.map((row) => (row.date === selectedDate ? { ...row, theme: updatedRecord.theme } : row))
+      );
+      setCalendarSummaries((rows) =>
+        rows.map((row) => (row.date === selectedDate ? { ...row, theme: updatedRecord.theme } : row))
+      );
+
+      const weightPayload = await apiJson<{ date: string; weightKg: number }>(
+        "/body-weight/by-date",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: selectedDate,
+            weightKg: Number(weightToPersist.toFixed(2))
+          })
+        }
+      );
+      setSavedBodyWeightKg(weightPayload.weightKg);
+      setBodyWeightDraft(String(weightPayload.weightKg));
+      setDailyCheckInWeightDraft(String(weightPayload.weightKg));
+      try {
+        const targets = await fetchDailyNutritionTargets(selectedDate);
+        setDailyNutritionTargets(targets);
+        setDailyTargetsDate(selectedDate);
+      } catch {
+        const fallback = fallbackNutritionTargetsFromWeight(weightPayload.weightKg);
+        setDailyNutritionTargets({
+          source: "fallback",
+          recommendedCaloriesKcal: fallback.calories,
+          recommendedProteinG: fallback.protein,
+          comment: "Auto fallback used because AI target generation was unavailable."
+        });
+        setDailyTargetsDate(selectedDate);
+      }
+    } catch (error) {
+      Alert.alert("Failed to complete daily check-in", String(error));
+    } finally {
+      setDailyCheckInSubmitting(false);
     }
   }
 
@@ -1234,6 +1519,155 @@ export default function App() {
     }
   }
 
+  async function submitOnboarding(): Promise<void> {
+    if (!profile) {
+      return;
+    }
+    setOnboardingError(null);
+    const gender = onboardingGender.trim();
+    const dob = onboardingDateOfBirth.trim();
+    const defaultWeight = Number(onboardingDefaultWeight.trim().replace(",", "."));
+    const height = Number(onboardingHeight.trim().replace(",", "."));
+    const calorieTargetRaw = onboardingCalorieTarget.trim();
+    const proteinTargetRaw = onboardingProteinTarget.trim();
+    const calorieTarget = calorieTargetRaw ? Number(calorieTargetRaw.replace(",", ".")) : null;
+    const proteinTarget = proteinTargetRaw ? Number(proteinTargetRaw.replace(",", ".")) : null;
+    const llmPrompt = onboardingLlmPrompt.trim();
+
+    if (!gender) {
+      setOnboardingError("Please provide your gender.");
+      return;
+    }
+    if (!Number.isFinite(defaultWeight) || defaultWeight < 20 || defaultWeight > 400) {
+      setOnboardingError("Default body weight must be between 20 and 400 kg.");
+      return;
+    }
+    if (!Number.isFinite(height) || height < 50 || height > 280) {
+      setOnboardingError("Height must be between 50 and 280 cm.");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+      setOnboardingError("Date of birth must use format YYYY-MM-DD.");
+      return;
+    }
+    if (
+      calorieTargetRaw.length > 0 &&
+      (!Number.isFinite(calorieTarget) || calorieTarget === null || calorieTarget < 800 || calorieTarget > 6000)
+    ) {
+      setOnboardingError("Daily calorie target must be between 800 and 6000 kcal.");
+      return;
+    }
+    if (
+      proteinTargetRaw.length > 0 &&
+      (!Number.isFinite(proteinTarget) || proteinTarget === null || proteinTarget < 30 || proteinTarget > 400)
+    ) {
+      setOnboardingError("Daily protein target must be between 30 and 400 g.");
+      return;
+    }
+    setOnboardingSubmitting(true);
+    try {
+      const next = await apiJson<UserProfile>("/me/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gender,
+          defaultBodyWeightKg: Number(defaultWeight.toFixed(2)),
+          heightCm: Number(height.toFixed(2)),
+          dailyCalorieTargetKcal: calorieTarget === null ? null : Number(calorieTarget.toFixed(2)),
+          dailyProteinTargetG: proteinTarget === null ? null : Number(proteinTarget.toFixed(2)),
+          dateOfBirth: dob,
+          globalLlmPrompt: llmPrompt.length > 0 ? llmPrompt : null,
+          profileInitialized: true
+        })
+      });
+      setProfile(next);
+      setUser({
+        id: next.id,
+        username: next.username,
+        displayName: next.displayName,
+        email: next.email,
+        authProvider: next.authProvider
+      });
+      if (!next.profileInitialized) {
+        setOnboardingError("Setup was saved but not initialized. Please ensure all required fields are filled.");
+        return;
+      }
+      await bootstrap();
+    } catch (error) {
+      setOnboardingError(`Failed to complete onboarding: ${String(error)}`);
+    } finally {
+      setOnboardingSubmitting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!profile || profile.profileInitialized) {
+      return;
+    }
+    setOnboardingGender(profile.gender ?? "");
+    setOnboardingDefaultWeight(
+      profile.defaultBodyWeightKg !== null && Number.isFinite(profile.defaultBodyWeightKg)
+        ? String(profile.defaultBodyWeightKg)
+        : ""
+    );
+    setOnboardingHeight(profile.heightCm !== null && Number.isFinite(profile.heightCm) ? String(profile.heightCm) : "");
+    setOnboardingCalorieTarget(
+      profile.dailyCalorieTargetKcal !== null && Number.isFinite(profile.dailyCalorieTargetKcal)
+        ? String(profile.dailyCalorieTargetKcal)
+        : ""
+    );
+    setOnboardingProteinTarget(
+      profile.dailyProteinTargetG !== null && Number.isFinite(profile.dailyProteinTargetG)
+        ? String(profile.dailyProteinTargetG)
+        : ""
+    );
+    setOnboardingDateOfBirth(profile.dateOfBirth ?? "");
+    setOnboardingLlmPrompt(profile.globalLlmPrompt ?? "");
+  }, [profile]);
+
+  useEffect(() => {
+    if (selectedDate !== todayDate()) {
+      return;
+    }
+    setDailyCheckInThemeDraft(recordDetail?.theme ?? "");
+    setDailyCheckInWeightDraft(savedBodyWeightKg === null ? "" : String(savedBodyWeightKg));
+  }, [selectedDate, recordDetail?.theme, savedBodyWeightKg]);
+
+  useEffect(() => {
+    const today = todayDate();
+    if (!profile?.profileInitialized || selectedDate !== today || screen !== "record") {
+      return;
+    }
+    const checkInInitialized = recordDetail?.checkInInitialized === true;
+    const alreadyLoadedTargets = dailyTargetsDate === today && dailyNutritionTargets !== null;
+    if (!checkInInitialized || alreadyLoadedTargets) {
+      return;
+    }
+    fetchDailyNutritionTargets(today)
+      .then((payload) => {
+        setDailyNutritionTargets(payload);
+        setDailyTargetsDate(today);
+      })
+      .catch(() => {
+        const fallback = fallbackNutritionTargetsFromWeight(savedBodyWeightKg);
+        setDailyNutritionTargets({
+          source: "fallback",
+          recommendedCaloriesKcal: fallback.calories,
+          recommendedProteinG: fallback.protein,
+          comment: "Auto fallback used because AI target generation was unavailable."
+        });
+        setDailyTargetsDate(today);
+      });
+  }, [
+    profile?.profileInitialized,
+    selectedDate,
+    screen,
+    recordDetail?.checkInInitialized,
+    dailyTargetsDate,
+    dailyNutritionTargets,
+    savedBodyWeightKg
+  ]);
+
   useRecordEffects({
     exerciseDetailsById,
     expandedExerciseIds,
@@ -1261,6 +1695,12 @@ export default function App() {
     refreshHomeHistory,
     loadCalendarHistory
   });
+
+  const isTodayHome = screen === "record" && selectedDate === todayDate();
+  const hasCompletedDailyCheckIn = recordDetail?.checkInInitialized === true;
+  const shouldBlockHomeWithDailyGate = Boolean(
+    profile?.profileInitialized && isTodayHome && !hasCompletedDailyCheckIn
+  );
 
   if (!fontsLoaded) {
     return <SafeAreaView style={appStyles.safeArea} />;
@@ -1310,6 +1750,130 @@ export default function App() {
     );
   }
 
+  if (profile && !profile.profileInitialized) {
+    return (
+      <SafeAreaView style={appStyles.safeArea}>
+        <StatusBar style="dark" />
+        <View pointerEvents="none" style={styles.backgroundWrap}>
+          <View style={[styles.blob, styles.blobA]} />
+          <View style={[styles.blob, styles.blobB]} />
+        </View>
+        <ScrollView
+          contentContainerStyle={styles.onboardingContainer}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <View style={styles.onboardingCard}>
+            <Text style={styles.onboardingTitle}>Complete your profile</Text>
+            <Text style={styles.onboardingHint}>
+              We need these details once before you can continue.
+            </Text>
+            <View style={styles.onboardingField}>
+              <Text style={styles.onboardingLabel}>Gender</Text>
+              <TextInput
+                style={styles.onboardingInput}
+                value={onboardingGender}
+                onChangeText={setOnboardingGender}
+                placeholder="e.g. male, female"
+                placeholderTextColor="#78786C"
+                editable={!onboardingSubmitting}
+                maxLength={30}
+              />
+            </View>
+            <View style={styles.onboardingField}>
+              <Text style={styles.onboardingLabel}>Default Body Weight (kg)</Text>
+              <TextInput
+                style={styles.onboardingInput}
+                value={onboardingDefaultWeight}
+                onChangeText={(value) => setOnboardingDefaultWeight(sanitizeWeightInput(value))}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 72.5"
+                placeholderTextColor="#78786C"
+                editable={!onboardingSubmitting}
+              />
+            </View>
+            <View style={styles.onboardingField}>
+              <Text style={styles.onboardingLabel}>Height (cm)</Text>
+              <TextInput
+                style={styles.onboardingInput}
+                value={onboardingHeight}
+                onChangeText={(value) => setOnboardingHeight(sanitizeWeightInput(value))}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 175"
+                placeholderTextColor="#78786C"
+                editable={!onboardingSubmitting}
+              />
+            </View>
+            <View style={styles.onboardingField}>
+              <Text style={styles.onboardingLabel}>Daily Calorie Target (kcal, optional)</Text>
+              <TextInput
+                style={styles.onboardingInput}
+                value={onboardingCalorieTarget}
+                onChangeText={(value) => setOnboardingCalorieTarget(sanitizeWeightInput(value))}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 2200"
+                placeholderTextColor="#78786C"
+                editable={!onboardingSubmitting}
+              />
+            </View>
+            <View style={styles.onboardingField}>
+              <Text style={styles.onboardingLabel}>Daily Protein Target (g, optional)</Text>
+              <TextInput
+                style={styles.onboardingInput}
+                value={onboardingProteinTarget}
+                onChangeText={(value) => setOnboardingProteinTarget(sanitizeWeightInput(value))}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 150"
+                placeholderTextColor="#78786C"
+                editable={!onboardingSubmitting}
+              />
+            </View>
+            <View style={styles.onboardingField}>
+              <Text style={styles.onboardingLabel}>Date of Birth</Text>
+              <TextInput
+                style={styles.onboardingInput}
+                value={onboardingDateOfBirth}
+                onChangeText={setOnboardingDateOfBirth}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#78786C"
+                editable={!onboardingSubmitting}
+                maxLength={10}
+              />
+            </View>
+            <View style={styles.onboardingField}>
+              <Text style={styles.onboardingLabel}>Personal LLM Prompt (optional)</Text>
+              <TextInput
+                style={[styles.onboardingInput, styles.onboardingPromptInput]}
+                value={onboardingLlmPrompt}
+                onChangeText={setOnboardingLlmPrompt}
+                placeholder="Optional guidance for your AI recommendations"
+                placeholderTextColor="#78786C"
+                editable={!onboardingSubmitting}
+                multiline
+                textAlignVertical="top"
+                maxLength={3000}
+              />
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.onboardingButton, withPressScale(pressed)]}
+              onPress={() => {
+                submitOnboarding().catch(() => {});
+              }}
+              disabled={onboardingSubmitting}
+            >
+              {onboardingSubmitting ? (
+                <ActivityIndicator color="#F3F4F1" />
+              ) : (
+                <Text style={styles.onboardingButtonText}>Finish Setup</Text>
+              )}
+            </Pressable>
+            {onboardingError ? <Text style={styles.onboardingErrorText}>{onboardingError}</Text> : null}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={appStyles.safeArea}>
       <StatusBar style="dark" />
@@ -1334,66 +1898,78 @@ export default function App() {
           </View>
         ) : null}
         {screen === "record" ? (
-          <ScrollView contentContainerStyle={styles.recordScrollContent}>
-            <RecordScreen
-              loading={loading}
-              savingRecordTheme={savingRecordTheme}
-              selectedDate={selectedDate}
-              recordDetail={recordDetail}
-              recordThemeDraft={recordThemeDraft}
-              setRecordThemeDraft={setRecordThemeDraft}
-              saveRecordTheme={() => {
-                saveRecordTheme().catch(() => {});
-              }}
-              exerciseItems={exerciseItems}
-              addExercise={addExercise}
-              deleteExerciseInRecord={(exerciseId: string) => {
-                deleteExerciseFromRecord(exerciseId).catch(() => {});
-              }}
-              user={user}
-              expandedExerciseIds={expandedExerciseIds}
-              exerciseDetailsById={exerciseDetailsById}
-              exerciseNotesDraftById={exerciseNotesDraftById}
-              savingExerciseNotesById={savingExerciseNotesById}
-              updateExerciseNotesDraft={updateExerciseNotesDraft}
-              saveExerciseNotes={(exerciseId: string) => {
-                saveExerciseNotes(exerciseId).catch(() => {});
-              }}
-              setDraftsByExerciseId={setDraftsByExerciseId}
-              savingSetIdsByExerciseId={savingSetIdsByExerciseId}
-              toggleExerciseExpanded={(exerciseId: string) => {
-                toggleExerciseExpanded(exerciseId).catch(() => {});
-              }}
-              setSetDraft={setSetDraft}
-              saveSet={(exerciseId: string, setId: string) => {
-                saveSet(exerciseId, setId).catch(() => {});
-              }}
-              addSet={addSet}
-              addSetsFromPlan={addSetsFromPlan}
-              fetchExercisePlan={fetchExercisePlan}
-              deleteSet={(exerciseId: string, setId: string) => {
-                deleteSet(exerciseId, setId).catch(() => {});
-              }}
-              toggleSetCompleted={(exerciseId: string, setId: string) => {
-                toggleSetCompleted(exerciseId, setId).catch(() => {});
-              }}
-              savingFoodConsumption={savingFoodConsumption}
-              deletingFoodIds={deletingFoodIds}
-              addFoodConsumption={addFoodConsumption}
-              deleteFoodConsumption={(foodConsumptionId: string) => {
-                deleteFoodConsumption(foodConsumptionId).catch(() => {});
-              }}
-              bodyWeightDraft={bodyWeightDraft}
-              setBodyWeightDraft={setBodyWeightDraft}
-              savedBodyWeightKg={savedBodyWeightKg}
-              savingBodyWeight={savingBodyWeight}
-              saveBodyWeight={() => {
-                saveBodyWeightByDate(selectedDate, bodyWeightDraft).catch(() => {});
-              }}
-              fetchDailySummary={(date) => fetchDailySummary(date)}
-              fetchExerciseFeedback={(input) => fetchExerciseFeedback(input)}
-            />
-          </ScrollView>
+          shouldBlockHomeWithDailyGate ? (
+            <View style={styles.homeBlockedWrap}>
+              <View style={styles.homeBlockedCard}>
+                <Text style={styles.homeBlockedTitle}>Daily check-in required</Text>
+                <Text style={styles.homeBlockedHint}>
+                  Add today&apos;s theme and weight so we can generate your nutrition targets.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.recordScrollContent}>
+              <RecordScreen
+                loading={loading}
+                savingRecordTheme={savingRecordTheme}
+                selectedDate={selectedDate}
+                recordDetail={recordDetail}
+                recordThemeDraft={recordThemeDraft}
+                setRecordThemeDraft={setRecordThemeDraft}
+                saveRecordTheme={() => {
+                  saveRecordTheme().catch(() => {});
+                }}
+                exerciseItems={exerciseItems}
+                addExercise={addExercise}
+                deleteExerciseInRecord={(exerciseId: string) => {
+                  deleteExerciseFromRecord(exerciseId).catch(() => {});
+                }}
+                user={user}
+                expandedExerciseIds={expandedExerciseIds}
+                exerciseDetailsById={exerciseDetailsById}
+                exerciseNotesDraftById={exerciseNotesDraftById}
+                savingExerciseNotesById={savingExerciseNotesById}
+                updateExerciseNotesDraft={updateExerciseNotesDraft}
+                saveExerciseNotes={(exerciseId: string) => {
+                  saveExerciseNotes(exerciseId).catch(() => {});
+                }}
+                setDraftsByExerciseId={setDraftsByExerciseId}
+                savingSetIdsByExerciseId={savingSetIdsByExerciseId}
+                toggleExerciseExpanded={(exerciseId: string) => {
+                  toggleExerciseExpanded(exerciseId).catch(() => {});
+                }}
+                setSetDraft={setSetDraft}
+                saveSet={(exerciseId: string, setId: string) => {
+                  saveSet(exerciseId, setId).catch(() => {});
+                }}
+                addSet={addSet}
+                addSetsFromPlan={addSetsFromPlan}
+                fetchExercisePlan={fetchExercisePlan}
+                deleteSet={(exerciseId: string, setId: string) => {
+                  deleteSet(exerciseId, setId).catch(() => {});
+                }}
+                toggleSetCompleted={(exerciseId: string, setId: string) => {
+                  toggleSetCompleted(exerciseId, setId).catch(() => {});
+                }}
+                savingFoodConsumption={savingFoodConsumption}
+                deletingFoodIds={deletingFoodIds}
+                addFoodConsumption={addFoodConsumption}
+                deleteFoodConsumption={(foodConsumptionId: string) => {
+                  deleteFoodConsumption(foodConsumptionId).catch(() => {});
+                }}
+                bodyWeightDraft={bodyWeightDraft}
+                setBodyWeightDraft={setBodyWeightDraft}
+                savedBodyWeightKg={savedBodyWeightKg}
+                savingBodyWeight={savingBodyWeight}
+                saveBodyWeight={() => {
+                  saveBodyWeightByDate(selectedDate, bodyWeightDraft).catch(() => {});
+                }}
+                fetchDailySummary={(date) => fetchDailySummary(date)}
+                fetchExerciseFeedback={(input) => fetchExerciseFeedback(input)}
+                dailyNutritionTargets={dailyTargetsDate === selectedDate ? dailyNutritionTargets : null}
+              />
+            </ScrollView>
+          )
         ) : null}
         {screen === "profile" ? (
           <View style={appStyles.flex}>
@@ -1425,6 +2001,58 @@ export default function App() {
             />
           </View>
         ) : null}
+        <Modal
+          visible={shouldBlockHomeWithDailyGate}
+          animationType="fade"
+          transparent
+          onRequestClose={() => {}}
+        >
+          <View style={styles.dailyGateBackdrop}>
+            <View style={styles.dailyGateCard}>
+              <Text style={styles.dailyGateTitle}>Today&apos;s check-in</Text>
+              <Text style={styles.dailyGateHint}>
+                Add your theme and weight to unlock your daily nutrition targets.
+              </Text>
+              <View style={styles.dailyGateField}>
+                <Text style={styles.dailyGateLabel}>Theme</Text>
+                <TextInput
+                  style={styles.dailyGateInput}
+                  value={dailyCheckInThemeDraft}
+                  onChangeText={setDailyCheckInThemeDraft}
+                  placeholder="e.g. push, pull, rest"
+                  placeholderTextColor="#78786C"
+                  editable={!dailyCheckInSubmitting}
+                  maxLength={30}
+                />
+              </View>
+              <View style={styles.dailyGateField}>
+                <Text style={styles.dailyGateLabel}>Weight (optional)</Text>
+                <TextInput
+                  style={styles.dailyGateInput}
+                  value={dailyCheckInWeightDraft}
+                  onChangeText={(value) => setDailyCheckInWeightDraft(sanitizeWeightInput(value))}
+                  keyboardType="decimal-pad"
+                  placeholder="Leave empty to use weight recorded before"
+                  placeholderTextColor="#78786C"
+                  editable={!dailyCheckInSubmitting}
+                />
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.dailyGateButton, withPressScale(pressed)]}
+                onPress={() => {
+                  submitDailyCheckInForToday().catch(() => {});
+                }}
+                disabled={dailyCheckInSubmitting}
+              >
+                {dailyCheckInSubmitting ? (
+                  <ActivityIndicator color="#F3F4F1" />
+                ) : (
+                  <Text style={styles.dailyGateButtonText}>Continue to Home</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
         <View style={styles.bottomNav}>
           <Pressable
             style={({ pressed }) => [
@@ -1515,6 +2143,158 @@ const styles = StyleSheet.create({
   recordScrollContent: {
     ...appStyles.container,
     paddingBottom: 24
+  },
+  onboardingContainer: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    justifyContent: "center"
+  },
+  onboardingCard: {
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
+    padding: 18,
+    gap: 10,
+    ...shadows.soft
+  },
+  onboardingTitle: {
+    fontSize: 28,
+    color: "#2C2C24",
+    fontFamily: textStyles.headingMd.fontFamily
+  },
+  onboardingHint: {
+    color: "#78786C",
+    fontSize: 14,
+    fontFamily: textStyles.body.fontFamily
+  },
+  onboardingField: {
+    gap: 6
+  },
+  onboardingLabel: {
+    color: "#4A4A40",
+    fontSize: 13,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  onboardingInput: {
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFFCC",
+    color: "#2C2C24",
+    fontFamily: textStyles.body.fontFamily
+  },
+  onboardingPromptInput: {
+    minHeight: 90,
+    borderRadius: 20
+  },
+  onboardingButton: {
+    marginTop: 8,
+    borderRadius: radius.pill,
+    backgroundColor: palette.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    ...shadows.soft
+  },
+  onboardingButtonText: {
+    color: "#F3F4F1",
+    fontSize: 16,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  onboardingErrorText: {
+    marginTop: 8,
+    color: palette.destructive,
+    fontSize: 13,
+    fontFamily: textStyles.bodySemiBold.fontFamily
+  },
+  homeBlockedWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24
+  },
+  homeBlockedCard: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    borderRadius: 28,
+    backgroundColor: "#FEFEFA",
+    padding: 18,
+    gap: 8,
+    ...shadows.soft
+  },
+  homeBlockedTitle: {
+    color: "#2C2C24",
+    fontSize: 22,
+    fontFamily: textStyles.headingMd.fontFamily
+  },
+  homeBlockedHint: {
+    color: "#78786C",
+    fontSize: 14,
+    fontFamily: textStyles.body.fontFamily
+  },
+  dailyGateBackdrop: {
+    flex: 1,
+    backgroundColor: "#2C2C2430",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20
+  },
+  dailyGateCard: {
+    width: "100%",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
+    padding: 18,
+    gap: 10,
+    ...shadows.soft
+  },
+  dailyGateTitle: {
+    color: "#2C2C24",
+    fontSize: 24,
+    fontFamily: textStyles.headingMd.fontFamily
+  },
+  dailyGateHint: {
+    color: "#78786C",
+    fontSize: 13,
+    fontFamily: textStyles.body.fontFamily
+  },
+  dailyGateField: {
+    gap: 6
+  },
+  dailyGateLabel: {
+    color: "#4A4A40",
+    fontSize: 13,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  dailyGateInput: {
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFFCC",
+    color: "#2C2C24",
+    fontFamily: textStyles.body.fontFamily
+  },
+  dailyGateButton: {
+    marginTop: 6,
+    borderRadius: radius.pill,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.primary,
+    ...shadows.soft
+  },
+  dailyGateButtonText: {
+    color: "#F3F4F1",
+    fontSize: 16,
+    fontFamily: textStyles.bodyBold.fontFamily
   },
   bottomNav: {
     flexDirection: "row",

@@ -12,8 +12,11 @@ export type UserProfile = User & {
   heightCm: number | null;
   gender: string | null;
   defaultBodyWeightKg: number | null;
+  dailyCalorieTargetKcal: number | null;
+  dailyProteinTargetG: number | null;
   dateOfBirth: string | null;
   globalLlmPrompt: string | null;
+  profileInitialized: boolean;
 };
 
 export type RecordSummary = {
@@ -41,6 +44,11 @@ export type RecordDetail = {
   date: string;
   userId: string;
   theme: string | null;
+  checkInInitialized: boolean;
+  dailyCalorieTargetKcal: number | null;
+  dailyProteinTargetG: number | null;
+  dailyTargetComment: string | null;
+  dailyTargetSource: "gemini" | "fallback" | "override" | null;
   exercises: RecordExerciseSummary[];
   foodConsumptions: FoodConsumption[];
   totalCaloriesKcal: number;
@@ -69,6 +77,13 @@ export type BodyWeightRecord = {
 export type AdviceReviewResult = {
   source: "gemini" | "fallback";
   review: string;
+};
+
+export type DailyNutritionTargets = {
+  source: "gemini" | "fallback" | "override";
+  recommendedCaloriesKcal: number;
+  recommendedProteinG: number;
+  comment: string | null;
 };
 
 export type ExerciseDailyMetricsPoint = {

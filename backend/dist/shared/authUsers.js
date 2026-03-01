@@ -93,6 +93,8 @@ export async function getPromptProfile(userId, asOfDate) {
         ) AS latest_weight_kg,
         height_cm::text,
         gender,
+        daily_calorie_target_kcal::text,
+        daily_protein_target_g::text,
         global_llm_prompt
       FROM users
       WHERE id = $1
@@ -105,6 +107,8 @@ export async function getPromptProfile(userId, asOfDate) {
             defaultBodyWeightKg: null,
             heightCm: null,
             gender: null,
+            dailyCalorieTargetKcal: null,
+            dailyProteinTargetG: null,
             globalLlmPrompt: null
         };
     }
@@ -117,6 +121,8 @@ export async function getPromptProfile(userId, asOfDate) {
                 : null,
         heightCm: row.height_cm ? Number(row.height_cm) : null,
         gender: row.gender,
+        dailyCalorieTargetKcal: row.daily_calorie_target_kcal ? Number(row.daily_calorie_target_kcal) : null,
+        dailyProteinTargetG: row.daily_protein_target_g ? Number(row.daily_protein_target_g) : null,
         globalLlmPrompt: row.global_llm_prompt
     };
 }

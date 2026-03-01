@@ -33,9 +33,18 @@ GymTracker is an Expo React Native iOS app with a TypeScript backend server.
 6. (Optional) Refresh exercise dataset and local image cache:
    - `npm --prefix backend run exercise-db:refresh`
 7. Start backend:
-   - `npm run backend`
+   - Dev mode (recommended): `npm --prefix backend run dev`
+   - Prod-like local mode (runs migrate then starts compiled server): `npm --prefix backend run start:with-migrate`
+   - Root shortcut: `npm run backend` (starts `node dist/server.js`)
 
 The backend runs on `http://localhost:4000` by default.
+
+Backend run mode notes:
+
+- `npm run backend` uses compiled output (`dist/server.js`).
+- If you changed `backend/src/*` and use `npm run backend`, rebuild first:
+  - `npm --prefix backend run build`
+- To avoid stale build issues during development, prefer `npm --prefix backend run dev`.
 
 ### 2) Mobile
 
@@ -44,8 +53,11 @@ The backend runs on `http://localhost:4000` by default.
      - `EXPO_PUBLIC_SUPABASE_URL=...`
      - `EXPO_PUBLIC_SUPABASE_ANON_KEY=...`
      - `EXPO_PUBLIC_BACKEND_URL=http://localhost:4000` (local) or your deployed backend URL
-   - `npm run mobile`
-2. Open in iOS simulator from Expo CLI output.
+   - Start Metro: `npm run mobile`
+2. iOS simulator (development build):
+   - Install/update dev build on simulator: `npm --prefix mobile run ios`
+   - If CLI shows `No development build (...) is installed`, run the command above again.
+   - After install, keep Metro running (`npm run mobile`) and press `i`.
 
 If running on a physical device, update backend URL in the app UI from `localhost` to your machine LAN IP.
 

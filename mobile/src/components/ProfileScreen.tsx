@@ -8,6 +8,8 @@ type ProfileInput = {
   heightCm: string;
   gender: string;
   defaultBodyWeightKg: string;
+  dailyCalorieTargetKcal: string;
+  dailyProteinTargetG: string;
   dateOfBirth: string;
   globalLlmPrompt: string;
 };
@@ -19,6 +21,8 @@ type ProfileScreenProps = {
     heightCm: number | null;
     gender: string | null;
     defaultBodyWeightKg: number | null;
+    dailyCalorieTargetKcal: number | null;
+    dailyProteinTargetG: number | null;
     dateOfBirth: string | null;
     globalLlmPrompt: string | null;
   }) => Promise<void>;
@@ -58,6 +62,8 @@ function toInput(profile: UserProfile | null): ProfileInput {
     heightCm: profile?.heightCm != null ? String(profile.heightCm) : "",
     gender: profile?.gender ?? "",
     defaultBodyWeightKg: profile?.defaultBodyWeightKg != null ? String(profile.defaultBodyWeightKg) : "",
+    dailyCalorieTargetKcal: profile?.dailyCalorieTargetKcal != null ? String(profile.dailyCalorieTargetKcal) : "",
+    dailyProteinTargetG: profile?.dailyProteinTargetG != null ? String(profile.dailyProteinTargetG) : "",
     dateOfBirth: profile?.dateOfBirth ?? "",
     globalLlmPrompt: profile?.globalLlmPrompt ?? ""
   };
@@ -102,7 +108,16 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
 
   useEffect(() => {
     setDraft(toInput(profile));
-  }, [profile?.id, profile?.heightCm, profile?.gender, profile?.defaultBodyWeightKg, profile?.dateOfBirth, profile?.globalLlmPrompt]);
+  }, [
+    profile?.id,
+    profile?.heightCm,
+    profile?.gender,
+    profile?.defaultBodyWeightKg,
+    profile?.dailyCalorieTargetKcal,
+    profile?.dailyProteinTargetG,
+    profile?.dateOfBirth,
+    profile?.globalLlmPrompt
+  ]);
 
   const openDatePicker = () => {
     setPendingDate(parseDateValue(draft.dateOfBirth) ?? new Date());
@@ -212,6 +227,40 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         </View>
 
         <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Daily Calorie Target (optional)</Text>
+          <View style={styles.unitRow}>
+            <TextInput
+              style={styles.fieldInput}
+              value={draft.dailyCalorieTargetKcal}
+              onChangeText={(value) => setDraft((current) => ({ ...current, dailyCalorieTargetKcal: digitsOnly(value) }))}
+              placeholder="e.g. 2200"
+              placeholderTextColor="#A29F94"
+              keyboardType="number-pad"
+            />
+            <View style={styles.unitBadge}>
+              <Text style={styles.unitBadgeText}>kcal</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Daily Protein Target (optional)</Text>
+          <View style={styles.unitRow}>
+            <TextInput
+              style={styles.fieldInput}
+              value={draft.dailyProteinTargetG}
+              onChangeText={(value) => setDraft((current) => ({ ...current, dailyProteinTargetG: digitsOnly(value) }))}
+              placeholder="e.g. 150"
+              placeholderTextColor="#A29F94"
+              keyboardType="number-pad"
+            />
+            <View style={styles.unitBadge}>
+              <Text style={styles.unitBadgeText}>g</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Date of Birth</Text>
           <Pressable style={styles.dateButton} onPress={openDatePicker}>
             <Text style={draft.dateOfBirth ? styles.dateText : styles.datePlaceholder}>
@@ -246,6 +295,8 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
             heightCm: draft.heightCm.trim() ? Number(draft.heightCm) : null,
             gender: draft.gender.trim() || null,
             defaultBodyWeightKg: draft.defaultBodyWeightKg.trim() ? Number(draft.defaultBodyWeightKg) : null,
+            dailyCalorieTargetKcal: draft.dailyCalorieTargetKcal.trim() ? Number(draft.dailyCalorieTargetKcal) : null,
+            dailyProteinTargetG: draft.dailyProteinTargetG.trim() ? Number(draft.dailyProteinTargetG) : null,
             dateOfBirth: draft.dateOfBirth.trim() || null,
             globalLlmPrompt: draft.globalLlmPrompt.trim() || null
           }).catch(() => {})

@@ -93,9 +93,26 @@ recordsRouter.get("/records/by-date", async (req, res) => {
   const { date } = parsed.data;
   try {
     const appUser = await upsertUserFromAuth(req.auth);
-    const recordResult = await pool.query<{ id: string; record_date: string; theme: string | null }>(
+    const recordResult = await pool.query<{
+      id: string;
+      record_date: string;
+      theme: string | null;
+      check_in_initialized: boolean;
+      daily_calorie_target_kcal: string | null;
+      daily_protein_target_g: string | null;
+      daily_target_source: string | null;
+      daily_target_comment: string | null;
+    }>(
       `
-        SELECT id, record_date::text, theme
+        SELECT
+          id,
+          record_date::text,
+          theme,
+          check_in_initialized,
+          daily_calorie_target_kcal::text,
+          daily_protein_target_g::text,
+          daily_target_source,
+          daily_target_comment
         FROM records
         WHERE user_id = $1 AND record_date = $2::date
         LIMIT 1
@@ -141,6 +158,15 @@ recordsRouter.get("/records/by-date", async (req, res) => {
       date,
       userId: appUser.id,
       theme: recordResult.rows[0].theme,
+      checkInInitialized: recordResult.rows[0].check_in_initialized,
+      dailyCalorieTargetKcal: recordResult.rows[0].daily_calorie_target_kcal
+        ? Number(recordResult.rows[0].daily_calorie_target_kcal)
+        : null,
+      dailyProteinTargetG: recordResult.rows[0].daily_protein_target_g
+        ? Number(recordResult.rows[0].daily_protein_target_g)
+        : null,
+      dailyTargetSource: recordResult.rows[0].daily_target_source,
+      dailyTargetComment: recordResult.rows[0].daily_target_comment,
       exercises: detail.rows.map((row) => ({
         id: row.exercise_id,
         exerciseItemId: row.exercise_item_id,
@@ -168,9 +194,24 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
 
   try {
     const appUser = await upsertUserFromAuth(req.auth);
-    const result = await pool.query<{ record_date: string; theme: string | null }>(
+    const result = await pool.query<{
+      record_date: string;
+      theme: string | null;
+      check_in_initialized: boolean;
+      daily_calorie_target_kcal: string | null;
+      daily_protein_target_g: string | null;
+      daily_target_source: string | null;
+      daily_target_comment: string | null;
+    }>(
       `
-        SELECT record_date::text, theme
+        SELECT
+          record_date::text,
+          theme,
+          check_in_initialized,
+          daily_calorie_target_kcal::text,
+          daily_protein_target_g::text,
+          daily_target_source,
+          daily_target_comment
         FROM records
         WHERE id = $1
           AND user_id = $2
@@ -218,6 +259,11 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
       userId: appUser.id,
       date: base.record_date,
       theme: base.theme,
+      checkInInitialized: base.check_in_initialized,
+      dailyCalorieTargetKcal: base.daily_calorie_target_kcal ? Number(base.daily_calorie_target_kcal) : null,
+      dailyProteinTargetG: base.daily_protein_target_g ? Number(base.daily_protein_target_g) : null,
+      dailyTargetSource: base.daily_target_source,
+      dailyTargetComment: base.daily_target_comment,
       exercises: detail.rows.map((row) => ({
         id: row.exercise_id,
         exerciseItemId: row.exercise_item_id,
@@ -250,15 +296,27 @@ recordsRouter.patch("/records/by-date/theme", async (req, res) => {
       id: string;
       record_date: string;
       theme: string | null;
+      check_in_initialized: boolean;
     }>(
       `
-        INSERT INTO records (id, user_id, record_date, theme)
-        VALUES ($1, $2, $3::date, $4)
+        INSERT INTO records (
+          id,
+          user_id,
+          record_date,
+          theme,
+          check_in_initialized
+        )
+        VALUES ($1, $2, $3::date, $4, true)
         ON CONFLICT (user_id, record_date)
         DO UPDATE SET
           theme = $4,
+          check_in_initialized = true,
           updated_at = now()
-        RETURNING id, record_date::text, theme
+        RETURNING
+          id,
+          record_date::text,
+          theme,
+          check_in_initialized
       `,
       [randomUUID(), appUser.id, date, theme]
     );
@@ -268,7 +326,8 @@ recordsRouter.patch("/records/by-date/theme", async (req, res) => {
       recordId: row.id,
       date: row.record_date,
       userId: appUser.id,
-      theme: row.theme
+      theme: row.theme,
+      checkInInitialized: row.check_in_initialized
     });
   } catch (error) {
     return res.status(500).json({ error: String(error) });

@@ -1,15 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { pool } from "../db.js";
+import { requireAuth } from "../middleware/auth.js";
+import { upsertUserFromAuth } from "../shared/authUsers.js";
 import { findIdempotentResponse, idempotencyHeader, saveIdempotentResponse } from "../shared/idempotency.js";
 import { createSetSchema, idSchema, patchExerciseSchema, patchSetSchema } from "../shared/validation.js";
 export const exercisesRouter = Router();
+exercisesRouter.use(requireAuth);
 exercisesRouter.get("/exercises/:exerciseId", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const exerciseId = req.params.exerciseId;
     if (!idSchema.safeParse(exerciseId).success) {
         return res.status(400).json({ error: "Invalid exerciseId" });
     }
     try {
+        const appUser = await upsertUserFromAuth(req.auth);
         const exerciseResult = await pool.query(`
         SELECT
           e.id,
@@ -21,9 +28,11 @@ exercisesRouter.get("/exercises/:exerciseId", async (req, res) => {
           e.updated_at::text
         FROM exercises e
         JOIN exercise_items ei ON ei.id = e.exercise_item_id
+        JOIN records r ON r.id = e.record_id
         WHERE e.id = $1
+          AND r.user_id = $2
         LIMIT 1
-      `, [exerciseId]);
+      `, [exerciseId, appUser.id]);
         if (exerciseResult.rowCount === 0) {
             return res.status(404).json({ error: "Exercise not found" });
         }
@@ -57,6 +66,9 @@ exercisesRouter.get("/exercises/:exerciseId", async (req, res) => {
     }
 });
 exercisesRouter.patch("/exercises/:exerciseId", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const exerciseId = req.params.exerciseId;
     if (!idSchema.safeParse(exerciseId).success) {
         return res.status(400).json({ error: "Invalid exerciseId" });
@@ -69,15 +81,19 @@ exercisesRouter.patch("/exercises/:exerciseId", async (req, res) => {
     const hasNotes = Object.prototype.hasOwnProperty.call(parsed.data, "notes");
     const hasSortOrder = Object.prototype.hasOwnProperty.call(parsed.data, "sortOrder");
     try {
+        const appUser = await upsertUserFromAuth(req.auth);
         const result = await pool.query(`
-        UPDATE exercises
+        UPDATE exercises e
         SET
           notes = CASE WHEN $2::boolean THEN $3 ELSE notes END,
           sort_order = CASE WHEN $4::boolean THEN $5 ELSE sort_order END,
           updated_at = now()
-        WHERE id = $1
-        RETURNING id, notes, sort_order, updated_at::text
-      `, [exerciseId, hasNotes, notes ?? null, hasSortOrder, sortOrder ?? null]);
+        FROM records r
+        WHERE e.id = $1
+          AND r.id = e.record_id
+          AND r.user_id = $6
+        RETURNING e.id, e.notes, e.sort_order, e.updated_at::text
+      `, [exerciseId, hasNotes, notes ?? null, hasSortOrder, sortOrder ?? null, appUser.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Exercise not found" });
         }
@@ -94,14 +110,23 @@ exercisesRouter.patch("/exercises/:exerciseId", async (req, res) => {
     }
 });
 exercisesRouter.delete("/exercises/:exerciseId", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const exerciseId = req.params.exerciseId;
     if (!idSchema.safeParse(exerciseId).success) {
         return res.status(400).json({ error: "Invalid exerciseId" });
     }
     try {
-        const result = await pool.query("DELETE FROM exercises WHERE id = $1 RETURNING id", [
-            exerciseId
-        ]);
+        const appUser = await upsertUserFromAuth(req.auth);
+        const result = await pool.query(`
+        DELETE FROM exercises e
+        USING records r
+        WHERE e.id = $1
+          AND r.id = e.record_id
+          AND r.user_id = $2
+        RETURNING e.id
+      `, [exerciseId, appUser.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Exercise not found" });
         }
@@ -112,6 +137,9 @@ exercisesRouter.delete("/exercises/:exerciseId", async (req, res) => {
     }
 });
 exercisesRouter.post("/exercises/:exerciseId/sets", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const exerciseId = req.params.exerciseId;
     if (!idSchema.safeParse(exerciseId).success) {
         return res.status(400).json({ error: "Invalid exerciseId" });
@@ -120,11 +148,12 @@ exercisesRouter.post("/exercises/:exerciseId/sets", async (req, res) => {
     if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const { userId, reps, weight, setOrder, notes, isCompleted } = parsed.data;
+    const { reps, weight, setOrder, notes, isCompleted } = parsed.data;
+    const appUser = await upsertUserFromAuth(req.auth);
     const endpoint = "POST /exercises/:exerciseId/sets";
     const key = idempotencyHeader(req);
     if (key) {
-        const existing = await findIdempotentResponse(userId, endpoint, key);
+        const existing = await findIdempotentResponse(appUser.id, endpoint, key);
         if (existing) {
             return res.status(existing.status).json(existing.body);
         }
@@ -136,7 +165,7 @@ exercisesRouter.post("/exercises/:exerciseId/sets", async (req, res) => {
         JOIN records r ON r.id = e.record_id
         WHERE e.id = $1 AND r.user_id = $2
         LIMIT 1
-      `, [exerciseId, userId]);
+      `, [exerciseId, appUser.id]);
         if (ownership.rowCount === 0) {
             return res.status(404).json({ error: "Exercise not found for user" });
         }
@@ -156,7 +185,7 @@ exercisesRouter.post("/exercises/:exerciseId/sets", async (req, res) => {
             isCompleted: row.is_completed
         };
         if (key) {
-            await saveIdempotentResponse(userId, endpoint, key, 201, payload);
+            await saveIdempotentResponse(appUser.id, endpoint, key, 201, payload);
         }
         return res.status(201).json(payload);
     }
@@ -165,6 +194,9 @@ exercisesRouter.post("/exercises/:exerciseId/sets", async (req, res) => {
     }
 });
 exercisesRouter.patch("/exercise-sets/:setId", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const setId = req.params.setId;
     if (!idSchema.safeParse(setId).success) {
         return res.status(400).json({ error: "Invalid setId" });
@@ -180,8 +212,9 @@ exercisesRouter.patch("/exercise-sets/:setId", async (req, res) => {
     const hasNotes = Object.prototype.hasOwnProperty.call(parsed.data, "notes");
     const hasIsCompleted = Object.prototype.hasOwnProperty.call(parsed.data, "isCompleted");
     try {
+        const appUser = await upsertUserFromAuth(req.auth);
         const result = await pool.query(`
-        UPDATE exercise_sets
+        UPDATE exercise_sets es
         SET
           reps = CASE WHEN $2::boolean THEN $3 ELSE reps END,
           weight = CASE WHEN $4::boolean THEN $5 ELSE weight END,
@@ -189,8 +222,12 @@ exercisesRouter.patch("/exercise-sets/:setId", async (req, res) => {
           notes = CASE WHEN $8::boolean THEN $9 ELSE notes END,
           is_completed = CASE WHEN $10::boolean THEN $11 ELSE is_completed END,
           updated_at = now()
-        WHERE id = $1
-        RETURNING id, reps, weight::text, set_order, notes, is_completed, updated_at::text
+        FROM exercises e
+        JOIN records r ON r.id = e.record_id
+        WHERE es.id = $1
+          AND e.id = es.exercise_id
+          AND r.user_id = $12
+        RETURNING es.id, es.reps, es.weight::text, es.set_order, es.notes, es.is_completed, es.updated_at::text
       `, [
             setId,
             hasReps,
@@ -202,7 +239,8 @@ exercisesRouter.patch("/exercise-sets/:setId", async (req, res) => {
             hasNotes,
             notes ?? null,
             hasIsCompleted,
-            isCompleted ?? null
+            isCompleted ?? null,
+            appUser.id
         ]);
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Set not found" });
@@ -223,14 +261,24 @@ exercisesRouter.patch("/exercise-sets/:setId", async (req, res) => {
     }
 });
 exercisesRouter.delete("/exercise-sets/:setId", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
     const setId = req.params.setId;
     if (!idSchema.safeParse(setId).success) {
         return res.status(400).json({ error: "Invalid setId" });
     }
     try {
-        const result = await pool.query("DELETE FROM exercise_sets WHERE id = $1 RETURNING id", [
-            setId
-        ]);
+        const appUser = await upsertUserFromAuth(req.auth);
+        const result = await pool.query(`
+        DELETE FROM exercise_sets es
+        USING exercises e, records r
+        WHERE es.id = $1
+          AND e.id = es.exercise_id
+          AND r.id = e.record_id
+          AND r.user_id = $2
+        RETURNING es.id
+      `, [setId, appUser.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Set not found" });
         }

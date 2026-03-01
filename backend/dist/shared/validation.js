@@ -30,11 +30,10 @@ const recordThemeSchema = z
     .trim()
     .max(30)
     .regex(/^[A-Za-z0-9 _-]+$/, "Theme can only include letters, numbers, spaces, - and _");
-export const patchRecordThemeByDateSchema = byDateSchema.extend({
+export const patchRecordThemeByDateSchema = byDateNoUserSchema.extend({
     theme: recordThemeSchema.nullable()
 });
 export const createExerciseSchema = z.object({
-    userId: idSchema,
     exerciseItemId: idSchema,
     notes: z.string().max(1000).optional(),
     sortOrder: z.number().int().min(0).optional(),
@@ -56,7 +55,6 @@ export const patchExerciseSchema = z.object({
     sortOrder: z.number().int().min(0).optional()
 });
 export const createSetSchema = z.object({
-    userId: idSchema,
     reps: z.number().int().positive(),
     weight: z.number().nonnegative(),
     setOrder: z.number().int().min(0).optional(),
