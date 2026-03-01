@@ -17,7 +17,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Allow GymTracker to take food photos for nutrition analysis.",
-        "NSPhotoLibraryUsageDescription": "Allow GymTracker to select food photos for nutrition analysis."
+        "NSPhotoLibraryUsageDescription": "Allow GymTracker to select food photos for nutrition analysis.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.lesliejiang.gymtracker"
     },
@@ -31,6 +32,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "53aedda8-1f83-4a57-b561-7282347bd7fe"
+      }
     }
   }
 }

@@ -293,7 +293,7 @@ exercisesRouter.patch("/exercise-sets/:setId", async (req, res) => {
           reps = CASE WHEN $2::boolean THEN $3 ELSE reps END,
           weight = CASE WHEN $4::boolean THEN $5 ELSE weight END,
           set_order = CASE WHEN $6::boolean THEN $7 ELSE set_order END,
-          notes = CASE WHEN $8::boolean THEN $9 ELSE notes END,
+          notes = CASE WHEN $8::boolean THEN $9 ELSE es.notes END,
           is_completed = CASE WHEN $10::boolean THEN $11 ELSE is_completed END,
           updated_at = now()
         FROM exercises e
