@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
-import { gemini } from "../config.js";
+import { kimi, generateKimiText } from "../config.js";
 import { pool, withTransaction } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth } from "../shared/authUsers.js";
@@ -78,7 +78,7 @@ async function analyzeFoodConsumption(text, image, promptProfile) {
         comment: "AI nutrition analysis is not available right now. Calories and protein are set to 0 until analysis succeeds.",
         source: "fallback"
     };
-    if (!gemini) {
+    if (!kimi) {
         return fallback;
     }
     const prompt = buildStructuredPrompt({
@@ -95,21 +95,12 @@ Rules:
 - caloriesKcal and proteinG must be non-negative numbers.
 - Keep the comment concise and actionable.`
     });
-    const parts = [{ text: prompt }, { text: `User text: ${text ?? "(none provided)"}` }];
-    if (image) {
-        parts.push({
-            inlineData: {
-                mimeType: image.mimeType,
-                data: image.dataBase64
-            }
-        });
-    }
     try {
-        const response = await gemini.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: [{ role: "user", parts }]
+        const raw = await generateKimiText({
+            prompt,
+            userText: text ?? "(none provided)",
+            image
         });
-        const raw = response.text?.trim();
         if (!raw) {
             return fallback;
         }

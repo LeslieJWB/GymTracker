@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
-import { gemini } from "../config.js";
+import { kimi, generateKimiText } from "../config.js";
 import { pool, withTransaction } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth, type PromptProfile } from "../shared/authUsers.js";
@@ -106,7 +106,7 @@ async function analyzeFoodConsumption(
     source: "fallback"
   };
 
-  if (!gemini) {
+  if (!kimi) {
     return fallback;
   }
 
@@ -125,33 +125,12 @@ Rules:
 - Keep the comment concise and actionable.`
   });
 
-  const parts: Array<
-    | {
-        text: string;
-      }
-    | {
-        inlineData: {
-          mimeType: string;
-          data: string;
-        };
-      }
-  > = [{ text: prompt }, { text: `User text: ${text ?? "(none provided)"}` }];
-
-  if (image) {
-    parts.push({
-      inlineData: {
-        mimeType: image.mimeType,
-        data: image.dataBase64
-      }
-    });
-  }
-
   try {
-    const response = await gemini.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts }]
+    const raw = await generateKimiText({
+      prompt,
+      userText: text ?? "(none provided)",
+      image
     });
-    const raw = (response as { text?: string }).text?.trim();
     if (!raw) {
       return fallback;
     }

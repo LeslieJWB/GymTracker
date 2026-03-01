@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { pool } from "../db.js";
-import { gemini } from "../config.js";
+import { kimi, generateKimiText } from "../config.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth } from "../shared/authUsers.js";
 import { buildStructuredPrompt } from "../shared/llmPrompt.js";
@@ -267,9 +267,9 @@ adviceRouter.post("/advice/exercise-plan", async (req, res) => {
     }
     const historyText = historyLines.length > 0 ? historyLines.join("\n") : "No prior logs for this exercise.";
 
-    if (!gemini) {
+    if (!kimi) {
       return fallback(
-        "AI advice is not configured. Add GEMINI_API_KEY to your environment. Based on your history, aim for progressive overload with good form."
+        "AI advice is not configured. Add KIMI_API_KEY to your environment. Based on your history, aim for progressive overload with good form."
       );
     }
 
@@ -291,12 +291,7 @@ Respond with ONLY a single JSON object, no other text. Use this exact shape:
 Keep recommendations safe and based on the user's history. Weight in kg.`
     });
 
-    const response = await gemini.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt
-    });
-
-    const raw = (response as { text?: string }).text?.trim();
+    const raw = await generateKimiText({ prompt });
     if (!raw) {
       return fallback("Could not generate a plan. Try again or add more history for this exercise.");
     }
@@ -588,7 +583,7 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
             .join("\n")
         : "No prior body weight records.";
 
-    if (!gemini) {
+    if (!kimi) {
       return fallback(
         "AI review is not configured right now. Keep tracking your completed sets, food, and body weight so the next review can compare trends."
       );
@@ -626,11 +621,7 @@ Respond with ONLY a single JSON object:
 {"review":"<short, concrete review with strengths, gaps, and next actions>"}`
     });
 
-    const response = await gemini.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt
-    });
-    const raw = (response as { text?: string }).text?.trim();
+    const raw = await generateKimiText({ prompt });
     if (!raw) {
       return fallback("Could not generate AI summary. Try again after logging more completed sets or food.");
     }
@@ -746,7 +737,7 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
       return res.json(responsePayload);
     }
 
-    if (!gemini) {
+    if (!kimi) {
       const responsePayload = {
         source: "fallback" as const,
         recommendedCaloriesKcal: needsCaloriesFromLlm
@@ -780,11 +771,7 @@ Rules:
 - Keep comment practical and under 2 sentences.`
     });
 
-    const response = await gemini.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt
-    });
-    const raw = (response as { text?: string }).text?.trim();
+    const raw = await generateKimiText({ prompt });
     if (!raw) {
       const responsePayload = {
         source: "fallback" as const,
@@ -1017,7 +1004,7 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
             .join("\n")
         : "No prior completed records for this exercise.";
 
-    if (!gemini) {
+    if (!kimi) {
       return fallback(
         "AI feedback is not configured right now. Keep progressing set quality and load over time, and log notes to improve review quality."
       );
@@ -1045,11 +1032,7 @@ Respond with ONLY JSON:
 {"review":"<concise feedback on incremental progress, form/load management, and next-step suggestion>"}`
     });
 
-    const response = await gemini.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt
-    });
-    const raw = (response as { text?: string }).text?.trim();
+    const raw = await generateKimiText({ prompt });
     if (!raw) {
       return fallback("Could not generate exercise feedback. Try again after completing more sets.");
     }

@@ -480,7 +480,8 @@ export function RecordScreen({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: false,
       quality: 0.5,
-      base64: true
+      base64: true,
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Automatic
     });
     if (result.canceled) {
       return;
@@ -510,7 +511,8 @@ export function RecordScreen({
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: false,
       quality: 0.5,
-      base64: true
+      base64: true,
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Automatic
     });
     if (result.canceled) {
       return;
