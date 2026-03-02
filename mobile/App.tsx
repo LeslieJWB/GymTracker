@@ -966,17 +966,6 @@ export default function App() {
           )
         }
       }));
-      setSetDraftsByExerciseId((current) => ({
-        ...current,
-        [exerciseId]: {
-          ...(current[exerciseId] ?? {}),
-          [setId]: {
-            reps: String(updatedSet.reps),
-            weight: String(updatedSet.weight),
-            notes: updatedSet.notes ?? ""
-          }
-        }
-      }));
     } catch (error) {
       Alert.alert("Failed to update set", String(error));
     } finally {
@@ -1671,15 +1660,7 @@ export default function App() {
 
   useRecordEffects({
     exerciseDetailsById,
-    expandedExerciseIds,
-    setDraftsByExerciseId,
-    savingSetIdsByExerciseId,
-    exerciseNotesDraftById,
-    savingExerciseNotesById,
-    loading,
-    setSetDraftsByExerciseId,
-    saveExerciseNotes,
-    saveSet
+    setSetDraftsByExerciseId
   });
 
   useEffect(() => {

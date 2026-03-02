@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import {
   Alert,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -203,10 +202,6 @@ export function RecordScreen({
   const [foodTextDraft, setFoodTextDraft] = useState("");
   const [foodImageDraft, setFoodImageDraft] = useState<FoodImageDraft | null>(null);
   const [foodComposerError, setFoodComposerError] = useState<string | null>(null);
-  const [pendingSetSaves, setPendingSetSaves] = useState<Record<string, { exerciseId: string; setId: string }>>({});
-  const pendingSetSavesRef = useRef(pendingSetSaves);
-  const activeSetInputRef = useRef<string | null>(null);
-  const keyboardHideFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [setNotesTarget, setSetNotesTarget] = useState<{
     exerciseId: string;
     setId: string;
@@ -320,44 +315,6 @@ export function RecordScreen({
   const foodEntryCount = recordDetail?.foodConsumptions.length ?? 0;
   const foodEntryLabel = foodEntryCount === 1 ? "entry" : "entries";
 
-  useEffect(() => {
-    pendingSetSavesRef.current = pendingSetSaves;
-  }, [pendingSetSaves]);
-
-  useEffect(() => {
-    const subscription = Keyboard.addListener("keyboardDidHide", () => {
-      if (keyboardHideFlushTimeoutRef.current) {
-        clearTimeout(keyboardHideFlushTimeoutRef.current);
-      }
-      // Delay flush to avoid saving during quick input-to-input focus switches.
-      keyboardHideFlushTimeoutRef.current = setTimeout(() => {
-        if (activeSetInputRef.current !== null) {
-          return;
-        }
-        const queuedSaves = Object.values(pendingSetSavesRef.current);
-        if (queuedSaves.length === 0) {
-          return;
-        }
-        setPendingSetSaves({});
-        for (const queuedSave of queuedSaves) {
-          saveSet(queuedSave.exerciseId, queuedSave.setId);
-        }
-      }, 220);
-    });
-    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
-      if (keyboardHideFlushTimeoutRef.current) {
-        clearTimeout(keyboardHideFlushTimeoutRef.current);
-        keyboardHideFlushTimeoutRef.current = null;
-      }
-    });
-    return () => {
-      subscription.remove();
-      showSubscription.remove();
-      if (keyboardHideFlushTimeoutRef.current) {
-        clearTimeout(keyboardHideFlushTimeoutRef.current);
-      }
-    };
-  }, [saveSet]);
 
   useEffect(() => {
     if (!adviceTarget || !user || !recordDetail) return;
@@ -441,30 +398,6 @@ export function RecordScreen({
     await addSet(exerciseId);
   }
 
-  function queueSetSave(exerciseId: string, setId: string): void {
-    const key = `${exerciseId}:${setId}`;
-    setPendingSetSaves((current) => ({
-      ...current,
-      [key]: { exerciseId, setId }
-    }));
-  }
-
-  function onSetInputFocus(exerciseId: string, setId: string, field: "weight" | "reps"): void {
-    activeSetInputRef.current = `${exerciseId}:${setId}:${field}`;
-    if (keyboardHideFlushTimeoutRef.current) {
-      clearTimeout(keyboardHideFlushTimeoutRef.current);
-      keyboardHideFlushTimeoutRef.current = null;
-    }
-  }
-
-  function onSetInputBlur(exerciseId: string, setId: string, field: "weight" | "reps"): void {
-    const key = `${exerciseId}:${setId}:${field}`;
-    setTimeout(() => {
-      if (activeSetInputRef.current === key) {
-        activeSetInputRef.current = null;
-      }
-    }, 0);
-  }
 
   function openAdviceSheetForExercise(item: { id: string; exerciseItemId: string; exerciseItemName: string }): void {
     setAdviceTarget({
@@ -948,36 +881,32 @@ export function RecordScreen({
                                       <TextInput
                                         style={[styles.setRowInput, styles.colWeight, isCompleted ? styles.setRowInputCompleted : null]}
                                         value={draft.weight}
-                                        onChangeText={(text) => {
-                                          queueSetSave(item.id, setItem.id);
+                                        onChangeText={(text) =>
                                           setSetDraft(item.id, setItem.id, {
                                             reps: draft.reps,
                                             weight: sanitizeWeightInput(text),
                                             notes: draft.notes
-                                          });
-                                        }}
+                                          })
+                                        }
                                         keyboardType="decimal-pad"
                                         placeholder="0"
                                         placeholderTextColor="#78786C"
-                                        onFocus={() => onSetInputFocus(item.id, setItem.id, "weight")}
-                                        onBlur={() => onSetInputBlur(item.id, setItem.id, "weight")}
+                                        onBlur={() => saveSet(item.id, setItem.id)}
                                       />
                                       <TextInput
                                         style={[styles.setRowInput, styles.colReps, isCompleted ? styles.setRowInputCompleted : null]}
                                         value={draft.reps}
-                                        onChangeText={(text) => {
-                                          queueSetSave(item.id, setItem.id);
+                                        onChangeText={(text) =>
                                           setSetDraft(item.id, setItem.id, {
                                             reps: sanitizeIntegerInput(text),
                                             weight: draft.weight,
                                             notes: draft.notes
-                                          });
-                                        }}
+                                          })
+                                        }
                                         keyboardType="numeric"
                                         placeholder="0"
                                         placeholderTextColor="#78786C"
-                                        onFocus={() => onSetInputFocus(item.id, setItem.id, "reps")}
-                                        onBlur={() => onSetInputBlur(item.id, setItem.id, "reps")}
+                                        onBlur={() => saveSet(item.id, setItem.id)}
                                       />
                                       <View style={styles.colNotes}>
                                         <TouchableOpacity
