@@ -57,13 +57,6 @@ export function CalendarScreen({
       new Set(recordSummaries.filter((item) => item.setCount > 0).map((item) => item.date)),
     [recordSummaries]
   );
-  const recordByDate = useMemo(
-    () =>
-      new Map(
-        recordSummaries.map((item) => [item.date, item] as const)
-      ),
-    [recordSummaries]
-  );
   const activeDays = markedDates.size;
   const totalExercises = useMemo(
     () => recordSummaries.reduce((sum, item) => sum + item.exerciseCount, 0),
@@ -124,8 +117,6 @@ export function CalendarScreen({
               );
             }
             const hasExercise = markedDates.has(dateValue);
-            const record = recordByDate.get(dateValue);
-            const theme = record?.theme?.trim();
             const isToday = dateValue === today;
             const isFuture = dateValue > today;
             return (
@@ -150,17 +141,6 @@ export function CalendarScreen({
                     >
                       {Number(dateValue.slice(8))}
                     </Text>
-                    {theme ? (
-                      <Text
-                        style={[
-                          styles.themeText,
-                          hasExercise ? styles.themeTextMarked : undefined,
-                          isFuture ? styles.themeTextFuture : undefined
-                        ]}
-                      >
-                        {theme}
-                      </Text>
-                    ) : null}
                   </View>
                 </TouchableOpacity>
               </View>
@@ -316,19 +296,6 @@ const styles = StyleSheet.create({
     color: palette.primaryForeground
   },
   dayTextFuture: {
-    color: palette.mutedForeground
-  },
-  themeText: {
-    marginTop: 1,
-    fontSize: 9,
-    color: palette.mutedForeground,
-    fontFamily: textStyles.bodySemiBold.fontFamily,
-    textTransform: "capitalize"
-  },
-  themeTextMarked: {
-    color: palette.primaryForeground
-  },
-  themeTextFuture: {
     color: palette.mutedForeground
   },
   legendRow: {

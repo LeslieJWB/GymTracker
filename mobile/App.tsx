@@ -662,6 +662,7 @@ export default function App() {
         rows.map((row) => (row.date === selectedDate ? { ...row, theme: updatedRecord.theme } : row))
       );
     } catch (error) {
+      setRecordThemeDraft(recordDetail?.theme ?? "");
       Alert.alert("Failed to save theme", String(error));
     } finally {
       setSavingRecordTheme(false);

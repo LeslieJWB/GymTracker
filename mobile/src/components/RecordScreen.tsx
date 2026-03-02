@@ -1,6 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { appStyles } from "../styles/appStyles";
 import { SwipeActionRow } from "./SwipeActionRow";
 import {
@@ -189,6 +203,8 @@ export function RecordScreen({
   const [foodTextDraft, setFoodTextDraft] = useState("");
   const [foodImageDraft, setFoodImageDraft] = useState<FoodImageDraft | null>(null);
   const [foodComposerError, setFoodComposerError] = useState<string | null>(null);
+  const [pendingSetSaves, setPendingSetSaves] = useState<Record<string, { exerciseId: string; setId: string }>>({});
+  const pendingSetSavesRef = useRef(pendingSetSaves);
   const [setNotesTarget, setSetNotesTarget] = useState<{
     exerciseId: string;
     setId: string;
@@ -303,24 +319,24 @@ export function RecordScreen({
   const foodEntryLabel = foodEntryCount === 1 ? "entry" : "entries";
 
   useEffect(() => {
-    if (!themeDirty || loading || !user || savingRecordTheme) {
-      return;
-    }
-    const timeoutId = setTimeout(() => {
-      saveRecordTheme();
-    }, 550);
-    return () => clearTimeout(timeoutId);
-  }, [themeDirty, loading, user, savingRecordTheme, saveRecordTheme]);
+    pendingSetSavesRef.current = pendingSetSaves;
+  }, [pendingSetSaves]);
 
   useEffect(() => {
-    if (!bodyWeightDirty || !isBodyWeightDraftValid || loading || !user || savingBodyWeight) {
-      return;
-    }
-    const timeoutId = setTimeout(() => {
-      saveBodyWeight();
-    }, 550);
-    return () => clearTimeout(timeoutId);
-  }, [bodyWeightDirty, isBodyWeightDraftValid, loading, user, savingBodyWeight, saveBodyWeight]);
+    const subscription = Keyboard.addListener("keyboardDidHide", () => {
+      const queuedSaves = Object.values(pendingSetSavesRef.current);
+      if (queuedSaves.length === 0) {
+        return;
+      }
+      setPendingSetSaves({});
+      for (const queuedSave of queuedSaves) {
+        saveSet(queuedSave.exerciseId, queuedSave.setId);
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [saveSet]);
 
   useEffect(() => {
     if (!adviceTarget || !user || !recordDetail) return;
@@ -402,6 +418,14 @@ export function RecordScreen({
 
   async function addSetForExercise(exerciseId: string): Promise<void> {
     await addSet(exerciseId);
+  }
+
+  function queueSetSave(exerciseId: string, setId: string): void {
+    const key = `${exerciseId}:${setId}`;
+    setPendingSetSaves((current) => ({
+      ...current,
+      [key]: { exerciseId, setId }
+    }));
   }
 
   function openAdviceSheetForExercise(item: { id: string; exerciseItemId: string; exerciseItemName: string }): void {
@@ -886,32 +910,32 @@ export function RecordScreen({
                                       <TextInput
                                         style={[styles.setRowInput, styles.colWeight, isCompleted ? styles.setRowInputCompleted : null]}
                                         value={draft.weight}
-                                        onChangeText={(text) =>
+                                        onChangeText={(text) => {
+                                          queueSetSave(item.id, setItem.id);
                                           setSetDraft(item.id, setItem.id, {
                                             reps: draft.reps,
                                             weight: sanitizeWeightInput(text),
                                             notes: draft.notes
-                                          })
-                                        }
+                                          });
+                                        }}
                                         keyboardType="decimal-pad"
                                         placeholder="0"
                                         placeholderTextColor="#78786C"
-                                        onBlur={() => saveSet(item.id, setItem.id)}
                                       />
                                       <TextInput
                                         style={[styles.setRowInput, styles.colReps, isCompleted ? styles.setRowInputCompleted : null]}
                                         value={draft.reps}
-                                        onChangeText={(text) =>
+                                        onChangeText={(text) => {
+                                          queueSetSave(item.id, setItem.id);
                                           setSetDraft(item.id, setItem.id, {
                                             reps: sanitizeIntegerInput(text),
                                             weight: draft.weight,
                                             notes: draft.notes
-                                          })
-                                        }
+                                          });
+                                        }}
                                         keyboardType="numeric"
                                         placeholder="0"
                                         placeholderTextColor="#78786C"
-                                        onBlur={() => saveSet(item.id, setItem.id)}
                                       />
                                       <View style={styles.colNotes}>
                                         <TouchableOpacity
@@ -1185,7 +1209,11 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeSetNotesSheet}
       >
-        <View style={styles.menuBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.menuBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={16}
+        >
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeSetNotesSheet} />
           <View style={styles.notesSheet}>
             <View style={styles.menuHandle} />
@@ -1239,7 +1267,7 @@ export function RecordScreen({
               </>
             ) : null}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -1248,7 +1276,11 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeExerciseNotesSheet}
       >
-        <View style={styles.menuBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.menuBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={16}
+        >
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeExerciseNotesSheet} />
           <View style={styles.notesSheet}>
             <View style={styles.menuHandle} />
@@ -1290,7 +1322,7 @@ export function RecordScreen({
               </>
             ) : null}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal

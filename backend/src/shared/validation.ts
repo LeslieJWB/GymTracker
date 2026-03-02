@@ -38,8 +38,7 @@ export const exerciseHistorySchema = dateRangeNoUserSchema.extend({
 const recordThemeSchema = z
   .string()
   .trim()
-  .max(30)
-  .regex(/^[A-Za-z0-9 _-]+$/, "Theme can only include letters, numbers, spaces, - and _");
+  .max(30);
 
 export const patchRecordThemeByDateSchema = byDateNoUserSchema.extend({
   theme: recordThemeSchema.nullable()
