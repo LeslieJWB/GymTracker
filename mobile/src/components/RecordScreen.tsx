@@ -205,6 +205,8 @@ export function RecordScreen({
   const [foodComposerError, setFoodComposerError] = useState<string | null>(null);
   const [pendingSetSaves, setPendingSetSaves] = useState<Record<string, { exerciseId: string; setId: string }>>({});
   const pendingSetSavesRef = useRef(pendingSetSaves);
+  const activeSetInputRef = useRef<string | null>(null);
+  const keyboardHideFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [setNotesTarget, setSetNotesTarget] = useState<{
     exerciseId: string;
     setId: string;
@@ -324,17 +326,36 @@ export function RecordScreen({
 
   useEffect(() => {
     const subscription = Keyboard.addListener("keyboardDidHide", () => {
-      const queuedSaves = Object.values(pendingSetSavesRef.current);
-      if (queuedSaves.length === 0) {
-        return;
+      if (keyboardHideFlushTimeoutRef.current) {
+        clearTimeout(keyboardHideFlushTimeoutRef.current);
       }
-      setPendingSetSaves({});
-      for (const queuedSave of queuedSaves) {
-        saveSet(queuedSave.exerciseId, queuedSave.setId);
+      // Delay flush to avoid saving during quick input-to-input focus switches.
+      keyboardHideFlushTimeoutRef.current = setTimeout(() => {
+        if (activeSetInputRef.current !== null) {
+          return;
+        }
+        const queuedSaves = Object.values(pendingSetSavesRef.current);
+        if (queuedSaves.length === 0) {
+          return;
+        }
+        setPendingSetSaves({});
+        for (const queuedSave of queuedSaves) {
+          saveSet(queuedSave.exerciseId, queuedSave.setId);
+        }
+      }, 220);
+    });
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      if (keyboardHideFlushTimeoutRef.current) {
+        clearTimeout(keyboardHideFlushTimeoutRef.current);
+        keyboardHideFlushTimeoutRef.current = null;
       }
     });
     return () => {
       subscription.remove();
+      showSubscription.remove();
+      if (keyboardHideFlushTimeoutRef.current) {
+        clearTimeout(keyboardHideFlushTimeoutRef.current);
+      }
     };
   }, [saveSet]);
 
@@ -426,6 +447,23 @@ export function RecordScreen({
       ...current,
       [key]: { exerciseId, setId }
     }));
+  }
+
+  function onSetInputFocus(exerciseId: string, setId: string, field: "weight" | "reps"): void {
+    activeSetInputRef.current = `${exerciseId}:${setId}:${field}`;
+    if (keyboardHideFlushTimeoutRef.current) {
+      clearTimeout(keyboardHideFlushTimeoutRef.current);
+      keyboardHideFlushTimeoutRef.current = null;
+    }
+  }
+
+  function onSetInputBlur(exerciseId: string, setId: string, field: "weight" | "reps"): void {
+    const key = `${exerciseId}:${setId}:${field}`;
+    setTimeout(() => {
+      if (activeSetInputRef.current === key) {
+        activeSetInputRef.current = null;
+      }
+    }, 0);
   }
 
   function openAdviceSheetForExercise(item: { id: string; exerciseItemId: string; exerciseItemName: string }): void {
@@ -921,6 +959,8 @@ export function RecordScreen({
                                         keyboardType="decimal-pad"
                                         placeholder="0"
                                         placeholderTextColor="#78786C"
+                                        onFocus={() => onSetInputFocus(item.id, setItem.id, "weight")}
+                                        onBlur={() => onSetInputBlur(item.id, setItem.id, "weight")}
                                       />
                                       <TextInput
                                         style={[styles.setRowInput, styles.colReps, isCompleted ? styles.setRowInputCompleted : null]}
@@ -936,6 +976,8 @@ export function RecordScreen({
                                         keyboardType="numeric"
                                         placeholder="0"
                                         placeholderTextColor="#78786C"
+                                        onFocus={() => onSetInputFocus(item.id, setItem.id, "reps")}
+                                        onBlur={() => onSetInputBlur(item.id, setItem.id, "reps")}
                                       />
                                       <View style={styles.colNotes}>
                                         <TouchableOpacity
