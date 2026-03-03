@@ -18,7 +18,7 @@ import {
   View
 } from "react-native";
 import { AuthScreen } from "./src/components/AuthScreen";
-import { KeyboardDoneBar } from "./src/components/KeyboardDoneBar";
+import { KeyboardDoneBar, DONE_BAR_ID } from "./src/components/KeyboardDoneBar";
 import { CalendarScreen } from "./src/components/CalendarScreen";
 import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/components/RecordScreen.tsx";
 import { ProfileScreen } from "./src/components/ProfileScreen";
@@ -1770,6 +1770,7 @@ export default function App() {
                 value={onboardingDefaultWeight}
                 onChangeText={(value) => setOnboardingDefaultWeight(sanitizeWeightInput(value))}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={DONE_BAR_ID}
                 placeholder="e.g. 72.5"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
@@ -1782,6 +1783,7 @@ export default function App() {
                 value={onboardingHeight}
                 onChangeText={(value) => setOnboardingHeight(sanitizeWeightInput(value))}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={DONE_BAR_ID}
                 placeholder="e.g. 175"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
@@ -1794,6 +1796,7 @@ export default function App() {
                 value={onboardingCalorieTarget}
                 onChangeText={(value) => setOnboardingCalorieTarget(sanitizeWeightInput(value))}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={DONE_BAR_ID}
                 placeholder="e.g. 2200"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
@@ -1806,6 +1809,7 @@ export default function App() {
                 value={onboardingProteinTarget}
                 onChangeText={(value) => setOnboardingProteinTarget(sanitizeWeightInput(value))}
                 keyboardType="decimal-pad"
+                inputAccessoryViewID={DONE_BAR_ID}
                 placeholder="e.g. 150"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
@@ -2015,6 +2019,7 @@ export default function App() {
                   value={dailyCheckInWeightDraft}
                   onChangeText={(value) => setDailyCheckInWeightDraft(sanitizeWeightInput(value))}
                   keyboardType="decimal-pad"
+                  inputAccessoryViewID={DONE_BAR_ID}
                   placeholder="Leave empty to use weight recorded before"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}

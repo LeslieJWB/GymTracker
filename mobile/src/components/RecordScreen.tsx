@@ -15,6 +15,7 @@ import {
   View
 } from "react-native";
 import { appStyles } from "../styles/appStyles";
+import { DONE_BAR_ID } from "./KeyboardDoneBar";
 import { SwipeActionRow } from "./SwipeActionRow";
 import {
   AdviceReviewResult,
@@ -663,6 +664,7 @@ export function RecordScreen({
               value={bodyWeightDraft}
               onChangeText={(value) => setBodyWeightDraft(sanitizeWeightInput(value))}
               keyboardType="decimal-pad"
+              inputAccessoryViewID={DONE_BAR_ID}
               placeholder="0.0"
               placeholderTextColor="#78786C"
               editable={Boolean(user) && !loading && !savingBodyWeight}
@@ -889,6 +891,7 @@ export function RecordScreen({
                                           })
                                         }
                                         keyboardType="decimal-pad"
+                                        inputAccessoryViewID={DONE_BAR_ID}
                                         placeholder="0"
                                         placeholderTextColor="#78786C"
                                         onBlur={() => saveSet(item.id, setItem.id)}
@@ -904,6 +907,7 @@ export function RecordScreen({
                                           })
                                         }
                                         keyboardType="numeric"
+                                        inputAccessoryViewID={DONE_BAR_ID}
                                         placeholder="0"
                                         placeholderTextColor="#78786C"
                                         onBlur={() => saveSet(item.id, setItem.id)}

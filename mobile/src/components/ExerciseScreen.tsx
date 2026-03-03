@@ -2,6 +2,7 @@ import { Dispatch, SetStateAction, useState } from "react";
 import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { appStyles } from "../styles/appStyles";
 import { BackButton } from "./BackButton";
+import { DONE_BAR_ID } from "./KeyboardDoneBar";
 import { SwipeActionRow } from "./SwipeActionRow";
 import { ExerciseDetail, SetDrafts } from "../types/workout";
 
@@ -163,6 +164,7 @@ export function ExerciseScreen({
                       }))
                     }
                     keyboardType="numeric"
+                    inputAccessoryViewID={DONE_BAR_ID}
                     placeholder="Reps"
                   />
                 </View>
@@ -182,6 +184,7 @@ export function ExerciseScreen({
                         }))
                       }
                       keyboardType="decimal-pad"
+                      inputAccessoryViewID={DONE_BAR_ID}
                       placeholder="Weight"
                       placeholderTextColor="#78786C"
                     />
@@ -266,6 +269,7 @@ export function ExerciseScreen({
                   value={newSetReps}
                   onChangeText={(text) => setNewSetReps(sanitizeIntegerInput(text))}
                   keyboardType="numeric"
+                  inputAccessoryViewID={DONE_BAR_ID}
                   placeholder="Reps"
                   placeholderTextColor="#78786C"
                 />
@@ -277,6 +281,7 @@ export function ExerciseScreen({
                     value={newSetWeight}
                     onChangeText={(text) => setNewSetWeight(sanitizeWeightInput(text))}
                     keyboardType="decimal-pad"
+                    inputAccessoryViewID={DONE_BAR_ID}
                     placeholder="Weight"
                     placeholderTextColor="#78786C"
                   />
