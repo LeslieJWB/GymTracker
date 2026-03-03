@@ -645,6 +645,7 @@ export function RecordScreen({
             style={styles.themeInput}
             value={recordThemeDraft}
             onChangeText={setRecordThemeDraft}
+            inputAccessoryViewID={DONE_BAR_ID}
             onBlur={() => {
               if (themeDirty && !loading && !savingRecordTheme && user) {
                 saveRecordTheme();
@@ -1007,6 +1008,7 @@ export function RecordScreen({
               style={[styles.modernInput, styles.foodTextInput]}
               value={foodTextDraft}
               onChangeText={setFoodTextDraft}
+              inputAccessoryViewID={DONE_BAR_ID}
               multiline
               numberOfLines={3}
               placeholder="e.g. 60g steel cut oats + 200ml milk"
@@ -1086,6 +1088,7 @@ export function RecordScreen({
               style={styles.searchInput}
               value={exerciseSearchTerm}
               onChangeText={setExerciseSearchTerm}
+              inputAccessoryViewID={DONE_BAR_ID}
               placeholder="Search exercises..."
               placeholderTextColor="#78786C"
               autoCorrect={false}
@@ -1204,6 +1207,7 @@ export function RecordScreen({
                   style={styles.notesInput}
                   multiline
                   numberOfLines={4}
+                  inputAccessoryViewID={DONE_BAR_ID}
                   value={setDraftsByExerciseId[setNotesTarget.exerciseId]?.[setNotesTarget.setId]?.notes ?? ""}
                   onChangeText={(value) => {
                     const draft = setDraftsByExerciseId[setNotesTarget.exerciseId]?.[setNotesTarget.setId];
@@ -1269,6 +1273,7 @@ export function RecordScreen({
                   style={styles.notesInput}
                   multiline
                   numberOfLines={4}
+                  inputAccessoryViewID={DONE_BAR_ID}
                   value={exerciseNotesDraftById[exerciseNotesTarget.exerciseId] ?? ""}
                   onChangeText={(value) => updateExerciseNotesDraft(exerciseNotesTarget.exerciseId, value)}
                   placeholder="e.g. Keep elbows tucked and control eccentric"

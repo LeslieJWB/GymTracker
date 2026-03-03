@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -159,8 +160,27 @@ export default function App() {
   const [onboardingLlmPrompt, setOnboardingLlmPrompt] = useState("");
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL.trim().replace(/\/$/, ""), []);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardVisible(true);
+      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   async function apiJson<T = unknown>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers ?? {});
@@ -1757,6 +1777,7 @@ export default function App() {
                 style={styles.onboardingInput}
                 value={onboardingGender}
                 onChangeText={setOnboardingGender}
+                inputAccessoryViewID={DONE_BAR_ID}
                 placeholder="e.g. male, female"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
@@ -1821,6 +1842,7 @@ export default function App() {
                 style={styles.onboardingInput}
                 value={onboardingDateOfBirth}
                 onChangeText={setOnboardingDateOfBirth}
+                inputAccessoryViewID={DONE_BAR_ID}
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
@@ -1833,6 +1855,7 @@ export default function App() {
                 style={[styles.onboardingInput, styles.onboardingPromptInput]}
                 value={onboardingLlmPrompt}
                 onChangeText={setOnboardingLlmPrompt}
+                inputAccessoryViewID={DONE_BAR_ID}
                 placeholder="Optional guidance for your AI recommendations"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
@@ -2006,6 +2029,7 @@ export default function App() {
                   style={styles.dailyGateInput}
                   value={dailyCheckInThemeDraft}
                   onChangeText={setDailyCheckInThemeDraft}
+                  inputAccessoryViewID={DONE_BAR_ID}
                   placeholder="e.g. push, pull, rest"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
@@ -2041,64 +2065,86 @@ export default function App() {
             </View>
           </View>
         </Modal>
-        <View style={styles.bottomNav}>
+        {!keyboardVisible ? (
+          <View style={styles.bottomNav}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.bottomNavItem,
+                screen === "record" ? styles.bottomNavItemActive : null,
+                withPressScale(pressed)
+              ]}
+              onPress={() => {
+                openDate(todayDate()).catch(() => {});
+              }}
+              disabled={loading || !user}
+            >
+              <Text style={[styles.bottomNavLabel, screen === "record" ? styles.bottomNavLabelActive : null]}>Home</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.bottomNavItem,
+                screen === "calendar" ? styles.bottomNavItemActive : null,
+                withPressScale(pressed)
+              ]}
+              onPress={() => {
+                setScreen("calendar");
+              }}
+              disabled={loading || !user}
+            >
+              <Text style={[styles.bottomNavLabel, screen === "calendar" ? styles.bottomNavLabelActive : null]}>Calendar</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.bottomNavItem,
+                screen === "statistics" ? styles.bottomNavItemActive : null,
+                withPressScale(pressed)
+              ]}
+              onPress={() => {
+                setScreen("statistics");
+                if (weightHistory.length === 0 && nutritionHistory.length === 0) {
+                  loadStatisticsBase().catch(() => {});
+                }
+              }}
+              disabled={loading || !user}
+            >
+              <Text style={[styles.bottomNavLabel, screen === "statistics" ? styles.bottomNavLabelActive : null]}>Statistics</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.bottomNavItem,
+                screen === "profile" ? styles.bottomNavItemActive : null,
+                withPressScale(pressed)
+              ]}
+              onPress={() => {
+                setScreen("profile");
+              }}
+              disabled={loading || !user}
+            >
+              <Text style={[styles.bottomNavLabel, screen === "profile" ? styles.bottomNavLabelActive : null]}>Profile</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </KeyboardAvoidingView>
+      {Platform.OS === "ios" && keyboardVisible ? (
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.fallbackDoneWrap,
+            {
+              bottom: Math.max(12, keyboardHeight + 8)
+            }
+          ]}
+        >
           <Pressable
-            style={({ pressed }) => [
-              styles.bottomNavItem,
-              screen === "record" ? styles.bottomNavItemActive : null,
-              withPressScale(pressed)
-            ]}
+            style={({ pressed }) => [styles.fallbackDoneButton, pressed ? styles.fallbackDoneButtonPressed : null]}
             onPress={() => {
-              openDate(todayDate()).catch(() => {});
+              Keyboard.dismiss();
             }}
-            disabled={loading || !user}
           >
-            <Text style={[styles.bottomNavLabel, screen === "record" ? styles.bottomNavLabelActive : null]}>Home</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bottomNavItem,
-              screen === "calendar" ? styles.bottomNavItemActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              setScreen("calendar");
-            }}
-            disabled={loading || !user}
-          >
-            <Text style={[styles.bottomNavLabel, screen === "calendar" ? styles.bottomNavLabelActive : null]}>Calendar</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bottomNavItem,
-              screen === "statistics" ? styles.bottomNavItemActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              setScreen("statistics");
-              if (weightHistory.length === 0 && nutritionHistory.length === 0) {
-                loadStatisticsBase().catch(() => {});
-              }
-            }}
-            disabled={loading || !user}
-          >
-            <Text style={[styles.bottomNavLabel, screen === "statistics" ? styles.bottomNavLabelActive : null]}>Statistics</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bottomNavItem,
-              screen === "profile" ? styles.bottomNavItemActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              setScreen("profile");
-            }}
-            disabled={loading || !user}
-          >
-            <Text style={[styles.bottomNavLabel, screen === "profile" ? styles.bottomNavLabelActive : null]}>Profile</Text>
+            <Text style={styles.fallbackDoneText}>Done</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      ) : null}
       <KeyboardDoneBar />
     </SafeAreaView>
   );
@@ -2315,5 +2361,29 @@ const styles = StyleSheet.create({
   },
   bottomNavLabelActive: {
     color: palette.primary
+  },
+  fallbackDoneWrap: {
+    position: "absolute",
+    right: 12,
+    zIndex: 1200
+  },
+  fallbackDoneButton: {
+    borderRadius: radius.pill,
+    paddingHorizontal: 16,
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F6F2EA",
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    ...shadows.soft
+  },
+  fallbackDoneButtonPressed: {
+    opacity: 0.75
+  },
+  fallbackDoneText: {
+    color: palette.primary,
+    fontSize: 16,
+    fontFamily: textStyles.bodyBold.fontFamily
   }
 });

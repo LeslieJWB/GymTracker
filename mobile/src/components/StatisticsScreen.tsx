@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { LineChart } from "react-native-chart-kit";
 import { palette, radius, shadows, textStyles, withPressScale } from "../styles/theme";
+import { DONE_BAR_ID } from "./KeyboardDoneBar";
 import {
   BodyWeightRecord,
   ExerciseDailyMetricsPoint,
@@ -312,6 +313,7 @@ export function StatisticsScreen({
               style={styles.searchInput}
               value={exerciseSearchTerm}
               onChangeText={setExerciseSearchTerm}
+              inputAccessoryViewID={DONE_BAR_ID}
               onFocus={() => setExerciseDropdownVisible(true)}
               onBlur={() => {
                 setTimeout(() => setExerciseDropdownVisible(false), 140);

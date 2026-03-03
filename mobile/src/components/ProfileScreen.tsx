@@ -284,6 +284,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
           style={styles.promptInput}
           value={draft.globalLlmPrompt}
           onChangeText={(value) => setDraft((current) => ({ ...current, globalLlmPrompt: value }))}
+          inputAccessoryViewID={DONE_BAR_ID}
           placeholder="e.g. Focus on hypertrophy, keep rest times short..."
           placeholderTextColor="#A29F94"
           multiline

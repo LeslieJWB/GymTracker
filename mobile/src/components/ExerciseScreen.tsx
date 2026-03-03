@@ -114,6 +114,7 @@ export function ExerciseScreen({
           style={styles.modernInput}
           value={exerciseNotesDraft}
           onChangeText={setExerciseNotesDraft}
+          inputAccessoryViewID={DONE_BAR_ID}
           onBlur={() => {
             if (exerciseNotesDirty && !loading && !savingExerciseNotes && exerciseDetail) {
               saveExerciseNotes();
@@ -195,6 +196,7 @@ export function ExerciseScreen({
               <TextInput
                 style={[styles.modernInput, styles.setNoteInput]}
                 value={setDrafts[item.id]?.notes ?? item.notes ?? ""}
+                inputAccessoryViewID={DONE_BAR_ID}
                 onChangeText={(text) =>
                   setSetDrafts((prev) => ({
                     ...prev,
