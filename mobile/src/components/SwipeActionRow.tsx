@@ -49,8 +49,15 @@ export function SwipeActionRow({
           if (disabled) {
             return false;
           }
-          return Math.abs(gestureState.dx) > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+          return Math.abs(gestureState.dx) > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy * 1.5);
         },
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+          if (disabled) {
+            return false;
+          }
+          return Math.abs(gestureState.dx) > 16 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy * 2);
+        },
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           translateX.stopAnimation((value) => {
             currentOffsetRef.current = value;
@@ -62,7 +69,7 @@ export function SwipeActionRow({
         },
         onPanResponderRelease: (_event, gestureState) => {
           const endX = clamp(currentOffsetRef.current + gestureState.dx, OPEN_X, 0);
-          const shouldOpen = endX < OPEN_X / 2 || gestureState.vx < -0.35;
+          const shouldOpen = endX < OPEN_X / 3 || gestureState.vx < -0.2;
           const target = shouldOpen ? OPEN_X : 0;
           Animated.spring(translateX, {
             toValue: target,
