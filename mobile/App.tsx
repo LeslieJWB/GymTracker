@@ -50,6 +50,7 @@ import { requestKey } from "./src/utils/request";
 import { organicShapes, palette, radius, shadows, textStyles, withPressScale } from "./src/styles/theme";
 
 const DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
+const REQUEST_TIMEOUT_MS = 15000;
 
 type ExerciseDetailsById = Record<string, ExerciseDetail>;
 type SetDraftsByExerciseId = Record<string, SetDrafts>;
@@ -118,6 +119,7 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [authActionLoading, setAuthActionLoading] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [recordSummaries, setRecordSummaries] = useState<RecordSummary[]>([]);
   const [calendarMonth, setCalendarMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -187,18 +189,40 @@ export default function App() {
     if (session?.access_token) {
       headers.set("Authorization", `Bearer ${session.access_token}`);
     }
-    const response = await fetch(`${normalizedUrl}${path}`, { ...init, headers });
-    const raw = await response.text();
-    if (!response.ok) {
-      if (response.status === 401) {
-        signOut().catch(() => {});
+    const canUseTimeout = !init?.signal;
+    const controller = canUseTimeout ? new AbortController() : null;
+    const timeoutHandle = canUseTimeout
+      ? setTimeout(() => {
+          controller?.abort();
+        }, REQUEST_TIMEOUT_MS)
+      : null;
+    try {
+      const response = await fetch(`${normalizedUrl}${path}`, {
+        ...init,
+        headers,
+        signal: init?.signal ?? controller?.signal
+      });
+      const raw = await response.text();
+      if (!response.ok) {
+        if (response.status === 401) {
+          signOut().catch(() => {});
+        }
+        throw new Error(raw || `HTTP ${response.status}`);
       }
-      throw new Error(raw || `HTTP ${response.status}`);
+      if (!raw) {
+        return undefined as T;
+      }
+      return JSON.parse(raw) as T;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+      }
+      throw error;
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
     }
-    if (!raw) {
-      return undefined as T;
-    }
-    return JSON.parse(raw) as T;
   }
 
   function resetExerciseState(): void {
@@ -241,6 +265,7 @@ export default function App() {
     if (!session?.access_token) {
       setUser(null);
       setProfile(null);
+      setBootstrapError(null);
       setRecordDetail(null);
       setRecordSummaries([]);
       setCalendarSummaries([]);
@@ -262,12 +287,19 @@ export default function App() {
       return;
     }
     setLoading(true);
+    setBootstrapError(null);
     try {
-      const [bootUser, profilePayload, items] = await Promise.all([
-        apiJson<User>("/me"),
+      const [profilePayload, items] = await Promise.all([
         apiJson<UserProfile>("/me/profile"),
         apiJson<ExerciseItem[]>("/exercise-items")
       ]);
+      const bootUser: User = {
+        id: profilePayload.id,
+        username: profilePayload.username,
+        displayName: profilePayload.displayName,
+        email: profilePayload.email,
+        authProvider: profilePayload.authProvider
+      };
       setUser(bootUser);
       setProfile(profilePayload);
       setExerciseItems(items);
@@ -339,7 +371,9 @@ export default function App() {
       setDailyCheckInThemeDraft(detail?.theme ?? "");
       setDailyCheckInWeightDraft(weight === null ? "" : String(weight));
     } catch (error) {
-      Alert.alert("Failed to bootstrap", String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setBootstrapError(message);
+      Alert.alert("Failed to bootstrap", message);
     } finally {
       setLoading(false);
     }
@@ -1700,9 +1734,16 @@ export default function App() {
   });
 
   const isTodayHome = screen === "record" && selectedDate === todayDate();
-  const hasCompletedDailyCheckIn = recordDetail?.checkInInitialized === true;
+  const hasResolvedSelectedRecord =
+    recordDetail !== null && recordDetail.date === selectedDate;
+  const hasCompletedDailyCheckIn =
+    hasResolvedSelectedRecord && recordDetail.checkInInitialized === true;
   const shouldBlockHomeWithDailyGate = Boolean(
-    profile?.profileInitialized && isTodayHome && !hasCompletedDailyCheckIn
+    profile?.profileInitialized &&
+      isTodayHome &&
+      hasResolvedSelectedRecord &&
+      !loading &&
+      !hasCompletedDailyCheckIn
   );
 
   if (!fontsLoaded) {
@@ -1747,7 +1788,32 @@ export default function App() {
     return (
       <SafeAreaView style={appStyles.safeArea}>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Text>Loading your account...</Text>
+          {loading ? <ActivityIndicator color={palette.primary} /> : null}
+          <Text style={{ marginTop: 10 }}>
+            {bootstrapError ? "Could not load your account." : "Loading your account..."}
+          </Text>
+          {bootstrapError ? (
+            <Pressable
+              style={({ pressed }) => [
+                {
+                  marginTop: 14,
+                  minHeight: 44,
+                  borderRadius: radius.pill,
+                  paddingHorizontal: 18,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: palette.primary
+                },
+                withPressScale(pressed)
+              ]}
+              onPress={() => {
+                bootstrap().catch(() => {});
+              }}
+              disabled={loading}
+            >
+              <Text style={{ color: "#F3F4F1", fontFamily: textStyles.bodyBold.fontFamily }}>Retry</Text>
+            </Pressable>
+          ) : null}
         </View>
       </SafeAreaView>
     );
