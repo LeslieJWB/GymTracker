@@ -594,7 +594,7 @@ export function RecordScreen({
               />
             </View>
             <Text style={styles.progressMeta}>
-              {calorieTarget ? `${Math.round((calorieProgress ?? 0) * 100)}% of target` : "Daily target pending"}
+              {calorieTarget ? `${Math.round((calorieProgress ?? 0) * 100)}% of target` : "Estimating daily target..."}
             </Text>
           </View>
           <View style={[styles.nutritionProgressSection, styles.nutritionProgressSectionDivider]}>
@@ -615,7 +615,7 @@ export function RecordScreen({
               />
             </View>
             <Text style={styles.progressMeta}>
-              {proteinTarget ? `${Math.round((proteinProgress ?? 0) * 100)}% of target` : "Daily target pending"}
+              {proteinTarget ? `${Math.round((proteinProgress ?? 0) * 100)}% of target` : "Estimating daily target..."}
             </Text>
             {dailyNutritionTargets?.comment ? <Text style={styles.progressComment}>{dailyNutritionTargets.comment}</Text> : null}
           </View>

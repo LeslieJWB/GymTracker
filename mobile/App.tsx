@@ -2,6 +2,7 @@ import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import { Fraunces_600SemiBold, Fraunces_700Bold } from "@expo-google-fonts/fraunces";
 import { Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,7 +51,6 @@ import { requestKey } from "./src/utils/request";
 import { organicShapes, palette, radius, shadows, textStyles, withPressScale } from "./src/styles/theme";
 
 const DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
-const REQUEST_TIMEOUT_MS = 15000;
 
 type ExerciseDetailsById = Record<string, ExerciseDetail>;
 type SetDraftsByExerciseId = Record<string, SetDrafts>;
@@ -89,6 +89,27 @@ function sanitizeWeightInput(value: string): string {
     return whole;
   }
   return `${whole}.${decimals.join("")}`;
+}
+
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function parseDateValue(value: string): Date | null {
+  const matched = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!matched) {
+    return null;
+  }
+
+  const year = Number(matched[1]);
+  const month = Number(matched[2]);
+  const day = Number(matched[3]);
+  const parsed = new Date(year, month - 1, day);
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
+    return null;
+  }
+
+  return parsed;
 }
 
 function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories: number; protein: number } {
@@ -159,6 +180,8 @@ export default function App() {
   const [onboardingCalorieTarget, setOnboardingCalorieTarget] = useState("");
   const [onboardingProteinTarget, setOnboardingProteinTarget] = useState("");
   const [onboardingDateOfBirth, setOnboardingDateOfBirth] = useState("");
+  const [showOnboardingDatePicker, setShowOnboardingDatePicker] = useState(false);
+  const [onboardingPendingDate, setOnboardingPendingDate] = useState<Date>(new Date());
   const [onboardingLlmPrompt, setOnboardingLlmPrompt] = useState("");
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
@@ -189,40 +212,18 @@ export default function App() {
     if (session?.access_token) {
       headers.set("Authorization", `Bearer ${session.access_token}`);
     }
-    const canUseTimeout = !init?.signal;
-    const controller = canUseTimeout ? new AbortController() : null;
-    const timeoutHandle = canUseTimeout
-      ? setTimeout(() => {
-          controller?.abort();
-        }, REQUEST_TIMEOUT_MS)
-      : null;
-    try {
-      const response = await fetch(`${normalizedUrl}${path}`, {
-        ...init,
-        headers,
-        signal: init?.signal ?? controller?.signal
-      });
-      const raw = await response.text();
-      if (!response.ok) {
-        if (response.status === 401) {
-          signOut().catch(() => {});
-        }
-        throw new Error(raw || `HTTP ${response.status}`);
+    const response = await fetch(`${normalizedUrl}${path}`, { ...init, headers });
+    const raw = await response.text();
+    if (!response.ok) {
+      if (response.status === 401) {
+        signOut().catch(() => {});
       }
-      if (!raw) {
-        return undefined as T;
-      }
-      return JSON.parse(raw) as T;
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
-      }
-      throw error;
-    } finally {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
+      throw new Error(raw || `HTTP ${response.status}`);
     }
+    if (!raw) {
+      return undefined as T;
+    }
+    return JSON.parse(raw) as T;
   }
 
   function resetExerciseState(): void {
@@ -1645,6 +1646,25 @@ export default function App() {
     }
   }
 
+  function openOnboardingDatePicker(): void {
+    setOnboardingPendingDate(parseDateValue(onboardingDateOfBirth) ?? new Date());
+    setShowOnboardingDatePicker(true);
+  }
+
+  function handleOnboardingDateChange(event: DateTimePickerEvent, selectedDate?: Date): void {
+    if (Platform.OS === "android") {
+      setShowOnboardingDatePicker(false);
+      if (event.type === "set" && selectedDate) {
+        setOnboardingDateOfBirth(toDateString(selectedDate));
+      }
+      return;
+    }
+
+    if (selectedDate) {
+      setOnboardingPendingDate(selectedDate);
+    }
+  }
+
   useEffect(() => {
     if (!profile || profile.profileInitialized) {
       return;
@@ -1839,81 +1859,108 @@ export default function App() {
             </Text>
             <View style={styles.onboardingField}>
               <Text style={styles.onboardingLabel}>Gender</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={onboardingGender}
-                onChangeText={setOnboardingGender}
-                inputAccessoryViewID={DONE_BAR_ID}
-                placeholder="e.g. male, female"
-                placeholderTextColor="#78786C"
-                editable={!onboardingSubmitting}
-                maxLength={30}
-              />
+              <View style={styles.onboardingSegmentedRow}>
+                {(["male", "female"] as const).map((option) => {
+                  const selected = onboardingGender === option;
+                  return (
+                    <Pressable
+                      key={option}
+                      style={[styles.onboardingSegmentedOption, selected && styles.onboardingSegmentedOptionActive]}
+                      onPress={() => setOnboardingGender(option)}
+                      disabled={onboardingSubmitting}
+                    >
+                      <Text style={[styles.onboardingSegmentedText, selected && styles.onboardingSegmentedTextActive]}>
+                        {option.charAt(0).toUpperCase() + option.slice(1)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
             <View style={styles.onboardingField}>
               <Text style={styles.onboardingLabel}>Default Body Weight (kg)</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={onboardingDefaultWeight}
-                onChangeText={(value) => setOnboardingDefaultWeight(sanitizeWeightInput(value))}
-                keyboardType="decimal-pad"
-                inputAccessoryViewID={DONE_BAR_ID}
-                placeholder="e.g. 72.5"
-                placeholderTextColor="#78786C"
-                editable={!onboardingSubmitting}
-              />
+              <View style={styles.onboardingUnitRow}>
+                <TextInput
+                  style={styles.onboardingInput}
+                  value={onboardingDefaultWeight}
+                  onChangeText={(value) => setOnboardingDefaultWeight(sanitizeWeightInput(value))}
+                  keyboardType="decimal-pad"
+                  inputAccessoryViewID={DONE_BAR_ID}
+                  placeholder="0"
+                  placeholderTextColor="#78786C"
+                  editable={!onboardingSubmitting}
+                />
+                <View style={styles.onboardingUnitBadge}>
+                  <Text style={styles.onboardingUnitBadgeText}>kg</Text>
+                </View>
+              </View>
             </View>
             <View style={styles.onboardingField}>
               <Text style={styles.onboardingLabel}>Height (cm)</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={onboardingHeight}
-                onChangeText={(value) => setOnboardingHeight(sanitizeWeightInput(value))}
-                keyboardType="decimal-pad"
-                inputAccessoryViewID={DONE_BAR_ID}
-                placeholder="e.g. 175"
-                placeholderTextColor="#78786C"
-                editable={!onboardingSubmitting}
-              />
+              <View style={styles.onboardingUnitRow}>
+                <TextInput
+                  style={styles.onboardingInput}
+                  value={onboardingHeight}
+                  onChangeText={(value) => setOnboardingHeight(digitsOnly(value))}
+                  keyboardType="number-pad"
+                  inputAccessoryViewID={DONE_BAR_ID}
+                  placeholder="0"
+                  placeholderTextColor="#78786C"
+                  editable={!onboardingSubmitting}
+                />
+                <View style={styles.onboardingUnitBadge}>
+                  <Text style={styles.onboardingUnitBadgeText}>cm</Text>
+                </View>
+              </View>
             </View>
             <View style={styles.onboardingField}>
               <Text style={styles.onboardingLabel}>Daily Calorie Target (kcal, optional)</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={onboardingCalorieTarget}
-                onChangeText={(value) => setOnboardingCalorieTarget(sanitizeWeightInput(value))}
-                keyboardType="decimal-pad"
-                inputAccessoryViewID={DONE_BAR_ID}
-                placeholder="e.g. 2200"
-                placeholderTextColor="#78786C"
-                editable={!onboardingSubmitting}
-              />
+              <View style={styles.onboardingUnitRow}>
+                <TextInput
+                  style={styles.onboardingInput}
+                  value={onboardingCalorieTarget}
+                  onChangeText={(value) => setOnboardingCalorieTarget(digitsOnly(value))}
+                  keyboardType="number-pad"
+                  inputAccessoryViewID={DONE_BAR_ID}
+                  placeholder="e.g. 2200"
+                  placeholderTextColor="#78786C"
+                  editable={!onboardingSubmitting}
+                />
+                <View style={styles.onboardingUnitBadge}>
+                  <Text style={styles.onboardingUnitBadgeText}>kcal</Text>
+                </View>
+              </View>
             </View>
             <View style={styles.onboardingField}>
               <Text style={styles.onboardingLabel}>Daily Protein Target (g, optional)</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={onboardingProteinTarget}
-                onChangeText={(value) => setOnboardingProteinTarget(sanitizeWeightInput(value))}
-                keyboardType="decimal-pad"
-                inputAccessoryViewID={DONE_BAR_ID}
-                placeholder="e.g. 150"
-                placeholderTextColor="#78786C"
-                editable={!onboardingSubmitting}
-              />
+              <View style={styles.onboardingUnitRow}>
+                <TextInput
+                  style={styles.onboardingInput}
+                  value={onboardingProteinTarget}
+                  onChangeText={(value) => setOnboardingProteinTarget(digitsOnly(value))}
+                  keyboardType="number-pad"
+                  inputAccessoryViewID={DONE_BAR_ID}
+                  placeholder="e.g. 150"
+                  placeholderTextColor="#78786C"
+                  editable={!onboardingSubmitting}
+                />
+                <View style={styles.onboardingUnitBadge}>
+                  <Text style={styles.onboardingUnitBadgeText}>g</Text>
+                </View>
+              </View>
             </View>
             <View style={styles.onboardingField}>
               <Text style={styles.onboardingLabel}>Date of Birth</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={onboardingDateOfBirth}
-                onChangeText={setOnboardingDateOfBirth}
-                inputAccessoryViewID={DONE_BAR_ID}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#78786C"
-                editable={!onboardingSubmitting}
-                maxLength={10}
-              />
+              <Pressable
+                style={styles.onboardingDateButton}
+                onPress={openOnboardingDatePicker}
+                disabled={onboardingSubmitting}
+              >
+                <Text style={onboardingDateOfBirth ? styles.onboardingDateText : styles.onboardingDatePlaceholder}>
+                  {onboardingDateOfBirth || "Select date"}
+                </Text>
+                <Text style={styles.onboardingDateChevron}>›</Text>
+              </Pressable>
             </View>
             <View style={styles.onboardingField}>
               <Text style={styles.onboardingLabel}>Personal LLM Prompt (optional)</Text>
@@ -1946,6 +1993,47 @@ export default function App() {
             {onboardingError ? <Text style={styles.onboardingErrorText}>{onboardingError}</Text> : null}
           </View>
         </ScrollView>
+        {Platform.OS === "android" && showOnboardingDatePicker ? (
+          <DateTimePicker
+            value={onboardingPendingDate}
+            mode="date"
+            display="calendar"
+            maximumDate={new Date()}
+            onChange={handleOnboardingDateChange}
+          />
+        ) : null}
+        {Platform.OS === "ios" && showOnboardingDatePicker ? (
+          <Modal animationType="slide" transparent onRequestClose={() => setShowOnboardingDatePicker(false)}>
+            <Pressable style={styles.datePickerModalOverlay} onPress={() => setShowOnboardingDatePicker(false)}>
+              <Pressable style={styles.datePickerModalCard} onPress={() => {}}>
+                <View style={styles.datePickerModalHeader}>
+                  <Pressable hitSlop={12} onPress={() => setShowOnboardingDatePicker(false)}>
+                    <Text style={styles.datePickerModalCancel}>Cancel</Text>
+                  </Pressable>
+                  <Text style={styles.datePickerModalTitle}>Date of Birth</Text>
+                  <Pressable
+                    hitSlop={12}
+                    onPress={() => {
+                      setOnboardingDateOfBirth(toDateString(onboardingPendingDate));
+                      setShowOnboardingDatePicker(false);
+                    }}
+                  >
+                    <Text style={styles.datePickerModalDone}>Done</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.datePickerSpinnerContainer}>
+                  <DateTimePicker
+                    value={onboardingPendingDate}
+                    mode="date"
+                    display="spinner"
+                    maximumDate={new Date()}
+                    onChange={handleOnboardingDateChange}
+                  />
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        ) : null}
       </SafeAreaView>
     );
   }
@@ -2276,17 +2364,94 @@ const styles = StyleSheet.create({
   onboardingLabel: {
     color: "#4A4A40",
     fontSize: 13,
-    fontFamily: textStyles.bodyBold.fontFamily
+    fontFamily: textStyles.bodyBold.fontFamily,
+    textTransform: "uppercase",
+    letterSpacing: 0.5
+  },
+  onboardingSegmentedRow: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: radius.pill,
+    padding: 4,
+    gap: 4
+  },
+  onboardingSegmentedOption: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.pill,
+    alignItems: "center"
+  },
+  onboardingSegmentedOptionActive: {
+    backgroundColor: "#FEFEFA",
+    shadowColor: "#78786C",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1
+  },
+  onboardingSegmentedText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#78786C"
+  },
+  onboardingSegmentedTextActive: {
+    color: "#2C2C24"
+  },
+  onboardingUnitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  onboardingUnitBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DED8CF"
+  },
+  onboardingUnitBadgeText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#475569"
   },
   onboardingInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: "#FFFFFFCC",
+    color: "#2C2C24",
+    fontFamily: textStyles.body.fontFamily,
+    fontSize: 16
+  },
+  onboardingDateButton: {
     borderWidth: 1,
     borderColor: "#DED8CF",
     borderRadius: radius.pill,
     paddingHorizontal: 14,
     paddingVertical: 12,
     backgroundColor: "#FFFFFFCC",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  onboardingDateText: {
     color: "#2C2C24",
-    fontFamily: textStyles.body.fontFamily
+    fontFamily: textStyles.body.fontFamily,
+    fontSize: 16
+  },
+  onboardingDatePlaceholder: {
+    color: "#78786C",
+    fontFamily: textStyles.body.fontFamily,
+    fontSize: 16
+  },
+  onboardingDateChevron: {
+    color: "#78786C",
+    fontSize: 22,
+    fontWeight: "600"
   },
   onboardingPromptInput: {
     minHeight: 90,
@@ -2451,5 +2616,43 @@ const styles = StyleSheet.create({
     color: palette.primary,
     fontSize: 16,
     fontFamily: textStyles.bodyBold.fontFamily
+  },
+  datePickerModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(44, 44, 36, 0.28)",
+    justifyContent: "flex-end"
+  },
+  datePickerModalCard: {
+    backgroundColor: "#FEFEFA",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 34
+  },
+  datePickerModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#DED8CF"
+  },
+  datePickerSpinnerContainer: {
+    paddingHorizontal: 16
+  },
+  datePickerModalCancel: {
+    fontSize: 16,
+    color: "#78786C",
+    fontWeight: "600"
+  },
+  datePickerModalTitle: {
+    fontSize: 16,
+    color: "#2C2C24",
+    fontWeight: "700"
+  },
+  datePickerModalDone: {
+    fontSize: 16,
+    color: "#5D7052",
+    fontWeight: "700"
   }
 });

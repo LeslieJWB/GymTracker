@@ -34,6 +34,15 @@ function digitsOnly(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+function sanitizeWeightInput(value: string): string {
+  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
+  const [whole, ...decimals] = normalized.split(".");
+  if (decimals.length === 0) {
+    return whole;
+  }
+  return `${whole}.${decimals.join("")}`;
+}
+
 function formatDateValue(date: Date): string {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -217,10 +226,10 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
             <TextInput
               style={styles.fieldInput}
               value={draft.defaultBodyWeightKg}
-              onChangeText={(value) => setDraft((current) => ({ ...current, defaultBodyWeightKg: digitsOnly(value) }))}
+              onChangeText={(value) => setDraft((current) => ({ ...current, defaultBodyWeightKg: sanitizeWeightInput(value) }))}
               placeholder="0"
               placeholderTextColor="#A29F94"
-              keyboardType="number-pad"
+              keyboardType="decimal-pad"
               inputAccessoryViewID={DONE_BAR_ID}
             />
             <View style={styles.unitBadge}>
