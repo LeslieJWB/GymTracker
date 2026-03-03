@@ -212,8 +212,14 @@ export default function App() {
     if (session?.access_token) {
       headers.set("Authorization", `Bearer ${session.access_token}`);
     }
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"c5f43b"},body:JSON.stringify({sessionId:"c5f43b",runId:"initial",hypothesisId:"H1",location:"mobile/App.tsx:apiJson:beforeFetch",message:"apiJson request start",data:{path,url:`${normalizedUrl}${path}`,method:init?.method ?? "GET",hasAuth:Boolean(session?.access_token)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const response = await fetch(`${normalizedUrl}${path}`, { ...init, headers });
     const raw = await response.text();
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"c5f43b"},body:JSON.stringify({sessionId:"c5f43b",runId:"initial",hypothesisId:"H1",location:"mobile/App.tsx:apiJson:afterFetch",message:"apiJson response received",data:{path,status:response.status,ok:response.ok,rawPreview:raw.slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!response.ok) {
       if (response.status === 401) {
         signOut().catch(() => {});

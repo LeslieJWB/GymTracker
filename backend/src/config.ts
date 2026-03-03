@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import OpenAI from "openai";
+import { createLlmProvider, type GenerateLlmTextParams, type SupportedLlmProvider } from "./shared/llmProvider.js";
 dotenv.config();
 
 export const nodeEnv = process.env.NODE_ENV ?? "development";
@@ -12,56 +12,38 @@ export const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const selectedProviderRaw = (process.env.LLM_PROVIDER ?? "kimi").trim().toLowerCase();
+export const llmProviderName: SupportedLlmProvider =
+  selectedProviderRaw === "gemini" ? "gemini" : "kimi";
+
 export const kimiModel = process.env.KIMI_MODEL ?? "kimi-k2.5";
 export const kimiBaseUrl = process.env.KIMI_BASE_URL ?? "https://api.moonshot.ai/v1";
+export const geminiModel = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+export const geminiBaseUrl =
+  process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai";
 
-export const kimi =
-  process.env.KIMI_API_KEY ?
-    new OpenAI({
-      apiKey: process.env.KIMI_API_KEY,
-      baseURL: kimiBaseUrl
-    })
-  : null;
+export const llmProvider = createLlmProvider({
+  selectedProvider: llmProviderName,
+  kimi: {
+    apiKey: process.env.KIMI_API_KEY,
+    baseUrl: kimiBaseUrl,
+    model: kimiModel
+  },
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY,
+    baseUrl: geminiBaseUrl,
+    model: geminiModel
+  }
+});
 
-type KimiImageInput = {
-  mimeType: string;
-  dataBase64: string;
-};
+export const llmConfigHint =
+  llmProviderName === "gemini"
+    ? "Set GEMINI_API_KEY in your environment."
+    : "Set KIMI_API_KEY in your environment.";
 
-export async function generateKimiText(params: {
-  prompt: string;
-  userText?: string | null;
-  image?: KimiImageInput;
-}): Promise<string | null> {
-  if (!kimi) {
+export async function generateLlmText(params: GenerateLlmTextParams): Promise<string | null> {
+  if (!llmProvider) {
     return null;
   }
-
-  const textParts = [params.prompt.trim()];
-  if (params.userText !== undefined) {
-    textParts.push(`User text: ${params.userText ?? "(none provided)"}`);
-  }
-  const textBlock = textParts.join("\n\n");
-
-  const content: Array<
-    | { type: "text"; text: string }
-    | { type: "image_url"; image_url: { url: string } }
-  > = [{ type: "text", text: textBlock }];
-
-  if (params.image) {
-    content.push({
-      type: "image_url",
-      image_url: {
-        url: `data:${params.image.mimeType};base64,${params.image.dataBase64}`
-      }
-    });
-  }
-
-  const response = await kimi.chat.completions.create({
-    model: kimiModel,
-    messages: [{ role: "user", content }]
-  });
-
-  const raw = response.choices[0]?.message?.content;
-  return typeof raw === "string" ? raw.trim() : null;
+  return llmProvider.generateText(params);
 }

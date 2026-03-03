@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { pool } from "../db.js";
-import { kimi, generateKimiText } from "../config.js";
+import { generateLlmText, llmConfigHint, llmProvider } from "../config.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth } from "../shared/authUsers.js";
 import { buildStructuredPrompt } from "../shared/llmPrompt.js";
@@ -267,9 +267,9 @@ adviceRouter.post("/advice/exercise-plan", async (req, res) => {
     }
     const historyText = historyLines.length > 0 ? historyLines.join("\n") : "No prior logs for this exercise.";
 
-    if (!kimi) {
+    if (!llmProvider) {
       return fallback(
-        "AI advice is not configured. Add KIMI_API_KEY to your environment. Based on your history, aim for progressive overload with good form."
+        `AI advice is not configured. ${llmConfigHint} Based on your history, aim for progressive overload with good form.`
       );
     }
 
@@ -291,7 +291,7 @@ Respond with ONLY a single JSON object, no other text. Use this exact shape:
 Keep recommendations safe and based on the user's history. Weight in kg.`
     });
 
-    const raw = await generateKimiText({ prompt });
+    const raw = await generateLlmText({ prompt });
     if (!raw) {
       return fallback("Could not generate a plan. Try again or add more history for this exercise.");
     }
@@ -316,16 +316,22 @@ Keep recommendations safe and based on the user's history. Weight in kg.`
       }));
 
     return res.json({
-      source: "gemini" as const,
+      source: llmProvider?.name ?? ("fallback" as const),
       sets,
       advice: String(data.advice).slice(0, 2000)
     });
   } catch (error) {
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"c5f43b"},body:JSON.stringify({sessionId:"c5f43b",runId:"post-fix",hypothesisId:"H7",location:"backend/src/routes/advice.ts:dailySummary:catch",message:"daily summary handler failed",data:{error:String(error)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     return res.status(500).json({ error: String(error) });
   }
 });
 
 adviceRouter.post("/advice/daily-summary", async (req, res) => {
+  // #region agent log
+  fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"c5f43b"},body:JSON.stringify({sessionId:"c5f43b",runId:"initial",hypothesisId:"H4",location:"backend/src/routes/advice.ts:dailySummary:entry",message:"daily summary handler entered",data:{hasAuth:Boolean(req.auth),bodyDate:typeof req.body?.date === "string" ? req.body.date : null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!req.auth) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -583,7 +589,7 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
             .join("\n")
         : "No prior body weight records.";
 
-    if (!kimi) {
+    if (!llmProvider) {
       return fallback(
         "AI review is not configured right now. Keep tracking your completed sets, food, and body weight so the next review can compare trends."
       );
@@ -621,7 +627,7 @@ Respond with ONLY a single JSON object:
 {"review":"<short, concrete review with strengths, gaps, and next actions>"}`
     });
 
-    const raw = await generateKimiText({ prompt });
+    const raw = await generateLlmText({ prompt });
     if (!raw) {
       return fallback("Could not generate AI summary. Try again after logging more completed sets or food.");
     }
@@ -632,7 +638,7 @@ Respond with ONLY a single JSON object:
     }
 
     return res.json({
-      source: "gemini" as const,
+      source: llmProvider?.name ?? ("fallback" as const),
       review
     });
   } catch (error) {
@@ -659,7 +665,7 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
       daily_calorie_target_kcal: string | null;
       daily_protein_target_g: string | null;
       daily_target_comment: string | null;
-      daily_target_source: "gemini" | "fallback" | "override" | null;
+      daily_target_source: "kimi" | "gemini" | "fallback" | "override" | null;
     }>(
       `
         SELECT
@@ -680,7 +686,7 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
     const effectiveWeightKg = promptProfile.defaultBodyWeightKg;
     const fallbackTargets = fallbackNutritionTargets(effectiveWeightKg);
     const persistTargets = async (targetPayload: {
-      source: "gemini" | "fallback" | "override";
+      source: "kimi" | "gemini" | "fallback" | "override";
       recommendedCaloriesKcal: number;
       recommendedProteinG: number;
       comment: string | null;
@@ -725,7 +731,11 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
       const responsePayload = {
         source: (userCalorieOverride !== null || userProteinOverride !== null
           ? "override"
-          : existing?.daily_target_source ?? "fallback") as "override" | "gemini" | "fallback",
+          : existing?.daily_target_source ?? "fallback") as
+          | "override"
+          | "kimi"
+          | "gemini"
+          | "fallback",
         recommendedCaloriesKcal: userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,
         recommendedProteinG: userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
         comment:
@@ -737,7 +747,7 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
       return res.json(responsePayload);
     }
 
-    if (!kimi) {
+    if (!llmProvider) {
       const responsePayload = {
         source: "fallback" as const,
         recommendedCaloriesKcal: needsCaloriesFromLlm
@@ -771,7 +781,7 @@ Rules:
 - Keep comment practical and under 2 sentences.`
     });
 
-    const raw = await generateKimiText({ prompt });
+    const raw = await generateLlmText({ prompt });
     if (!raw) {
       const responsePayload = {
         source: "fallback" as const,
@@ -804,8 +814,11 @@ Rules:
     }
 
     const responsePayload = {
-      source: (userCalorieOverride !== null || userProteinOverride !== null ? "override" : "gemini") as
+      source: (userCalorieOverride !== null || userProteinOverride !== null
+        ? "override"
+        : (llmProvider?.name ?? "fallback")) as
         | "override"
+        | "kimi"
         | "gemini",
       recommendedCaloriesKcal: needsCaloriesFromLlm
         ? targets.recommendedCaloriesKcal
@@ -1004,7 +1017,7 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
             .join("\n")
         : "No prior completed records for this exercise.";
 
-    if (!kimi) {
+    if (!llmProvider) {
       return fallback(
         "AI feedback is not configured right now. Keep progressing set quality and load over time, and log notes to improve review quality."
       );
@@ -1032,7 +1045,7 @@ Respond with ONLY JSON:
 {"review":"<concise feedback on incremental progress, form/load management, and next-step suggestion>"}`
     });
 
-    const raw = await generateKimiText({ prompt });
+    const raw = await generateLlmText({ prompt });
     if (!raw) {
       return fallback("Could not generate exercise feedback. Try again after completing more sets.");
     }
@@ -1042,7 +1055,7 @@ Respond with ONLY JSON:
     }
 
     return res.json({
-      source: "gemini" as const,
+      source: llmProvider?.name ?? ("fallback" as const),
       review
     });
   } catch (error) {

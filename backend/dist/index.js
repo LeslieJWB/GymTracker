@@ -38,8 +38,7 @@ const byDateSchema = z.object({
 const recordThemeSchema = z
     .string()
     .trim()
-    .max(30)
-    .regex(/^[A-Za-z0-9 _-]+$/, "Theme can only include letters, numbers, spaces, - and _");
+    .max(30);
 const patchRecordThemeByDateSchema = byDateSchema.extend({
     theme: recordThemeSchema.nullable()
 });

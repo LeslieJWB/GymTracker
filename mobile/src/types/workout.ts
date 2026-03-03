@@ -48,7 +48,7 @@ export type RecordDetail = {
   dailyCalorieTargetKcal: number | null;
   dailyProteinTargetG: number | null;
   dailyTargetComment: string | null;
-  dailyTargetSource: "gemini" | "fallback" | "override" | null;
+  dailyTargetSource: "kimi" | "gemini" | "fallback" | "override" | null;
   exercises: RecordExerciseSummary[];
   foodConsumptions: FoodConsumption[];
   totalCaloriesKcal: number;
@@ -75,12 +75,12 @@ export type BodyWeightRecord = {
 };
 
 export type AdviceReviewResult = {
-  source: "gemini" | "fallback";
+  source: "kimi" | "gemini" | "fallback";
   review: string;
 };
 
 export type DailyNutritionTargets = {
-  source: "gemini" | "fallback" | "override";
+  source: "kimi" | "gemini" | "fallback" | "override";
   recommendedCaloriesKcal: number;
   recommendedProteinG: number;
   comment: string | null;

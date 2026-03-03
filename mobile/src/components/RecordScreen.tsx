@@ -1352,7 +1352,7 @@ export function RecordScreen({
                 <ScrollView style={styles.adviceScroll} nestedScrollEnabled>
                   <View style={styles.adviceTextBlock}>
                     <Text style={styles.adviceSectionLabel}>
-                      Review ({dailySummaryResult.source === "gemini" ? "AI" : "Fallback"})
+                      Review ({dailySummaryResult.source === "fallback" ? "Fallback" : "AI"})
                     </Text>
                     <Text style={styles.adviceParagraph}>{dailySummaryResult.review}</Text>
                   </View>
@@ -1422,7 +1422,7 @@ export function RecordScreen({
                 <ScrollView style={styles.adviceScroll} nestedScrollEnabled>
                   <View style={styles.adviceTextBlock}>
                     <Text style={styles.adviceSectionLabel}>
-                      Review ({feedbackResult.source === "gemini" ? "AI" : "Fallback"})
+                      Review ({feedbackResult.source === "fallback" ? "Fallback" : "AI"})
                     </Text>
                     <Text style={styles.adviceParagraph}>{feedbackResult.review}</Text>
                   </View>

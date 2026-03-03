@@ -20,6 +20,9 @@ export async function requireAuth(req, res, next) {
     }
     const token = parseBearerToken(req.header("Authorization"));
     if (!token) {
+        // #region agent log
+        fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5f43b" }, body: JSON.stringify({ sessionId: "c5f43b", runId: "initial", hypothesisId: "H5", location: "backend/src/middleware/auth.ts:missingToken", message: "auth rejected missing bearer token", data: { method: req.method, path: req.path }, timestamp: Date.now() }) }).catch(() => { });
+        // #endregion
         res.status(401).json({ error: "Missing bearer token" });
         return;
     }
@@ -45,6 +48,9 @@ export async function requireAuth(req, res, next) {
         next();
     }
     catch {
+        // #region agent log
+        fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5f43b" }, body: JSON.stringify({ sessionId: "c5f43b", runId: "initial", hypothesisId: "H5", location: "backend/src/middleware/auth.ts:invalidToken", message: "auth rejected invalid or expired token", data: { method: req.method, path: req.path }, timestamp: Date.now() }) }).catch(() => { });
+        // #endregion
         res.status(401).json({ error: "Invalid or expired auth token" });
     }
 }

@@ -32,6 +32,21 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "8mb" }));
 app.use("/assets", express.static(publicDir));
+app.use((req, res, next) => {
+    if (!req.path.startsWith("/advice")) {
+        next();
+        return;
+    }
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5f43b" }, body: JSON.stringify({ sessionId: "c5f43b", runId: "initial", hypothesisId: "H2", location: "backend/src/app.ts:adviceMiddleware:entry", message: "incoming advice request", data: { method: req.method, path: req.path, hasAuthorization: Boolean(req.header("Authorization")) }, timestamp: Date.now() }) }).catch(() => { });
+    // #endregion
+    res.on("finish", () => {
+        // #region agent log
+        fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5f43b" }, body: JSON.stringify({ sessionId: "c5f43b", runId: "initial", hypothesisId: "H2", location: "backend/src/app.ts:adviceMiddleware:finish", message: "completed advice request", data: { method: req.method, path: req.path, status: res.statusCode }, timestamp: Date.now() }) }).catch(() => { });
+        // #endregion
+    });
+    next();
+});
 app.use(healthRouter);
 app.use(meRouter);
 app.use(exerciseItemsRouter);
@@ -41,4 +56,10 @@ app.use(foodRouter);
 app.use(adviceRouter);
 app.use(bodyWeightRouter);
 app.use(statisticsRouter);
+app.use((req, res) => {
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5f43b" }, body: JSON.stringify({ sessionId: "c5f43b", runId: "initial", hypothesisId: "H3", location: "backend/src/app.ts:notFound", message: "request fell through routers", data: { method: req.method, path: req.path }, timestamp: Date.now() }) }).catch(() => { });
+    // #endregion
+    res.status(404).json({ error: "Not found" });
+});
 export default app;

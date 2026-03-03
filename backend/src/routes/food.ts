@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
-import { kimi, generateKimiText } from "../config.js";
+import { generateLlmText, llmProvider } from "../config.js";
 import { pool, withTransaction } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth, type PromptProfile } from "../shared/authUsers.js";
@@ -20,7 +20,7 @@ type FoodAnalysis = {
   caloriesKcal: number;
   proteinG: number;
   comment: string;
-  source: "gemini" | "fallback";
+  source: "kimi" | "gemini" | "fallback";
 };
 
 const foodAnalysisSchema = z.object({
@@ -82,7 +82,7 @@ function parseFoodAnalysis(raw: string): FoodAnalysis | null {
       caloriesKcal: toSafeNumber(validated.data.caloriesKcal),
       proteinG: toSafeNumber(validated.data.proteinG),
       comment: validated.data.comment.slice(0, 2000),
-      source: "gemini"
+      source: llmProvider?.name ?? "fallback"
     };
   } catch {
     return null;
@@ -106,7 +106,7 @@ async function analyzeFoodConsumption(
     source: "fallback"
   };
 
-  if (!kimi) {
+  if (!llmProvider) {
     return fallback;
   }
 
@@ -126,7 +126,7 @@ Rules:
   });
 
   try {
-    const raw = await generateKimiText({
+    const raw = await generateLlmText({
       prompt,
       userText: text ?? "(none provided)",
       image

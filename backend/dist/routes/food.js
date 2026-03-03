@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
-import { kimi, generateKimiText } from "../config.js";
+import { generateLlmText, llmProvider } from "../config.js";
 import { pool, withTransaction } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth } from "../shared/authUsers.js";
@@ -61,7 +61,7 @@ function parseFoodAnalysis(raw) {
             caloriesKcal: toSafeNumber(validated.data.caloriesKcal),
             proteinG: toSafeNumber(validated.data.proteinG),
             comment: validated.data.comment.slice(0, 2000),
-            source: "gemini"
+            source: llmProvider?.name ?? "fallback"
         };
     }
     catch {
@@ -78,7 +78,7 @@ async function analyzeFoodConsumption(text, image, promptProfile) {
         comment: "AI nutrition analysis is not available right now. Calories and protein are set to 0 until analysis succeeds.",
         source: "fallback"
     };
-    if (!kimi) {
+    if (!llmProvider) {
         return fallback;
     }
     const prompt = buildStructuredPrompt({
@@ -96,7 +96,7 @@ Rules:
 - Keep the comment concise and actionable.`
     });
     try {
-        const raw = await generateKimiText({
+        const raw = await generateLlmText({
             prompt,
             userText: text ?? "(none provided)",
             image
