@@ -49,6 +49,24 @@ function compactLabels(dates: string[]): string[] {
   );
 }
 
+function estimateYAxisPadding(
+  data: number[],
+  suffix: string,
+  dp: number
+): number {
+  if (data.length === 0) return 64;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const segments = 4;
+  let longest = "";
+  for (let i = 0; i <= segments; i++) {
+    const val = min + ((max - min) * i) / segments;
+    const label = val.toFixed(dp) + suffix;
+    if (label.length > longest.length) longest = label;
+  }
+  return Math.max(64, Math.ceil(longest.length * 7.5 + 20));
+}
+
 function SingleLineCard({
   title,
   emptyText,
@@ -68,6 +86,20 @@ function SingleLineCard({
   const labels = compactLabels(points.map((item) => item.date));
   const width = chartWidth(chartData.length || 1);
   const baseWidth = Dimensions.get("window").width - 56;
+  const chartHeight = 260;
+  const actualWidth = Math.max(baseWidth, width);
+  const dp = decimalPlaces ?? 0;
+  const yAxisPadding = estimateYAxisPadding(chartData, unitSuffix, dp);
+
+  const sharedChartConfig = {
+    backgroundGradientFrom: "#FEFEFA",
+    backgroundGradientTo: "#FEFEFA",
+    decimalPlaces: dp,
+    labelColor: () => palette.mutedForeground
+  };
+
+  const mainChartStyle = { borderRadius: radius.md, paddingRight: yAxisPadding };
+  const overlayChartStyle = { paddingRight: yAxisPadding };
 
   return (
     <View style={styles.chartCard}>
@@ -75,39 +107,66 @@ function SingleLineCard({
       {chartData.length === 0 ? (
         <Text style={styles.emptyText}>{emptyText}</Text>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <LineChart
-            data={{
-              labels,
-              datasets: [{ data: chartData }]
-            }}
-            width={Math.max(baseWidth, width)}
-            height={260}
-            yAxisSuffix={unitSuffix}
-            withShadow={false}
-            withInnerLines
-            withOuterLines={false}
-            withVerticalLines={false}
-            bezier
-            chartConfig={{
-              backgroundGradientFrom: "#FEFEFA",
-              backgroundGradientTo: "#FEFEFA",
-                decimalPlaces: decimalPlaces ?? 0,
-              color: () => lineColor,
-              labelColor: () => palette.mutedForeground,
-              propsForDots: {
-                r: "3",
-                strokeWidth: "1",
-                stroke: lineColor,
-                fill: "#FEFEFA"
-              },
-              propsForBackgroundLines: {
-                stroke: "#EAE4DC"
-              }
-            }}
-            style={styles.lineChart}
-          />
-        </ScrollView>
+        <View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <LineChart
+              data={{ labels, datasets: [{ data: chartData }] }}
+              width={actualWidth}
+              height={chartHeight}
+              yAxisSuffix={unitSuffix}
+              withHorizontalLabels={false}
+              withShadow={false}
+              withInnerLines
+              withOuterLines={false}
+              withVerticalLines={false}
+              bezier
+              chartConfig={{
+                ...sharedChartConfig,
+                color: () => lineColor,
+                propsForDots: {
+                  r: "3",
+                  strokeWidth: "1",
+                  stroke: lineColor,
+                  fill: "#FEFEFA"
+                },
+                propsForBackgroundLines: { stroke: "#EAE4DC" }
+              }}
+              style={mainChartStyle}
+            />
+          </ScrollView>
+
+          <View
+            pointerEvents="none"
+            style={[
+              styles.yAxisOverlay,
+              { width: yAxisPadding, height: chartHeight }
+            ]}
+          >
+            <LineChart
+              data={{
+                labels: labels.map(() => ""),
+                datasets: [{ data: chartData }]
+              }}
+              width={actualWidth}
+              height={chartHeight}
+              yAxisSuffix={unitSuffix}
+              withShadow={false}
+              withInnerLines={false}
+              withOuterLines={false}
+              withVerticalLines={false}
+              withVerticalLabels={false}
+              withDots={false}
+              bezier
+              chartConfig={{
+                ...sharedChartConfig,
+                color: () => "transparent",
+                propsForDots: { r: "0" },
+                propsForBackgroundLines: { stroke: "transparent" }
+              }}
+              style={overlayChartStyle}
+            />
+          </View>
+        </View>
       )}
     </View>
   );
@@ -396,6 +455,13 @@ const styles = StyleSheet.create({
   },
   lineChart: {
     borderRadius: radius.md
+  },
+  yAxisOverlay: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    overflow: "hidden",
+    backgroundColor: "#FEFEFA"
   },
   chartTitle: {
     color: palette.foreground,
