@@ -2,7 +2,6 @@ import DateTimePicker, { type DateTimePickerEvent } from "@react-native-communit
 import { useEffect, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { radius, textStyles, withPressScale } from "../styles/theme";
-import { KeyboardDoneBar, KEYBOARD_ACCESSORY_ID } from "./KeyboardDoneBar";
 import type { UserProfile } from "../types/workout";
 
 type ProfileInput = {
@@ -142,7 +141,6 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
   const avatarColor = getAvatarColor(profile);
 
   return (
-    <>
     <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       {/* Avatar Hero */}
       <View style={styles.heroSection}>
@@ -184,7 +182,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
               placeholder="0"
               placeholderTextColor="#A29F94"
               keyboardType="number-pad"
-              inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
+
             />
             <View style={styles.unitBadge}>
               <Text style={styles.unitBadgeText}>cm</Text>
@@ -222,7 +220,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
               placeholder="0"
               placeholderTextColor="#A29F94"
               keyboardType="number-pad"
-              inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
+
             />
             <View style={styles.unitBadge}>
               <Text style={styles.unitBadgeText}>kg</Text>
@@ -240,7 +238,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
               placeholder="e.g. 2200"
               placeholderTextColor="#A29F94"
               keyboardType="number-pad"
-              inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
+
             />
             <View style={styles.unitBadge}>
               <Text style={styles.unitBadgeText}>kcal</Text>
@@ -258,7 +256,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
               placeholder="e.g. 150"
               placeholderTextColor="#A29F94"
               keyboardType="number-pad"
-              inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
+
             />
             <View style={styles.unitBadge}>
               <Text style={styles.unitBadgeText}>g</Text>
@@ -364,8 +362,6 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         </Modal>
       ) : null}
     </ScrollView>
-    <KeyboardDoneBar />
-    </>
   );
 }
 

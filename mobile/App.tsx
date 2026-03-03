@@ -18,6 +18,7 @@ import {
   View
 } from "react-native";
 import { AuthScreen } from "./src/components/AuthScreen";
+import { KeyboardDoneBar } from "./src/components/KeyboardDoneBar";
 import { CalendarScreen } from "./src/components/CalendarScreen";
 import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/components/RecordScreen.tsx";
 import { ProfileScreen } from "./src/components/ProfileScreen";
@@ -2093,6 +2094,7 @@ export default function App() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      <KeyboardDoneBar />
     </SafeAreaView>
   );
 }
