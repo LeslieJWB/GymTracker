@@ -953,6 +953,30 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
       [exerciseId, exerciseItemId, appUser.id, date]
     );
 
+    const otherTodayCompletedRows = await pool.query<CompletedSetRow>(
+      `
+        SELECT
+          e.id AS exercise_id,
+          e.exercise_item_id,
+          ei.name AS exercise_name,
+          e.notes AS exercise_notes,
+          es.reps,
+          es.weight::text,
+          es.set_order,
+          es.notes AS set_notes
+        FROM records r
+        JOIN exercises e ON e.record_id = r.id
+        JOIN exercise_items ei ON ei.id = e.exercise_item_id
+        JOIN exercise_sets es ON es.exercise_id = e.id
+        WHERE r.user_id = $1
+          AND r.record_date = $2::date
+          AND e.id <> $3
+          AND es.is_completed = TRUE
+        ORDER BY e.sort_order ASC, es.set_order ASC
+      `,
+      [appUser.id, date, exerciseId]
+    );
+
     const pastRows = await pool.query<{
       record_date: string;
       exercise_notes: string | null;
@@ -991,6 +1015,10 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
             .join(", ")
         : "No completed sets logged for this exercise today.";
     const todayExerciseNotes = normalizeAdviceNote(todaySetRows.rows[0]?.exercise_notes ?? null) ?? "none";
+    const otherTodayExercisesText =
+      otherTodayCompletedRows.rows.length > 0
+        ? groupedExerciseSetLines(otherTodayCompletedRows.rows).join("\n")
+        : "No other completed exercises logged today.";
 
     const pastByDate = new Map<string, { exerciseNotes: string | null; sets: string[] }>();
     for (const row of pastRows.rows) {
@@ -1039,6 +1067,8 @@ Priority rule: Treat today's theme as authoritative day intent and align feedbac
 Today's completed sets:
 ${todaySetsText}
 Today's exercise note: ${todayExerciseNotes}
+Other completed exercises today:
+${otherTodayExercisesText}
 
 Past ${EXERCISE_FEEDBACK_HISTORY_LIMIT} completed records for this exercise (with dates):
 ${pastText}
