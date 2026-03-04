@@ -665,7 +665,7 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
       daily_calorie_target_kcal: string | null;
       daily_protein_target_g: string | null;
       daily_target_comment: string | null;
-      daily_target_source: "kimi" | "gemini" | "fallback" | "override" | null;
+      daily_target_source: "kimi" | "gemini" | "vertex" | "fallback" | "override" | null;
     }>(
       `
         SELECT
@@ -686,7 +686,7 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
     const effectiveWeightKg = promptProfile.defaultBodyWeightKg;
     const fallbackTargets = fallbackNutritionTargets(effectiveWeightKg);
     const persistTargets = async (targetPayload: {
-      source: "kimi" | "gemini" | "fallback" | "override";
+      source: "kimi" | "gemini" | "vertex" | "fallback" | "override";
       recommendedCaloriesKcal: number;
       recommendedProteinG: number;
       comment: string | null;
@@ -735,6 +735,7 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
           | "override"
           | "kimi"
           | "gemini"
+          | "vertex"
           | "fallback",
         recommendedCaloriesKcal: userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,
         recommendedProteinG: userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
@@ -819,7 +820,8 @@ Rules:
         : (llmProvider?.name ?? "fallback")) as
         | "override"
         | "kimi"
-        | "gemini",
+        | "gemini"
+        | "vertex",
       recommendedCaloriesKcal: needsCaloriesFromLlm
         ? targets.recommendedCaloriesKcal
         : userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,

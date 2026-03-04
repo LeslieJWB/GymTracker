@@ -20,7 +20,7 @@ type FoodAnalysis = {
   caloriesKcal: number;
   proteinG: number;
   comment: string;
-  source: "kimi" | "gemini" | "fallback";
+  source: "kimi" | "gemini" | "vertex" | "fallback";
 };
 
 const foodAnalysisSchema = z.object({

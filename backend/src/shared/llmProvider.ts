@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-export type SupportedLlmProvider = "kimi" | "gemini";
+export type SupportedLlmProvider = "kimi" | "gemini" | "vertex";
 
 export type LlmImageInput = {
   mimeType: string;
@@ -24,6 +24,21 @@ function buildPromptText(params: GenerateLlmTextParams): string {
     textParts.push(`User text: ${params.userText ?? "(none provided)"}`);
   }
   return textParts.join("\n\n");
+}
+
+function extractTextFromGeminiCandidates(payload: {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+  }>;
+}): string {
+  return (
+    payload.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text ?? "")
+      .join("")
+      .trim() ?? ""
+  );
 }
 
 abstract class OpenAiCompatibleProvider implements LlmProvider {
@@ -109,17 +124,8 @@ class GeminiNativeProvider implements LlmProvider {
       throw new Error(raw || `Gemini native API failed with status ${response.status}`);
     }
 
-    const payload = (await response.json()) as {
-      candidates?: Array<{
-        content?: {
-          parts?: Array<{ text?: string }>;
-        };
-      }>;
-    };
-    const text = payload.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? "")
-      .join("")
-      .trim();
+    const payload = (await response.json()) as Parameters<typeof extractTextFromGeminiCandidates>[0];
+    const text = extractTextFromGeminiCandidates(payload);
     return text && text.length > 0 ? text : null;
   }
 
@@ -139,6 +145,107 @@ class GeminiNativeProvider implements LlmProvider {
   }
 }
 
+class VertexAiProvider implements LlmProvider {
+  readonly name = "vertex" as const;
+  private readonly apiKey: string;
+  private readonly model: string;
+  private readonly baseUrl: string;
+
+  constructor(apiKey: string, model: string, baseUrl: string) {
+    this.apiKey = apiKey;
+    this.model = model;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+  }
+
+  private parseStreamGenerateContent(rawText: string): string | null {
+    const normalized = rawText.trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const joinTexts = (items: Array<Parameters<typeof extractTextFromGeminiCandidates>[0]>): string =>
+      items
+        .map((item) => extractTextFromGeminiCandidates(item))
+        .filter(Boolean)
+        .join("")
+        .trim();
+
+    try {
+      const parsed = JSON.parse(normalized) as unknown;
+      if (Array.isArray(parsed)) {
+        const text = joinTexts(parsed as Array<Parameters<typeof extractTextFromGeminiCandidates>[0]>);
+        return text.length > 0 ? text : null;
+      }
+      if (parsed && typeof parsed === "object") {
+        const text = extractTextFromGeminiCandidates(
+          parsed as Parameters<typeof extractTextFromGeminiCandidates>[0]
+        );
+        return text.length > 0 ? text : null;
+      }
+    } catch {
+      // Some stream responses are line-delimited. Handle those below.
+    }
+
+    const chunks = normalized
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => (line.startsWith("data:") ? line.slice(5).trim() : line))
+      .filter((line) => line && line !== "[DONE]");
+
+    const parts: string[] = [];
+    for (const chunk of chunks) {
+      try {
+        const parsedChunk = JSON.parse(chunk) as Parameters<typeof extractTextFromGeminiCandidates>[0];
+        const text = extractTextFromGeminiCandidates(parsedChunk);
+        if (text) {
+          parts.push(text);
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    const merged = parts.join("").trim();
+    return merged.length > 0 ? merged : null;
+  }
+
+  async generateText(params: GenerateLlmTextParams): Promise<string | null> {
+    const endpoint = `${this.baseUrl}/${encodeURIComponent(
+      this.model
+    )}:streamGenerateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }> = [
+      { text: buildPromptText(params) }
+    ];
+    if (params.image) {
+      parts.push({
+        inline_data: {
+          mime_type: params.image.mimeType,
+          data: params.image.dataBase64
+        }
+      });
+    }
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }]
+      })
+    });
+
+    if (!response.ok) {
+      const raw = await response.text();
+      throw new Error(raw || `Vertex AI API failed with status ${response.status}`);
+    }
+
+    const raw = await response.text();
+    return this.parseStreamGenerateContent(raw);
+  }
+}
+
 type CreateProviderInput = {
   selectedProvider: string;
   kimi: {
@@ -147,6 +254,11 @@ type CreateProviderInput = {
     model: string;
   };
   gemini: {
+    apiKey: string | undefined;
+    baseUrl: string;
+    model: string;
+  };
+  vertex: {
     apiKey: string | undefined;
     baseUrl: string;
     model: string;
@@ -173,6 +285,13 @@ export function createLlmProvider(input: CreateProviderInput): LlmProvider | nul
       }),
       input.gemini.model
     );
+  }
+
+  if (input.selectedProvider === "vertex") {
+    if (!input.vertex.apiKey) {
+      return null;
+    }
+    return new VertexAiProvider(input.vertex.apiKey, input.vertex.model, input.vertex.baseUrl);
   }
 
   if (input.selectedProvider === "kimi") {

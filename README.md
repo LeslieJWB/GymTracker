@@ -23,9 +23,10 @@ GymTracker is an Expo React Native iOS app with a TypeScript backend server.
    - Ensure PostgreSQL is running locally
    - Set `DATABASE_URL=postgres://postgres:postgres@localhost:5432/gymtracker` (or your own URL)
 3. Optionally configure AI provider:
-   - `LLM_PROVIDER=kimi` or `LLM_PROVIDER=gemini`
+   - `LLM_PROVIDER=kimi` or `LLM_PROVIDER=gemini` or `LLM_PROVIDER=vertex`
    - For Kimi: `KIMI_API_KEY=...`
    - For Gemini: `GEMINI_API_KEY=...`
+   - For Vertex AI (Google Cloud): `VERTEX_API_KEY=...`
    - Without the selected provider key, advice/food endpoints use fallback mode.
 4. Configure auth:
    - `SUPABASE_URL=...`
@@ -96,9 +97,10 @@ Set these variables in Render:
 - `DATABASE_URL=<supabase-postgres-connection-string>`
 - `SUPABASE_URL=<your-supabase-project-url>`
 - `SUPABASE_JWT_AUDIENCE=authenticated`
-- `LLM_PROVIDER=<kimi-or-gemini>`
+- `LLM_PROVIDER=<kimi-or-gemini-or-vertex>`
 - `KIMI_API_KEY=<optional-if-LLM_PROVIDER-kimi>`
 - `GEMINI_API_KEY=<optional-if-LLM_PROVIDER-gemini>`
+- `VERTEX_API_KEY=<optional-if-LLM_PROVIDER-vertex>`
 - `ALLOWED_ORIGINS=<comma-separated-origins-that-can-call-your-api>`
 - `TRUST_PROXY=true`
 
