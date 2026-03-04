@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import {
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -213,6 +214,8 @@ export function RecordScreen({
     exerciseId: string;
     exerciseName: string;
   } | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const expandedIds = useMemo(() => new Set(expandedExerciseIds), [expandedExerciseIds]);
   const filteredExerciseItems = useMemo(() => {
     const normalizedQuery = normalizeSearchText(exerciseSearchTerm);
@@ -316,6 +319,23 @@ export function RecordScreen({
   const foodEntryCount = recordDetail?.foodConsumptions.length ?? 0;
   const foodEntryLabel = foodEntryCount === 1 ? "entry" : "entries";
 
+  useEffect(() => {
+    if (Platform.OS !== "ios") {
+      return;
+    }
+    const showSub = Keyboard.addListener("keyboardWillShow", (event) => {
+      setKeyboardVisible(true);
+      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener("keyboardWillHide", () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!adviceTarget || !user || !recordDetail) return;
@@ -1246,6 +1266,26 @@ export function RecordScreen({
               </>
             ) : null}
           </View>
+          {Platform.OS === "ios" && keyboardVisible && setNotesTarget !== null ? (
+            <View
+              pointerEvents="box-none"
+              style={[
+                styles.keyboardDoneWrap,
+                {
+                  bottom: Math.max(12, keyboardHeight + 8)
+                }
+              ]}
+            >
+              <Pressable
+                style={({ pressed }) => [styles.keyboardDoneButton, pressed ? styles.keyboardDoneButtonPressed : null]}
+                onPress={() => {
+                  Keyboard.dismiss();
+                }}
+              >
+                <Text style={styles.keyboardDoneText}>Done</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </KeyboardAvoidingView>
       </Modal>
 
@@ -1302,6 +1342,26 @@ export function RecordScreen({
               </>
             ) : null}
           </View>
+          {Platform.OS === "ios" && keyboardVisible && exerciseNotesTarget !== null ? (
+            <View
+              pointerEvents="box-none"
+              style={[
+                styles.keyboardDoneWrap,
+                {
+                  bottom: Math.max(12, keyboardHeight + 8)
+                }
+              ]}
+            >
+              <Pressable
+                style={({ pressed }) => [styles.keyboardDoneButton, pressed ? styles.keyboardDoneButtonPressed : null]}
+                onPress={() => {
+                  Keyboard.dismiss();
+                }}
+              >
+                <Text style={styles.keyboardDoneText}>Done</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </KeyboardAvoidingView>
       </Modal>
 
@@ -2609,5 +2669,28 @@ const styles = StyleSheet.create({
   },
   adviceButtonTextDecline: {
     color: "#2C2C24"
+  },
+  keyboardDoneWrap: {
+    position: "absolute",
+    right: 12,
+    zIndex: 2000
+  },
+  keyboardDoneButton: {
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F6F2EA",
+    borderWidth: 1,
+    borderColor: "#DED8CF"
+  },
+  keyboardDoneButtonPressed: {
+    opacity: 0.75
+  },
+  keyboardDoneText: {
+    color: "#5D7052",
+    fontSize: 16,
+    fontWeight: "700"
   }
 });

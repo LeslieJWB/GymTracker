@@ -12,13 +12,13 @@ import {
   Modal,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthScreen } from "./src/components/AuthScreen";
 import { KeyboardDoneBar, DONE_BAR_ID } from "./src/components/KeyboardDoneBar";
 import { CalendarScreen } from "./src/components/CalendarScreen";
@@ -126,6 +126,7 @@ function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories
 }
 
 export default function App() {
+  const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
@@ -2045,7 +2046,7 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={appStyles.safeArea}>
+    <SafeAreaView edges={["top", "left", "right"]} style={appStyles.safeArea}>
       <StatusBar style="dark" />
       <View pointerEvents="none" style={styles.backgroundWrap}>
         <View style={[styles.blob, styles.blobA]} />
@@ -2226,7 +2227,14 @@ export default function App() {
           </View>
         </Modal>
         {!keyboardVisible ? (
-          <View style={styles.bottomNav}>
+          <View
+            style={[
+              styles.bottomNav,
+              {
+                paddingBottom: Math.max(10, insets.bottom)
+              }
+            ]}
+          >
             <Pressable
               style={({ pressed }) => [
                 styles.bottomNavItem,
