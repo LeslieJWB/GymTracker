@@ -127,5 +127,38 @@ export type ExerciseDetail = {
   sets: ExerciseSet[];
 };
 
+export type WorkoutTemplateSummary = {
+  id: string;
+  name: string;
+  exerciseCount: number;
+  setCount: number;
+  updatedAt: string;
+};
+
+export type WorkoutTemplateSet = {
+  id: string;
+  reps: number;
+  weight: number;
+  setOrder: number;
+  notes: string | null;
+};
+
+export type WorkoutTemplateExercise = {
+  id: string;
+  exerciseItemId: string;
+  exerciseItemName: string;
+  notes: string | null;
+  sortOrder: number;
+  sets: WorkoutTemplateSet[];
+};
+
+export type WorkoutTemplateDetail = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  exercises: WorkoutTemplateExercise[];
+};
+
 export type SetDraft = { reps: string; weight: string; notes: string };
 export type SetDrafts = Record<string, SetDraft>;

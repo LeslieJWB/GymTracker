@@ -44,7 +44,9 @@ import {
   SetDraft,
   SetDrafts,
   User,
-  UserProfile
+  UserProfile,
+  WorkoutTemplateDetail,
+  WorkoutTemplateSummary
 } from "./src/types/workout";
 import { DATE_PATTERN, daysAgo, todayDate } from "./src/utils/date";
 import { requestKey } from "./src/utils/request";
@@ -110,6 +112,22 @@ function parseDateValue(value: string): Date | null {
   }
 
   return parsed;
+}
+
+function parseApiErrorPayload(error: unknown): { message: string; code: string | null } {
+  const raw = error instanceof Error ? error.message : String(error);
+  try {
+    const parsed = JSON.parse(raw) as { error?: string; code?: string };
+    return {
+      message: parsed.error ?? raw,
+      code: parsed.code ?? null
+    };
+  } catch {
+    return {
+      message: raw,
+      code: null
+    };
+  }
 }
 
 function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories: number; protein: number } {
@@ -685,6 +703,120 @@ export default function App() {
       return false;
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function listWorkoutTemplates(): Promise<WorkoutTemplateSummary[]> {
+    if (!user) {
+      return [];
+    }
+    return apiJson<WorkoutTemplateSummary[]>("/templates");
+  }
+
+  async function loadWorkoutTemplateDetail(templateId: string): Promise<WorkoutTemplateDetail> {
+    return apiJson<WorkoutTemplateDetail>(`/templates/${encodeURIComponent(templateId)}`);
+  }
+
+  async function saveWorkoutTemplate(
+    templateName: string
+  ): Promise<{ ok: true } | { ok: false; conflict: boolean; message: string }> {
+    if (!user || !recordDetail) {
+      return { ok: false, conflict: false, message: "Open a workout day first." };
+    }
+    const trimmedName = templateName.trim();
+    if (!trimmedName) {
+      return { ok: false, conflict: false, message: "Template name is required." };
+    }
+    if ((recordDetail.exercises ?? []).length === 0) {
+      return { ok: false, conflict: false, message: "Add at least one exercise before saving a template." };
+    }
+
+    try {
+      const snapshotByExerciseId = new Map<string, ExerciseDetail>();
+      for (const summary of recordDetail.exercises) {
+        const existing = exerciseDetailsById[summary.id];
+        if (existing) {
+          snapshotByExerciseId.set(summary.id, existing);
+          continue;
+        }
+        const detail = await apiJson<ExerciseDetail>(`/exercises/${summary.id}`);
+        const fallbackImageUrl =
+          detail.exerciseItemImageUrl ?? exerciseItems.find((item) => item.id === detail.exerciseItemId)?.imageUrl ?? null;
+        snapshotByExerciseId.set(summary.id, {
+          ...detail,
+          exerciseItemImageUrl: fallbackImageUrl
+        });
+      }
+
+      const payload = {
+        name: trimmedName,
+        exercises: recordDetail.exercises
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((summary, index) => {
+            const detail = snapshotByExerciseId.get(summary.id);
+            const sets = (detail?.sets ?? [])
+              .slice()
+              .sort((a, b) => a.setOrder - b.setOrder)
+              .map((setItem, setIndex) => ({
+                reps: setItem.reps,
+                weight: setItem.weight,
+                setOrder: setItem.setOrder ?? setIndex,
+                notes: setItem.notes ?? undefined
+              }));
+            return {
+              exerciseItemId: summary.exerciseItemId,
+              notes: (detail?.notes ?? summary.notes ?? "") || undefined,
+              sortOrder: summary.sortOrder ?? index,
+              sets
+            };
+          })
+      };
+
+      await apiJson<{ id: string }>("/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      return { ok: true };
+    } catch (error) {
+      const parsed = parseApiErrorPayload(error);
+      return {
+        ok: false,
+        conflict: parsed.code === "TEMPLATE_NAME_CONFLICT",
+        message: parsed.message || "Failed to save template."
+      };
+    }
+  }
+
+  async function applyWorkoutTemplate(templateId: string): Promise<boolean> {
+    if (!user) {
+      return false;
+    }
+    try {
+      const template = await loadWorkoutTemplateDetail(templateId);
+      for (const exercise of template.exercises.slice().sort((a, b) => a.sortOrder - b.sortOrder)) {
+        const ok = await addExercise({
+          exerciseItemId: exercise.exerciseItemId,
+          notes: exercise.notes ?? undefined,
+          initialSets: exercise.sets
+            .slice()
+            .sort((a, b) => a.setOrder - b.setOrder)
+            .map((setItem, index) => ({
+              reps: setItem.reps,
+              weight: setItem.weight,
+              setOrder: setItem.setOrder ?? index,
+              notes: setItem.notes ?? undefined
+            }))
+        });
+        if (!ok) {
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      Alert.alert("Failed to load template", String(error));
+      return false;
     }
   }
 
@@ -2135,6 +2267,9 @@ export default function App() {
                 saveBodyWeight={() => {
                   saveBodyWeightByDate(selectedDate, bodyWeightDraft).catch(() => {});
                 }}
+                listWorkoutTemplates={() => listWorkoutTemplates()}
+                saveWorkoutTemplate={saveWorkoutTemplate}
+                applyWorkoutTemplate={applyWorkoutTemplate}
                 fetchDailySummary={(date) => fetchDailySummary(date)}
                 fetchExerciseFeedback={(input) => fetchExerciseFeedback(input)}
                 dailyNutritionTargets={dailyTargetsDate === selectedDate ? dailyNutritionTargets : null}

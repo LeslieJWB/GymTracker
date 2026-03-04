@@ -6,6 +6,12 @@ function buildPromptText(params) {
     }
     return textParts.join("\n\n");
 }
+function extractTextFromGeminiCandidates(payload) {
+    return (payload.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("")
+        .trim() ?? "");
+}
 class OpenAiCompatibleProvider {
     client;
     model;
@@ -67,10 +73,7 @@ class GeminiNativeProvider {
             throw new Error(raw || `Gemini native API failed with status ${response.status}`);
         }
         const payload = (await response.json());
-        const text = payload.candidates?.[0]?.content?.parts
-            ?.map((part) => part.text ?? "")
-            .join("")
-            .trim();
+        const text = extractTextFromGeminiCandidates(payload);
         return text && text.length > 0 ? text : null;
     }
     async generateText(params) {
@@ -86,6 +89,92 @@ class GeminiNativeProvider {
             });
         }
         return this.callGenerateContent(parts);
+    }
+}
+class VertexAiProvider {
+    name = "vertex";
+    apiKey;
+    model;
+    baseUrl;
+    constructor(apiKey, model, baseUrl) {
+        this.apiKey = apiKey;
+        this.model = model;
+        this.baseUrl = baseUrl.replace(/\/+$/, "");
+    }
+    parseStreamGenerateContent(rawText) {
+        const normalized = rawText.trim();
+        if (!normalized) {
+            return null;
+        }
+        const joinTexts = (items) => items
+            .map((item) => extractTextFromGeminiCandidates(item))
+            .filter(Boolean)
+            .join("")
+            .trim();
+        try {
+            const parsed = JSON.parse(normalized);
+            if (Array.isArray(parsed)) {
+                const text = joinTexts(parsed);
+                return text.length > 0 ? text : null;
+            }
+            if (parsed && typeof parsed === "object") {
+                const text = extractTextFromGeminiCandidates(parsed);
+                return text.length > 0 ? text : null;
+            }
+        }
+        catch {
+            // Some stream responses are line-delimited. Handle those below.
+        }
+        const chunks = normalized
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => (line.startsWith("data:") ? line.slice(5).trim() : line))
+            .filter((line) => line && line !== "[DONE]");
+        const parts = [];
+        for (const chunk of chunks) {
+            try {
+                const parsedChunk = JSON.parse(chunk);
+                const text = extractTextFromGeminiCandidates(parsedChunk);
+                if (text) {
+                    parts.push(text);
+                }
+            }
+            catch {
+                continue;
+            }
+        }
+        const merged = parts.join("").trim();
+        return merged.length > 0 ? merged : null;
+    }
+    async generateText(params) {
+        const endpoint = `${this.baseUrl}/${encodeURIComponent(this.model)}:streamGenerateContent?key=${encodeURIComponent(this.apiKey)}`;
+        const parts = [
+            { text: buildPromptText(params) }
+        ];
+        if (params.image) {
+            parts.push({
+                inline_data: {
+                    mime_type: params.image.mimeType,
+                    data: params.image.dataBase64
+                }
+            });
+        }
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                contents: [{ role: "user", parts }]
+            })
+        });
+        if (!response.ok) {
+            const raw = await response.text();
+            throw new Error(raw || `Vertex AI API failed with status ${response.status}`);
+        }
+        const raw = await response.text();
+        return this.parseStreamGenerateContent(raw);
     }
 }
 export function createLlmProvider(input) {
@@ -105,6 +194,12 @@ export function createLlmProvider(input) {
             apiKey: input.gemini.apiKey,
             baseURL: normalizedGeminiBase
         }), input.gemini.model);
+    }
+    if (input.selectedProvider === "vertex") {
+        if (!input.vertex.apiKey) {
+            return null;
+        }
+        return new VertexAiProvider(input.vertex.apiKey, input.vertex.model, input.vertex.baseUrl);
     }
     if (input.selectedProvider === "kimi") {
         if (!input.kimi.apiKey) {

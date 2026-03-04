@@ -86,6 +86,29 @@ export const patchSetSchema = z.object({
   isCompleted: z.boolean().optional()
 });
 
+export const listTemplatesSchema = z.object({
+  search: z.string().trim().max(120).optional()
+});
+
+export const templateSetSchema = z.object({
+  reps: z.number().int().positive(),
+  weight: z.number().nonnegative(),
+  setOrder: z.number().int().min(0).optional(),
+  notes: z.string().max(1000).optional()
+});
+
+export const templateExerciseSchema = z.object({
+  exerciseItemId: idSchema,
+  notes: z.string().max(1000).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+  sets: z.array(templateSetSchema).optional()
+});
+
+export const createWorkoutTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  exercises: z.array(templateExerciseSchema).min(1)
+});
+
 const base64Pattern = /^[A-Za-z0-9+/=]+$/;
 const imageMimeTypePattern = /^image\/[A-Za-z0-9.+-]+$/;
 

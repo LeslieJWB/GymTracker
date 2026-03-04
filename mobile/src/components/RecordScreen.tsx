@@ -26,7 +26,8 @@ import {
   RecordDetail,
   SetDraft,
   SetDrafts,
-  User
+  User,
+  WorkoutTemplateSummary
 } from "../types/workout";
 
 export type NewExerciseSetDraft = {
@@ -117,6 +118,11 @@ type RecordScreenProps = {
   savedBodyWeightKg: number | null;
   savingBodyWeight: boolean;
   saveBodyWeight: () => void;
+  listWorkoutTemplates: () => Promise<WorkoutTemplateSummary[]>;
+  saveWorkoutTemplate: (
+    templateName: string
+  ) => Promise<{ ok: true } | { ok: false; conflict: boolean; message: string }>;
+  applyWorkoutTemplate: (templateId: string) => Promise<boolean>;
   fetchDailySummary: (date: string) => Promise<AdviceReviewResult>;
   fetchExerciseFeedback: (input: {
     exerciseId: string;
@@ -164,12 +170,25 @@ export function RecordScreen({
   savedBodyWeightKg,
   savingBodyWeight,
   saveBodyWeight,
+  listWorkoutTemplates,
+  saveWorkoutTemplate,
+  applyWorkoutTemplate,
   fetchDailySummary,
   fetchExerciseFeedback,
   dailyNutritionTargets
 }: RecordScreenProps) {
   const [showExerciseSearchModal, setShowExerciseSearchModal] = useState(false);
   const [exerciseSearchTerm, setExerciseSearchTerm] = useState("");
+  const [showTemplateSaveModal, setShowTemplateSaveModal] = useState(false);
+  const [templateNameDraft, setTemplateNameDraft] = useState("");
+  const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [showTemplateLoadModal, setShowTemplateLoadModal] = useState(false);
+  const [templateSearchTerm, setTemplateSearchTerm] = useState("");
+  const [templateOptions, setTemplateOptions] = useState<WorkoutTemplateSummary[]>([]);
+  const [loadingTemplateOptions, setLoadingTemplateOptions] = useState(false);
+  const [templateLoadError, setTemplateLoadError] = useState<string | null>(null);
+  const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
   const [exerciseMenuTarget, setExerciseMenuTarget] = useState<{
     id: string;
     exerciseItemId: string;
@@ -252,6 +271,41 @@ export function RecordScreen({
       .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name))
       .map((entry) => entry.item);
   }, [exerciseItems, exerciseSearchTerm]);
+  const filteredTemplateOptions = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(templateSearchTerm);
+    if (!normalizedQuery) {
+      return templateOptions;
+    }
+    const queryTerms = normalizedQuery.split(" ").filter(Boolean);
+    return templateOptions
+      .map((item) => {
+        const normalizedName = normalizeSearchText(item.name);
+        const nameTerms = normalizedName.split(" ").filter(Boolean);
+        let score = normalizedName.includes(normalizedQuery) ? 200 : 0;
+        for (const queryTerm of queryTerms) {
+          const termScore = nameTerms.reduce((bestScore, nameTerm) => {
+            if (nameTerm === queryTerm) {
+              return Math.max(bestScore, 40);
+            }
+            if (nameTerm.startsWith(queryTerm)) {
+              return Math.max(bestScore, 25);
+            }
+            if (nameTerm.includes(queryTerm)) {
+              return Math.max(bestScore, 10);
+            }
+            return bestScore;
+          }, 0);
+          if (termScore === 0 && !normalizedName.includes(queryTerm)) {
+            return null;
+          }
+          score += termScore;
+        }
+        return { item, score };
+      })
+      .filter((entry): entry is { item: WorkoutTemplateSummary; score: number } => entry !== null)
+      .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name))
+      .map((entry) => entry.item);
+  }, [templateOptions, templateSearchTerm]);
 
   const completedSetCountByExerciseId = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -318,6 +372,9 @@ export function RecordScreen({
   const proteinOverflow = proteinTarget ? Math.max(0, Math.round(totalProteinG - proteinTarget)) : 0;
   const foodEntryCount = recordDetail?.foodConsumptions.length ?? 0;
   const foodEntryLabel = foodEntryCount === 1 ? "entry" : "entries";
+  const exerciseEntryCount = recordDetail?.exercises.length ?? 0;
+  const canSaveTemplate = Boolean(user) && !loading && exerciseEntryCount > 0;
+  const canLoadTemplate = Boolean(user) && !loading;
 
   useEffect(() => {
     if (Platform.OS !== "ios") {
@@ -404,6 +461,85 @@ export function RecordScreen({
 
   function closeExerciseSearchModal(): void {
     setShowExerciseSearchModal(false);
+  }
+
+  function openTemplateSaveModal(): void {
+    setTemplateNameDraft("");
+    setTemplateSaveError(null);
+    setShowTemplateSaveModal(true);
+  }
+
+  function closeTemplateSaveModal(): void {
+    if (savingTemplate) {
+      return;
+    }
+    setShowTemplateSaveModal(false);
+    setTemplateSaveError(null);
+  }
+
+  async function submitTemplateSave(): Promise<void> {
+    const trimmed = templateNameDraft.trim();
+    if (!trimmed) {
+      setTemplateSaveError("Template name is required.");
+      return;
+    }
+    setSavingTemplate(true);
+    setTemplateSaveError(null);
+    const result = await saveWorkoutTemplate(trimmed);
+    if (result.ok) {
+      setShowTemplateSaveModal(false);
+      setTemplateNameDraft("");
+      setTemplateSaveError(null);
+      setSavingTemplate(false);
+      Alert.alert("Template saved", `"${trimmed}" is now available in Load Exercises From Template.`);
+      return;
+    }
+    setSavingTemplate(false);
+    if (result.conflict) {
+      setTemplateSaveError("A template with this name already exists. Please enter a new name.");
+      return;
+    }
+    setTemplateSaveError(result.message || "Failed to save template.");
+  }
+
+  async function openTemplateLoadModal(): Promise<void> {
+    setTemplateSearchTerm("");
+    setTemplateLoadError(null);
+    setTemplateOptions([]);
+    setShowTemplateLoadModal(true);
+    setLoadingTemplateOptions(true);
+    try {
+      const templates = await listWorkoutTemplates();
+      setTemplateOptions(templates);
+    } catch (error) {
+      setTemplateLoadError(String(error));
+    } finally {
+      setLoadingTemplateOptions(false);
+    }
+  }
+
+  function closeTemplateLoadModal(): void {
+    if (applyingTemplateId) {
+      return;
+    }
+    setShowTemplateLoadModal(false);
+    setTemplateSearchTerm("");
+    setTemplateLoadError(null);
+    setLoadingTemplateOptions(false);
+    setApplyingTemplateId(null);
+  }
+
+  async function chooseTemplateForLoad(templateId: string): Promise<void> {
+    setApplyingTemplateId(templateId);
+    setTemplateLoadError(null);
+    const ok = await applyWorkoutTemplate(templateId);
+    setApplyingTemplateId(null);
+    if (ok) {
+      setShowTemplateLoadModal(false);
+      setTemplateSearchTerm("");
+      return;
+    }
+    setTemplateLoadError("Failed to load template. Please try again.");
   }
 
   async function chooseExerciseForInPlaceAdd(exerciseItem: ExerciseItem): Promise<void> {
@@ -1001,10 +1137,137 @@ export function RecordScreen({
       ) : null}
 
       {recordDetailTab === "exercise" ? (
-        <TouchableOpacity style={styles.openAddModalButton} onPress={openExerciseSearchModal} disabled={loading || !user}>
-          <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
-        </TouchableOpacity>
+        <View style={styles.templateActionStack}>
+          <TouchableOpacity style={styles.openAddModalButton} onPress={openTemplateSaveModal} disabled={!canSaveTemplate}>
+            <Text style={styles.openAddModalButtonText}>Save as Template</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.openAddModalButton} onPress={openExerciseSearchModal} disabled={loading || !user}>
+            <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.openAddModalButton, styles.secondaryActionButton]}
+            onPress={() => {
+              openTemplateLoadModal().catch(() => {});
+            }}
+            disabled={!canLoadTemplate}
+          >
+            <Text style={[styles.openAddModalButtonText, styles.secondaryActionButtonText]}>
+              Load Exercises From Template
+            </Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
+
+      <Modal
+        visible={showTemplateSaveModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeTemplateSaveModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalBackdropTapTarget} onPress={closeTemplateSaveModal} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Save Template</Text>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={closeTemplateSaveModal} disabled={savingTemplate}>
+                <Text style={styles.modalCloseButtonText}>x</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>Save today&apos;s exercises and sets as a reusable template.</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={templateNameDraft}
+              onChangeText={setTemplateNameDraft}
+              inputAccessoryViewID={DONE_BAR_ID}
+              placeholder="Template name"
+              placeholderTextColor="#78786C"
+              autoCorrect={false}
+              editable={!savingTemplate}
+              maxLength={120}
+            />
+            {templateSaveError ? <Text style={styles.foodComposerErrorText}>{templateSaveError}</Text> : null}
+            <View style={styles.composerActionRow}>
+              <TouchableOpacity style={styles.composerCancelButton} onPress={closeTemplateSaveModal} disabled={savingTemplate}>
+                <Text style={styles.composerCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.composerSaveButton}
+                onPress={() => {
+                  submitTemplateSave().catch(() => {});
+                }}
+                disabled={savingTemplate}
+              >
+                <Text style={styles.composerSaveButtonText}>{savingTemplate ? "Saving..." : "Save Template"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showTemplateLoadModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeTemplateLoadModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalBackdropTapTarget} onPress={closeTemplateLoadModal} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Load Template</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={closeTemplateLoadModal}
+                disabled={Boolean(applyingTemplateId)}
+              >
+                <Text style={styles.modalCloseButtonText}>x</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>Search a template to append its exercises and sets to today.</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={templateSearchTerm}
+              onChangeText={setTemplateSearchTerm}
+              inputAccessoryViewID={DONE_BAR_ID}
+              placeholder="Search templates..."
+              placeholderTextColor="#78786C"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            <ScrollView style={styles.searchList} keyboardShouldPersistTaps="handled">
+              {loadingTemplateOptions ? (
+                <View style={styles.emptySetCard}>
+                  <Text style={appStyles.emptyText}>Loading templates...</Text>
+                </View>
+              ) : filteredTemplateOptions.length === 0 ? (
+                <View style={styles.emptySetCard}>
+                  <Text style={appStyles.emptyText}>No templates match your search.</Text>
+                </View>
+              ) : (
+                filteredTemplateOptions.map((template) => (
+                  <Pressable
+                    key={template.id}
+                    style={styles.searchResultRow}
+                    onPress={() => {
+                      chooseTemplateForLoad(template.id).catch(() => {});
+                    }}
+                    disabled={Boolean(applyingTemplateId)}
+                  >
+                    <Text style={styles.searchResultName}>{template.name}</Text>
+                    <Text style={styles.searchResultMeta}>
+                      {template.exerciseCount} exercises • {template.setCount} sets
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+            {templateLoadError ? <Text style={styles.foodComposerErrorText}>{templateLoadError}</Text> : null}
+            <TouchableOpacity style={styles.cancelButton} onPress={closeTemplateLoadModal} disabled={Boolean(applyingTemplateId)}>
+              <Text style={styles.cancelButtonText}>{applyingTemplateId ? "Applying..." : "Close"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showFoodComposerModal}
@@ -2217,8 +2480,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "600"
   },
-  openAddModalButton: {
+  templateActionStack: {
     marginTop: 4,
+    gap: 8
+  },
+  openAddModalButton: {
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
@@ -2227,6 +2493,12 @@ const styles = StyleSheet.create({
   openAddModalButtonText: {
     color: "#FEFEFA",
     fontWeight: "800"
+  },
+  secondaryActionButton: {
+    backgroundColor: "#E6DCCD"
+  },
+  secondaryActionButtonText: {
+    color: "#4A4A40"
   },
   modalBackdrop: {
     flex: 1,
