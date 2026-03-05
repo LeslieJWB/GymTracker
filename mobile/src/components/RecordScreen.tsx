@@ -1138,23 +1138,56 @@ export function RecordScreen({
 
       {recordDetailTab === "exercise" ? (
         <View style={styles.templateActionStack}>
-          <TouchableOpacity style={styles.openAddModalButton} onPress={openTemplateSaveModal} disabled={!canSaveTemplate}>
-            <Text style={styles.openAddModalButtonText}>Save as Template</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.openAddModalButton} onPress={openExerciseSearchModal} disabled={loading || !user}>
-            <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.openAddModalButton, styles.secondaryActionButton]}
-            onPress={() => {
-              openTemplateLoadModal().catch(() => {});
-            }}
-            disabled={!canLoadTemplate}
-          >
-            <Text style={[styles.openAddModalButtonText, styles.secondaryActionButtonText]}>
-              Load Exercises From Template
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.templateActionCard}>
+            <TouchableOpacity
+              style={[
+                styles.openAddModalButton,
+                loading || !user ? styles.primaryActionButtonDisabled : null
+              ]}
+              onPress={openExerciseSearchModal}
+              disabled={loading || !user}
+            >
+              <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
+            </TouchableOpacity>
+            <View style={styles.templateSecondaryActionRow}>
+              <TouchableOpacity
+                style={[
+                  styles.secondaryActionButton,
+                  !canSaveTemplate ? styles.secondaryActionButtonDisabled : null
+                ]}
+                onPress={openTemplateSaveModal}
+                disabled={!canSaveTemplate}
+              >
+                <Text
+                  style={[
+                    styles.secondaryActionButtonText,
+                    !canSaveTemplate ? styles.secondaryActionButtonTextDisabled : null
+                  ]}
+                >
+                  Save Template
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tertiaryActionButton,
+                  !canLoadTemplate ? styles.secondaryActionButtonDisabled : null
+                ]}
+                onPress={() => {
+                  openTemplateLoadModal().catch(() => {});
+                }}
+                disabled={!canLoadTemplate}
+              >
+                <Text
+                  style={[
+                    styles.tertiaryActionButtonText,
+                    !canLoadTemplate ? styles.secondaryActionButtonTextDisabled : null
+                  ]}
+                >
+                  Load Template
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       ) : null}
 
@@ -2484,21 +2517,81 @@ const styles = StyleSheet.create({
     marginTop: 4,
     gap: 8
   },
+  templateActionCard: {
+    borderRadius: 22,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 26,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 30,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    backgroundColor: "#FEFEFA",
+    padding: 10
+  },
   openAddModalButton: {
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 999,
+    paddingVertical: 13,
+    paddingHorizontal: 12,
     alignItems: "center",
-    backgroundColor: "#5D7052"
+    justifyContent: "center",
+    backgroundColor: "#5D7052",
+    shadowColor: "#5D7052",
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: {
+      width: 0,
+      height: 6
+    },
+    elevation: 4
   },
   openAddModalButtonText: {
     color: "#FEFEFA",
+    fontSize: 17,
     fontWeight: "800"
   },
+  primaryActionButtonDisabled: {
+    backgroundColor: "#9CA796",
+    shadowOpacity: 0
+  },
+  templateSecondaryActionRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    gap: 8
+  },
   secondaryActionButton: {
-    backgroundColor: "#E6DCCD"
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#C18C5D",
+    backgroundColor: "#FEFEFA",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center"
   },
   secondaryActionButtonText: {
-    color: "#4A4A40"
+    color: "#A66936",
+    fontWeight: "800"
+  },
+  tertiaryActionButton: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    backgroundColor: "#E6DCCD",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  tertiaryActionButtonText: {
+    color: "#4A4A40",
+    fontWeight: "800"
+  },
+  secondaryActionButtonDisabled: {
+    backgroundColor: "#F0EBE5",
+    borderColor: "#DED8CF"
+  },
+  secondaryActionButtonTextDisabled: {
+    color: "#A6A49D"
   },
   modalBackdrop: {
     flex: 1,
