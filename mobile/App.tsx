@@ -2102,13 +2102,13 @@ export default function App() {
               </Pressable>
             </View>
             <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>Personal LLM Prompt (optional)</Text>
+              <Text style={styles.onboardingLabel}>AI Coaching Prompt(optional)</Text>
               <TextInput
                 style={[styles.onboardingInput, styles.onboardingPromptInput]}
                 value={onboardingLlmPrompt}
                 onChangeText={setOnboardingLlmPrompt}
                 inputAccessoryViewID={DONE_BAR_ID}
-                placeholder="Optional guidance for your AI recommendations"
+                placeholder="Optional instructions for your AI coach, e.g. Goal is muscle growth"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
                 multiline

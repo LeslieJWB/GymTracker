@@ -219,6 +219,7 @@ export function RecordScreen({
   const [feedbackResult, setFeedbackResult] = useState<AdviceReviewResult | null>(null);
   const [recordDetailTab, setRecordDetailTab] = useState<"exercise" | "food">("exercise");
   const [foodSectionExpanded, setFoodSectionExpanded] = useState(false);
+  const [exerciseSectionExpanded, setExerciseSectionExpanded] = useState(true);
   const [showFoodComposerModal, setShowFoodComposerModal] = useState(false);
   const [foodTextDraft, setFoodTextDraft] = useState("");
   const [foodImageDraft, setFoodImageDraft] = useState<FoodImageDraft | null>(null);
@@ -373,6 +374,7 @@ export function RecordScreen({
   const foodEntryCount = recordDetail?.foodConsumptions.length ?? 0;
   const foodEntryLabel = foodEntryCount === 1 ? "entry" : "entries";
   const exerciseEntryCount = recordDetail?.exercises.length ?? 0;
+  const exerciseEntryLabel = exerciseEntryCount === 1 ? "entry" : "entries";
   const canSaveTemplate = Boolean(user) && !loading && exerciseEntryCount > 0;
   const canLoadTemplate = Boolean(user) && !loading;
 
@@ -852,7 +854,10 @@ export function RecordScreen({
             styles.logTabButton,
             recordDetailTab === "exercise" ? styles.logTabButtonActive : null
           ]}
-          onPress={() => setRecordDetailTab("exercise")}
+          onPress={() => {
+            setRecordDetailTab("exercise");
+            setExerciseSectionExpanded(true);
+          }}
         >
           <Text
             style={[
@@ -882,7 +887,7 @@ export function RecordScreen({
       </View>
 
       {recordDetailTab === "food" ? (
-        <View style={styles.foodCard}>
+        <>
           <Pressable
             style={styles.foodCardHeader}
             onPress={() => setFoodSectionExpanded((current) => !current)}
@@ -929,22 +934,34 @@ export function RecordScreen({
                   ))}
                 </View>
               )}
-
-              <TouchableOpacity
-                style={styles.addFoodButton}
-                onPress={openFoodComposerModal}
-                disabled={!user || loading || savingFoodConsumption}
-              >
-                <Text style={styles.addFoodButtonText}>+ Add Food Log</Text>
-              </TouchableOpacity>
             </>
           ) : null}
-        </View>
+          <TouchableOpacity
+            style={styles.addFoodButton}
+            onPress={openFoodComposerModal}
+            disabled={!user || loading || savingFoodConsumption}
+          >
+            <Text style={styles.addFoodButtonText}>+ Add Food Log</Text>
+          </TouchableOpacity>
+        </>
       ) : null}
 
       {recordDetailTab === "exercise" ? (
         <>
-          <Text style={appStyles.sectionTitle}>Exercises</Text>
+          <Pressable
+            style={styles.exerciseLogHeader}
+            onPress={() => setExerciseSectionExpanded((current) => !current)}
+          >
+            <View>
+              <Text style={styles.exerciseLogTitle}>Exercise Log</Text>
+              <Text style={styles.exerciseLogSubtitle}>
+                {exerciseEntryCount} {exerciseEntryLabel} for {selectedDate}
+              </Text>
+            </View>
+            <Text style={styles.foodCardChevron}>{exerciseSectionExpanded ? "▾" : "▸"}</Text>
+          </Pressable>
+          {exerciseSectionExpanded ? (
+            <>
           {(recordDetail?.exercises ?? []).length === 0 ? (
             <View style={styles.emptyStateCard}>
               <Text style={styles.emptyStateTitle}>No exercises yet</Text>
@@ -959,236 +976,234 @@ export function RecordScreen({
 
               return (
                 <View key={item.id} style={styles.exerciseCard}>
-                <View style={styles.exerciseCardHeader}>
-                  <Pressable
-                    style={styles.exerciseHeaderTapArea}
-                    onPress={() => toggleExerciseExpanded(item.id)}
-                  >
-                    <View style={styles.exerciseHeaderLeft}>
-                      {item.exerciseItemImageUrl ? (
-                        <Image source={{ uri: item.exerciseItemImageUrl }} style={styles.exerciseThumb} />
-                      ) : (
-                        <View style={styles.exerciseThumbPlaceholder}>
-                          <Text style={styles.exerciseThumbPlaceholderText}>No Image</Text>
-                        </View>
-                      )}
-                      <View style={styles.exerciseHeaderText}>
-                        <Text style={styles.exerciseTitle}>{item.exerciseItemName}</Text>
-                        <Text style={styles.exerciseSubtitle}>
-                          {completedSetCountByExerciseId[item.id] ?? 0} sets
-                        </Text>
-                      </View>
-                    </View>
-                  </Pressable>
-                  <TouchableOpacity
-                    style={styles.exerciseMenuButton}
-                    onPress={() => openExerciseMenu(item)}
-                    disabled={loading}
-                  >
-                    <Text style={styles.exerciseMenuButtonText}>⋮</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {isExpanded ? (
-                  <>
-                    {!detail ? (
-                      <View style={styles.loadingExerciseCard}>
-                        <Text style={styles.statusText}>Loading sets...</Text>
-                      </View>
-                    ) : (
-                      <>
-                        <View style={styles.setTableHeader}>
-                          <Text style={[styles.setHeaderText, styles.colSet]}>SET</Text>
-                          <Text style={[styles.setHeaderText, styles.colWeight]}>KG</Text>
-                          <Text style={[styles.setHeaderText, styles.colReps]}>REPS</Text>
-                          <Text style={[styles.setHeaderText, styles.colNotes]}>NOTES</Text>
-                          <Text style={[styles.setHeaderText, styles.colCheck]}>✓</Text>
-                        </View>
-
-                        {detail.sets.length === 0 ? (
-                          <View style={styles.emptySetCard}>
-                            <Text style={appStyles.emptyText}>No sets yet.</Text>
-                          </View>
+                  <View style={styles.exerciseCardHeader}>
+                    <Pressable
+                      style={styles.exerciseHeaderTapArea}
+                      onPress={() => toggleExerciseExpanded(item.id)}
+                    >
+                      <View style={styles.exerciseHeaderLeft}>
+                        {item.exerciseItemImageUrl ? (
+                          <Image source={{ uri: item.exerciseItemImageUrl }} style={styles.exerciseThumb} />
                         ) : (
-                          detail.sets.map((setItem, index) => {
-                            const draft = setDrafts[setItem.id] ?? {
-                              reps: String(setItem.reps),
-                              weight: String(setItem.weight),
-                              notes: setItem.notes ?? ""
-                            };
-                            const isCompleted = setItem.isCompleted;
-                            return (
-                              <View key={setItem.id} style={styles.setRowSwipeWrap}>
-                                <SwipeActionRow
-                                  onAction={() => deleteSet(item.id, setItem.id)}
-                                  disabled={loading || Boolean(savingSetIds[setItem.id])}
-                                  borderRadius={0}
-                                  marginBottom={0}
-                                  actionLabel="Delete"
-                                >
-                                  <View
-                                    style={[
-                                      styles.setRowWrap,
-                                      index % 2 === 0 ? styles.setRowEven : styles.setRowOdd,
-                                      isCompleted ? styles.setRowCompleted : null
-                                    ]}
+                          <View style={styles.exerciseThumbPlaceholder}>
+                            <Text style={styles.exerciseThumbPlaceholderText}>No Image</Text>
+                          </View>
+                        )}
+                        <View style={styles.exerciseHeaderText}>
+                          <Text style={styles.exerciseTitle}>{item.exerciseItemName}</Text>
+                          <Text style={styles.exerciseSubtitle}>
+                            {completedSetCountByExerciseId[item.id] ?? 0} sets
+                          </Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                    <TouchableOpacity
+                      style={styles.exerciseMenuButton}
+                      onPress={() => openExerciseMenu(item)}
+                      disabled={loading}
+                    >
+                      <Text style={styles.exerciseMenuButtonText}>⋮</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {isExpanded ? (
+                    <>
+                      {!detail ? (
+                        <View style={styles.loadingExerciseCard}>
+                          <Text style={styles.statusText}>Loading sets...</Text>
+                        </View>
+                      ) : (
+                        <>
+                          <View style={styles.setTableHeader}>
+                            <Text style={[styles.setHeaderText, styles.colSet]}>SET</Text>
+                            <Text style={[styles.setHeaderText, styles.colWeight]}>KG</Text>
+                            <Text style={[styles.setHeaderText, styles.colReps]}>REPS</Text>
+                            <Text style={[styles.setHeaderText, styles.colNotes]}>NOTES</Text>
+                            <Text style={[styles.setHeaderText, styles.colCheck]}>✓</Text>
+                          </View>
+
+                          {detail.sets.length === 0 ? (
+                            <View style={styles.emptySetCard}>
+                              <Text style={appStyles.emptyText}>No sets yet.</Text>
+                            </View>
+                          ) : (
+                            detail.sets.map((setItem, index) => {
+                              const draft = setDrafts[setItem.id] ?? {
+                                reps: String(setItem.reps),
+                                weight: String(setItem.weight),
+                                notes: setItem.notes ?? ""
+                              };
+                              const isCompleted = setItem.isCompleted;
+                              return (
+                                <View key={setItem.id} style={styles.setRowSwipeWrap}>
+                                  <SwipeActionRow
+                                    onAction={() => deleteSet(item.id, setItem.id)}
+                                    disabled={loading || Boolean(savingSetIds[setItem.id])}
+                                    borderRadius={0}
+                                    marginBottom={0}
+                                    actionLabel="Delete"
                                   >
-                                    <View style={styles.setRow}>
-                                      <Text style={[styles.setCellText, styles.colSet, isCompleted ? styles.setCellTextCompleted : null]}>
-                                        {index + 1}
-                                      </Text>
-                                      <TextInput
-                                        style={[styles.setRowInput, styles.colWeight, isCompleted ? styles.setRowInputCompleted : null]}
-                                        value={draft.weight}
-                                        onChangeText={(text) =>
-                                          setSetDraft(item.id, setItem.id, {
-                                            reps: draft.reps,
-                                            weight: sanitizeWeightInput(text),
-                                            notes: draft.notes
-                                          })
-                                        }
-                                        keyboardType="decimal-pad"
-                                        inputAccessoryViewID={DONE_BAR_ID}
-                                        placeholder="0"
-                                        placeholderTextColor="#78786C"
-                                        onBlur={() => saveSet(item.id, setItem.id)}
-                                      />
-                                      <TextInput
-                                        style={[styles.setRowInput, styles.colReps, isCompleted ? styles.setRowInputCompleted : null]}
-                                        value={draft.reps}
-                                        onChangeText={(text) =>
-                                          setSetDraft(item.id, setItem.id, {
-                                            reps: sanitizeIntegerInput(text),
-                                            weight: draft.weight,
-                                            notes: draft.notes
-                                          })
-                                        }
-                                        keyboardType="numeric"
-                                        inputAccessoryViewID={DONE_BAR_ID}
-                                        placeholder="0"
-                                        placeholderTextColor="#78786C"
-                                        onBlur={() => saveSet(item.id, setItem.id)}
-                                      />
-                                      <View style={styles.colNotes}>
-                                        <TouchableOpacity
-                                          style={styles.notePill}
-                                          onPress={() =>
-                                            openSetNotesSheet({
-                                              exerciseId: item.id,
-                                              setId: setItem.id,
-                                              setNumber: index + 1,
-                                              exerciseName: item.exerciseItemName
+                                    <View
+                                      style={[
+                                        styles.setRowWrap,
+                                        index % 2 === 0 ? styles.setRowEven : styles.setRowOdd,
+                                        isCompleted ? styles.setRowCompleted : null
+                                      ]}
+                                    >
+                                      <View style={styles.setRow}>
+                                        <Text style={[styles.setCellText, styles.colSet, isCompleted ? styles.setCellTextCompleted : null]}>
+                                          {index + 1}
+                                        </Text>
+                                        <TextInput
+                                          style={[styles.setRowInput, styles.colWeight, isCompleted ? styles.setRowInputCompleted : null]}
+                                          value={draft.weight}
+                                          onChangeText={(text) =>
+                                            setSetDraft(item.id, setItem.id, {
+                                              reps: draft.reps,
+                                              weight: sanitizeWeightInput(text),
+                                              notes: draft.notes
                                             })
                                           }
-                                          disabled={loading || Boolean(savingSetIds[setItem.id])}
-                                        >
-                                          <Text style={styles.notePillText}>
-                                            {draft.notes.trim().length > 0 ? "View" : "Add"}
-                                          </Text>
-                                        </TouchableOpacity>
-                                      </View>
-                                      <View style={styles.colCheck}>
-                                        <Pressable
-                                          style={[styles.checkPill, isCompleted ? styles.checkPillCompleted : null]}
-                                          onPress={() => toggleSetCompleted(item.id, setItem.id)}
-                                          disabled={loading || Boolean(savingSetIds[setItem.id])}
-                                        >
-                                          <Text style={styles.checkPillText}>
-                                            {savingSetIds[setItem.id] ? "..." : "✓"}
-                                          </Text>
-                                        </Pressable>
+                                          keyboardType="decimal-pad"
+                                          inputAccessoryViewID={DONE_BAR_ID}
+                                          placeholder="0"
+                                          placeholderTextColor="#78786C"
+                                          onBlur={() => saveSet(item.id, setItem.id)}
+                                        />
+                                        <TextInput
+                                          style={[styles.setRowInput, styles.colReps, isCompleted ? styles.setRowInputCompleted : null]}
+                                          value={draft.reps}
+                                          onChangeText={(text) =>
+                                            setSetDraft(item.id, setItem.id, {
+                                              reps: sanitizeIntegerInput(text),
+                                              weight: draft.weight,
+                                              notes: draft.notes
+                                            })
+                                          }
+                                          keyboardType="numeric"
+                                          inputAccessoryViewID={DONE_BAR_ID}
+                                          placeholder="0"
+                                          placeholderTextColor="#78786C"
+                                          onBlur={() => saveSet(item.id, setItem.id)}
+                                        />
+                                        <View style={styles.colNotes}>
+                                          <TouchableOpacity
+                                            style={styles.notePill}
+                                            onPress={() =>
+                                              openSetNotesSheet({
+                                                exerciseId: item.id,
+                                                setId: setItem.id,
+                                                setNumber: index + 1,
+                                                exerciseName: item.exerciseItemName
+                                              })
+                                            }
+                                            disabled={loading || Boolean(savingSetIds[setItem.id])}
+                                          >
+                                            <Text style={styles.notePillText}>
+                                              {draft.notes.trim().length > 0 ? "View" : "Add"}
+                                            </Text>
+                                          </TouchableOpacity>
+                                        </View>
+                                        <View style={styles.colCheck}>
+                                          <Pressable
+                                            style={[styles.checkPill, isCompleted ? styles.checkPillCompleted : null]}
+                                            onPress={() => toggleSetCompleted(item.id, setItem.id)}
+                                            disabled={loading || Boolean(savingSetIds[setItem.id])}
+                                          >
+                                            <Text style={styles.checkPillText}>
+                                              {savingSetIds[setItem.id] ? "..." : "✓"}
+                                            </Text>
+                                          </Pressable>
+                                        </View>
                                       </View>
                                     </View>
-                                  </View>
-                                </SwipeActionRow>
-                              </View>
-                            );
-                          })
-                        )}
+                                  </SwipeActionRow>
+                                </View>
+                              );
+                            })
+                          )}
 
-                        <TouchableOpacity
-                          style={styles.addSetSimpleButton}
-                          onPress={() => {
-                            addSetForExercise(item.id).catch(() => {});
-                          }}
-                          disabled={loading || !user}
-                        >
-                          <Text style={styles.addSetSimpleButtonText}>+ Add Set</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.addSetSimpleButton}
-                          onPress={() => {
-                            openAdviceSheetForExercise(item);
-                          }}
-                          disabled={loading || !user}
-                        >
-                          <Text style={styles.addSetSimpleButtonText}>Add AI Recommended Sets</Text>
-                        </TouchableOpacity>
-
-                      </>
-                    )}
-                  </>
-                ) : null}
-              </View>
+                          <TouchableOpacity
+                            style={styles.addSetSimpleButton}
+                            onPress={() => {
+                              addSetForExercise(item.id).catch(() => {});
+                            }}
+                            disabled={loading || !user}
+                          >
+                            <Text style={styles.addSetSimpleButtonText}>+ Add Set</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.addSetSimpleButton}
+                            onPress={() => {
+                              openAdviceSheetForExercise(item);
+                            }}
+                            disabled={loading || !user}
+                          >
+                            <Text style={styles.addSetSimpleButtonText}>Add AI Recommended Sets</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </>
+                  ) : null}
+                </View>
               );
             })
           )}
-        </>
-      ) : null}
-
-      {recordDetailTab === "exercise" ? (
-        <View style={styles.templateActionStack}>
-          <View style={styles.templateActionCard}>
-            <TouchableOpacity
-              style={[
-                styles.openAddModalButton,
-                loading || !user ? styles.primaryActionButtonDisabled : null
-              ]}
-              onPress={openExerciseSearchModal}
-              disabled={loading || !user}
-            >
-              <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
-            </TouchableOpacity>
-            <View style={styles.templateSecondaryActionRow}>
+          </>
+          ) : null}
+          <View style={styles.templateActionStack}>
+            <View style={styles.templateActionCard}>
               <TouchableOpacity
                 style={[
-                  styles.secondaryActionButton,
-                  !canSaveTemplate ? styles.secondaryActionButtonDisabled : null
+                  styles.openAddModalButton,
+                  loading || !user ? styles.primaryActionButtonDisabled : null
                 ]}
-                onPress={openTemplateSaveModal}
-                disabled={!canSaveTemplate}
+                onPress={openExerciseSearchModal}
+                disabled={loading || !user}
               >
-                <Text
-                  style={[
-                    styles.secondaryActionButtonText,
-                    !canSaveTemplate ? styles.secondaryActionButtonTextDisabled : null
-                  ]}
-                >
-                  Save Template
-                </Text>
+                <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.tertiaryActionButton,
-                  !canLoadTemplate ? styles.secondaryActionButtonDisabled : null
-                ]}
-                onPress={() => {
-                  openTemplateLoadModal().catch(() => {});
-                }}
-                disabled={!canLoadTemplate}
-              >
-                <Text
+              <View style={styles.templateSecondaryActionRow}>
+                <TouchableOpacity
                   style={[
-                    styles.tertiaryActionButtonText,
-                    !canLoadTemplate ? styles.secondaryActionButtonTextDisabled : null
+                    styles.secondaryActionButton,
+                    !canSaveTemplate ? styles.secondaryActionButtonDisabled : null
                   ]}
+                  onPress={openTemplateSaveModal}
+                  disabled={!canSaveTemplate}
                 >
-                  Load Template
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.secondaryActionButtonText,
+                      !canSaveTemplate ? styles.secondaryActionButtonTextDisabled : null
+                    ]}
+                  >
+                    Save Template
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tertiaryActionButton,
+                    !canLoadTemplate ? styles.secondaryActionButtonDisabled : null
+                  ]}
+                  onPress={() => {
+                    openTemplateLoadModal().catch(() => {});
+                  }}
+                  disabled={!canLoadTemplate}
+                >
+                  <Text
+                    style={[
+                      styles.tertiaryActionButtonText,
+                      !canLoadTemplate ? styles.secondaryActionButtonTextDisabled : null
+                    ]}
+                  >
+                    Load Template
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </>
       ) : null}
 
       <Modal
@@ -2203,15 +2218,25 @@ const styles = StyleSheet.create({
     color: "#78786C",
     fontSize: 12
   },
-  foodCard: {
+  exerciseLogHeader: {
     marginTop: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#DED8CF",
-    backgroundColor: "#FEFEFA",
-    padding: 12
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  exerciseLogTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#2C2C24"
+  },
+  exerciseLogSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#78786C"
   },
   foodCardHeader: {
+    marginTop: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between"
@@ -2514,7 +2539,7 @@ const styles = StyleSheet.create({
     fontWeight: "600"
   },
   templateActionStack: {
-    marginTop: 4,
+    marginTop: 8,
     gap: 8
   },
   templateActionCard: {
@@ -2530,8 +2555,8 @@ const styles = StyleSheet.create({
   },
   openAddModalButton: {
     borderRadius: 999,
-    paddingVertical: 13,
-    paddingHorizontal: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#5D7052",
@@ -2546,7 +2571,7 @@ const styles = StyleSheet.create({
   },
   openAddModalButtonText: {
     color: "#FEFEFA",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800"
   },
   primaryActionButtonDisabled: {
