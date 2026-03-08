@@ -12,7 +12,7 @@ export function AuthScreen({ loading, error, onGoogle, onApple }: AuthScreenProp
   return (
     <View style={styles.container}>
       <View pointerEvents="none" style={styles.blob} />
-      <Text style={styles.title}>Welcome to GymTracker</Text>
+      <Text style={styles.title}>Welcome to IntelliFit</Text>
       <Text style={styles.subtitle}>Sign in to sync your workouts and profile across devices.</Text>
       <Pressable style={({ pressed }) => [styles.primaryButton, withPressScale(pressed)]} onPress={onGoogle} disabled={loading}>
         <Text style={styles.primaryButtonLabel}>Continue with Google</Text>
