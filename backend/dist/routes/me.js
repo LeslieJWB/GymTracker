@@ -8,6 +8,7 @@ const profileSchema = z.object({
     heightCm: z.number().min(50).max(280).nullable().optional(),
     gender: z.string().trim().min(1).max(30).nullable().optional(),
     defaultBodyWeightKg: z.number().min(20).max(400).nullable().optional(),
+    defaultBodyFatPercentage: z.number().min(3).max(60).nullable().optional(),
     dailyCalorieTargetKcal: z.number().min(800).max(6000).nullable().optional(),
     dailyProteinTargetG: z.number().min(30).max(400).nullable().optional(),
     dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -39,6 +40,7 @@ meRouter.get("/me/profile", async (req, res) => {
           height_cm::text,
           gender,
           default_body_weight_kg::text,
+          default_body_fat_percentage::text,
           daily_calorie_target_kcal::text,
           daily_protein_target_g::text,
           date_of_birth::text,
@@ -54,6 +56,7 @@ meRouter.get("/me/profile", async (req, res) => {
             heightCm: row?.height_cm ? Number(row.height_cm) : null,
             gender: row?.gender ?? null,
             defaultBodyWeightKg: row?.default_body_weight_kg ? Number(row.default_body_weight_kg) : null,
+            defaultBodyFatPercentage: row?.default_body_fat_percentage ? Number(row.default_body_fat_percentage) : null,
             dailyCalorieTargetKcal: row?.daily_calorie_target_kcal ? Number(row.daily_calorie_target_kcal) : null,
             dailyProteinTargetG: row?.daily_protein_target_g ? Number(row.daily_protein_target_g) : null,
             dateOfBirth: row?.date_of_birth ?? null,
@@ -79,6 +82,7 @@ meRouter.put("/me/profile", async (req, res) => {
         const hasHeightCm = Object.prototype.hasOwnProperty.call(data, "heightCm");
         const hasGender = Object.prototype.hasOwnProperty.call(data, "gender");
         const hasDefaultBodyWeightKg = Object.prototype.hasOwnProperty.call(data, "defaultBodyWeightKg");
+        const hasDefaultBodyFatPercentage = Object.prototype.hasOwnProperty.call(data, "defaultBodyFatPercentage");
         const hasDailyCalorieTargetKcal = Object.prototype.hasOwnProperty.call(data, "dailyCalorieTargetKcal");
         const hasDailyProteinTargetG = Object.prototype.hasOwnProperty.call(data, "dailyProteinTargetG");
         const hasDateOfBirth = Object.prototype.hasOwnProperty.call(data, "dateOfBirth");
@@ -89,6 +93,7 @@ meRouter.put("/me/profile", async (req, res) => {
           height_cm::text,
           gender,
           default_body_weight_kg::text,
+          default_body_fat_percentage::text,
           date_of_birth::text
         FROM users
         WHERE id = $1
@@ -102,6 +107,11 @@ meRouter.put("/me/profile", async (req, res) => {
             : currentRow?.default_body_weight_kg
                 ? Number(currentRow.default_body_weight_kg)
                 : null;
+        const nextDefaultBodyFatPercentage = hasDefaultBodyFatPercentage
+            ? data.defaultBodyFatPercentage ?? null
+            : currentRow?.default_body_fat_percentage
+                ? Number(currentRow.default_body_fat_percentage)
+                : null;
         const nextDateOfBirth = hasDateOfBirth ? data.dateOfBirth ?? null : currentRow?.date_of_birth ?? null;
         const canInitialize = wantsInitialize &&
             nextHeightCm !== null &&
@@ -114,13 +124,14 @@ meRouter.put("/me/profile", async (req, res) => {
           height_cm = CASE WHEN $2::boolean THEN $3 ELSE height_cm END,
           gender = CASE WHEN $4::boolean THEN $5 ELSE gender END,
           default_body_weight_kg = CASE WHEN $6::boolean THEN $7 ELSE default_body_weight_kg END,
-          daily_calorie_target_kcal = CASE WHEN $8::boolean THEN $9 ELSE daily_calorie_target_kcal END,
-          daily_protein_target_g = CASE WHEN $10::boolean THEN $11 ELSE daily_protein_target_g END,
-          date_of_birth = CASE WHEN $12::boolean THEN $13::date ELSE date_of_birth END,
-          global_llm_prompt = CASE WHEN $14::boolean THEN $15 ELSE global_llm_prompt END,
+          default_body_fat_percentage = CASE WHEN $8::boolean THEN $9::numeric(4,1) ELSE default_body_fat_percentage END,
+          daily_calorie_target_kcal = CASE WHEN $10::boolean THEN $11 ELSE daily_calorie_target_kcal END,
+          daily_protein_target_g = CASE WHEN $12::boolean THEN $13 ELSE daily_protein_target_g END,
+          date_of_birth = CASE WHEN $14::boolean THEN $15::date ELSE date_of_birth END,
+          global_llm_prompt = CASE WHEN $16::boolean THEN $17 ELSE global_llm_prompt END,
           profile_initialized = CASE
             WHEN profile_initialized THEN true
-            WHEN $16::boolean THEN true
+            WHEN $18::boolean THEN true
             ELSE false
           END,
           updated_at = now()
@@ -129,6 +140,7 @@ meRouter.put("/me/profile", async (req, res) => {
           height_cm::text,
           gender,
           default_body_weight_kg::text,
+          default_body_fat_percentage::text,
           daily_calorie_target_kcal::text,
           daily_protein_target_g::text,
           date_of_birth::text,
@@ -142,6 +154,8 @@ meRouter.put("/me/profile", async (req, res) => {
             data.gender?.trim() || null,
             hasDefaultBodyWeightKg,
             data.defaultBodyWeightKg ?? null,
+            hasDefaultBodyFatPercentage,
+            data.defaultBodyFatPercentage ?? null,
             hasDailyCalorieTargetKcal,
             data.dailyCalorieTargetKcal ?? null,
             hasDailyProteinTargetG,
@@ -187,6 +201,7 @@ meRouter.put("/me/profile", async (req, res) => {
             heightCm: row.height_cm ? Number(row.height_cm) : null,
             gender: row.gender,
             defaultBodyWeightKg: row.default_body_weight_kg ? Number(row.default_body_weight_kg) : null,
+            defaultBodyFatPercentage: row.default_body_fat_percentage ? Number(row.default_body_fat_percentage) : null,
             dailyCalorieTargetKcal: row.daily_calorie_target_kcal ? Number(row.daily_calorie_target_kcal) : null,
             dailyProteinTargetG: row.daily_protein_target_g ? Number(row.daily_protein_target_g) : null,
             dateOfBirth: row.date_of_birth,

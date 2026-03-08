@@ -236,6 +236,12 @@ export function StatisticsScreen({
       date: row.date,
       value: row.totalProteinG
     }));
+  const bodyFatPoints = weightRecords
+    .filter((row): row is BodyWeightRecord & { bodyFatPercentage: number } => row.bodyFatPercentage !== null)
+    .map((row) => ({
+      date: row.date,
+      value: row.bodyFatPercentage
+    }));
 
   async function handlePullToRefresh(): Promise<void> {
     if (loading || isRefreshing) {
@@ -295,14 +301,24 @@ export function StatisticsScreen({
       </View>
 
       {statisticsTab === "body" ? (
-        <SingleLineCard
-          title="Body Weight Trend"
-          emptyText="No weight records yet."
-          unitSuffix=" kg"
-          decimalPlaces={1}
-          lineColor={palette.primary}
-          points={weightRecords.map((row) => ({ date: row.date, value: row.weightKg }))}
-        />
+        <>
+          <SingleLineCard
+            title="Body Weight Trend"
+            emptyText="No weight records yet."
+            unitSuffix=" kg"
+            decimalPlaces={1}
+            lineColor={palette.primary}
+            points={weightRecords.map((row) => ({ date: row.date, value: row.weightKg }))}
+          />
+          <SingleLineCard
+            title="Body Fat Percentage Trend"
+            emptyText="No body fat records yet."
+            unitSuffix="%"
+            decimalPlaces={1}
+            lineColor={palette.secondary}
+            points={bodyFatPoints}
+          />
+        </>
       ) : null}
 
       {statisticsTab === "exercise" ? (

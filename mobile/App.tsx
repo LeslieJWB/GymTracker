@@ -93,6 +93,10 @@ function sanitizeWeightInput(value: string): string {
   return `${whole}.${decimals.join("")}`;
 }
 
+function sanitizeBodyFatInput(value: string): string {
+  return sanitizeWeightInput(value);
+}
+
 function digitsOnly(value: string): string {
   return value.replace(/\D/g, "");
 }
@@ -182,6 +186,8 @@ export default function App() {
   const [deletingFoodIds, setDeletingFoodIds] = useState<DeletingFoodIds>({});
   const [bodyWeightDraft, setBodyWeightDraft] = useState("");
   const [savedBodyWeightKg, setSavedBodyWeightKg] = useState<number | null>(null);
+  const [bodyFatDraft, setBodyFatDraft] = useState("");
+  const [savedBodyFatPercentage, setSavedBodyFatPercentage] = useState<number | null>(null);
   const [savingBodyWeight, setSavingBodyWeight] = useState(false);
   const [statisticsLoading, setStatisticsLoading] = useState(false);
   const [weightHistory, setWeightHistory] = useState<BodyWeightRecord[]>([]);
@@ -192,9 +198,11 @@ export default function App() {
   const [dailyTargetsDate, setDailyTargetsDate] = useState<string | null>(null);
   const [dailyCheckInThemeDraft, setDailyCheckInThemeDraft] = useState("");
   const [dailyCheckInWeightDraft, setDailyCheckInWeightDraft] = useState("");
+  const [dailyCheckInBodyFatDraft, setDailyCheckInBodyFatDraft] = useState("");
   const [dailyCheckInSubmitting, setDailyCheckInSubmitting] = useState(false);
   const [onboardingGender, setOnboardingGender] = useState("");
   const [onboardingDefaultWeight, setOnboardingDefaultWeight] = useState("");
+  const [onboardingDefaultBodyFat, setOnboardingDefaultBodyFat] = useState("");
   const [onboardingHeight, setOnboardingHeight] = useState("");
   const [onboardingCalorieTarget, setOnboardingCalorieTarget] = useState("");
   const [onboardingProteinTarget, setOnboardingProteinTarget] = useState("");
@@ -281,8 +289,10 @@ export default function App() {
     );
   }
 
-  async function loadBodyWeightByDate(date: string): Promise<{ date: string; weightKg: number | null }> {
-    return apiJson<{ date: string; weightKg: number | null }>(
+  async function loadBodyWeightByDate(
+    date: string
+  ): Promise<{ date: string; weightKg: number | null; bodyFatPercentage: number | null }> {
+    return apiJson<{ date: string; weightKg: number | null; bodyFatPercentage: number | null }>(
       `/body-weight/by-date?date=${encodeURIComponent(date)}`
     );
   }
@@ -297,6 +307,8 @@ export default function App() {
       setCalendarSummaries([]);
       setBodyWeightDraft("");
       setSavedBodyWeightKg(null);
+      setBodyFatDraft("");
+      setSavedBodyFatPercentage(null);
       setWeightHistory([]);
       setNutritionHistory([]);
       setStatisticsExerciseItemId(null);
@@ -305,8 +317,10 @@ export default function App() {
       setDailyTargetsDate(null);
       setDailyCheckInThemeDraft("");
       setDailyCheckInWeightDraft("");
+      setDailyCheckInBodyFatDraft("");
       setOnboardingGender("");
       setOnboardingDefaultWeight("");
+      setOnboardingDefaultBodyFat("");
       setOnboardingHeight("");
       setOnboardingDateOfBirth("");
       setOnboardingLlmPrompt("");
@@ -334,6 +348,8 @@ export default function App() {
         setRecordThemeDraft("");
         setSavedBodyWeightKg(null);
         setBodyWeightDraft("");
+        setSavedBodyFatPercentage(null);
+        setBodyFatDraft("");
         setDailyNutritionTargets(null);
         setDailyTargetsDate(null);
         return;
@@ -350,6 +366,7 @@ export default function App() {
         loadBodyWeightByDate(today)
       ]);
       const weight = weightPayload.weightKg;
+      const bodyFat = weightPayload.bodyFatPercentage;
       if (detail) {
         setRecordDetail(
           applyExerciseImageFallback({
@@ -394,8 +411,11 @@ export default function App() {
       }
       setSavedBodyWeightKg(weight);
       setBodyWeightDraft(weight === null ? "" : String(weight));
+      setSavedBodyFatPercentage(bodyFat);
+      setBodyFatDraft(bodyFat === null ? "" : String(bodyFat));
       setDailyCheckInThemeDraft(detail?.theme ?? "");
       setDailyCheckInWeightDraft(weight === null ? "" : String(weight));
+      setDailyCheckInBodyFatDraft(bodyFat === null ? "" : String(bodyFat));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setBootstrapError(message);
@@ -409,6 +429,7 @@ export default function App() {
     heightCm: number | null;
     gender: string | null;
     defaultBodyWeightKg: number | null;
+    defaultBodyFatPercentage: number | null;
     dailyCalorieTargetKcal: number | null;
     dailyProteinTargetG: number | null;
     dateOfBirth: string | null;
@@ -418,6 +439,15 @@ export default function App() {
     const showSuccessAlert = options?.showSuccessAlert ?? true;
     setSavingProfile(true);
     try {
+      if (
+        payload.defaultBodyFatPercentage !== null &&
+        (!Number.isFinite(payload.defaultBodyFatPercentage) ||
+          payload.defaultBodyFatPercentage < 3 ||
+          payload.defaultBodyFatPercentage > 60)
+      ) {
+        Alert.alert("Invalid body fat", "Default body fat percentage must be between 3 and 60.");
+        return;
+      }
       if (
         payload.dailyCalorieTargetKcal !== null &&
         (!Number.isFinite(payload.dailyCalorieTargetKcal) ||
@@ -585,8 +615,11 @@ export default function App() {
       }
       setSavedBodyWeightKg(weight.weightKg);
       setBodyWeightDraft(weight.weightKg === null ? "" : String(weight.weightKg));
+      setSavedBodyFatPercentage(weight.bodyFatPercentage);
+      setBodyFatDraft(weight.bodyFatPercentage === null ? "" : String(weight.bodyFatPercentage));
       setDailyCheckInThemeDraft(detail?.theme ?? "");
       setDailyCheckInWeightDraft(weight.weightKg === null ? "" : String(weight.weightKg));
+      setDailyCheckInBodyFatDraft(weight.bodyFatPercentage === null ? "" : String(weight.bodyFatPercentage));
       setScreen("record");
     } catch (error) {
       Alert.alert("Failed to open record", String(error));
@@ -1476,10 +1509,37 @@ export default function App() {
     }
   }
 
-  async function saveBodyWeightByDate(date: string, draft: string): Promise<void> {
-    const normalized = draft.trim();
+  async function saveBodyMetricsByDate(date: string, weightDraft: string, bodyFatInput: string): Promise<void> {
+    const normalized = weightDraft.trim();
     if (!normalized) {
-      Alert.alert("Missing weight", "Please enter your body weight in kg.");
+      if (savedBodyWeightKg === null && savedBodyFatPercentage === null) return;
+      setSavingBodyWeight(true);
+      try {
+        await apiJson<{ date: string; deleted: boolean }>(
+          `/body-weight/by-date?date=${encodeURIComponent(date)}`,
+          { method: "DELETE" }
+        );
+        setSavedBodyWeightKg(null);
+        setBodyWeightDraft("");
+        setSavedBodyFatPercentage(null);
+        if (date === todayDate()) {
+          setDailyCheckInWeightDraft("");
+        }
+        if (date === todayDate()) {
+          try {
+            const targets = await fetchDailyNutritionTargets(date);
+            setDailyNutritionTargets(targets);
+            setDailyTargetsDate(date);
+          } catch {
+            setDailyNutritionTargets(null);
+            setDailyTargetsDate(null);
+          }
+        }
+      } catch (error) {
+        Alert.alert("Failed to delete body metrics", String(error));
+      } finally {
+        setSavingBodyWeight(false);
+      }
       return;
     }
     const numeric = Number(normalized.replace(",", "."));
@@ -1487,22 +1547,38 @@ export default function App() {
       Alert.alert("Invalid weight", "Body weight must be between 20 and 400 kg.");
       return;
     }
-
+    const bodyFatTrimmed = bodyFatInput.trim();
+    let bodyFatPercentage: number | null = null;
+    if (bodyFatTrimmed.length > 0) {
+      const bodyFatNumeric = Number(bodyFatTrimmed.replace(",", "."));
+      if (!Number.isFinite(bodyFatNumeric) || bodyFatNumeric < 3 || bodyFatNumeric > 60) {
+        Alert.alert("Invalid body fat", "Body fat percentage must be between 3 and 60.");
+        return;
+      }
+      bodyFatPercentage = Number(bodyFatNumeric.toFixed(1));
+    }
     setSavingBodyWeight(true);
     try {
-      const payload = await apiJson<{ date: string; weightKg: number }>(
+      const payload = await apiJson<{ date: string; weightKg: number; bodyFatPercentage: number | null }>(
         "/body-weight/by-date",
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             date,
-            weightKg: Number(numeric.toFixed(2))
+            weightKg: Number(numeric.toFixed(2)),
+            bodyFatPercentage
           })
         }
       );
       setSavedBodyWeightKg(payload.weightKg);
       setBodyWeightDraft(String(payload.weightKg));
+      setSavedBodyFatPercentage(payload.bodyFatPercentage);
+      setBodyFatDraft(payload.bodyFatPercentage === null ? "" : String(payload.bodyFatPercentage));
+      if (date === todayDate()) {
+        setDailyCheckInWeightDraft(String(payload.weightKg));
+        setDailyCheckInBodyFatDraft(payload.bodyFatPercentage === null ? "" : String(payload.bodyFatPercentage));
+      }
       if (date === todayDate()) {
         try {
           const targets = await fetchDailyNutritionTargets(date);
@@ -1514,7 +1590,7 @@ export default function App() {
         }
       }
     } catch (error) {
-      Alert.alert("Failed to save weight", String(error));
+      Alert.alert("Failed to save body metrics", String(error));
     } finally {
       setSavingBodyWeight(false);
     }
@@ -1528,12 +1604,18 @@ export default function App() {
     });
   }
 
-  async function getLatestRecordedBodyWeightKg(date: string): Promise<number | null> {
+  async function getLatestRecordedBodyMetrics(date: string): Promise<{
+    weightKg: number | null;
+    bodyFatPercentage: number | null;
+  }> {
     const payload = await apiJson<{ records: BodyWeightRecord[] }>(
       `/body-weight/history?from=${encodeURIComponent(daysAgo(3650))}&to=${encodeURIComponent(date)}`
     );
     const latest = payload.records[payload.records.length - 1];
-    return latest?.weightKg ?? null;
+    return {
+      weightKg: latest?.weightKg ?? null,
+      bodyFatPercentage: latest?.bodyFatPercentage ?? null
+    };
   }
 
   async function submitDailyCheckInForToday(): Promise<void> {
@@ -1547,7 +1629,10 @@ export default function App() {
     }
 
     let weightToPersist: number | null = null;
+    let bodyFatToPersist: number | null = null;
+    let latestRecordedMetrics: { weightKg: number | null; bodyFatPercentage: number | null } | null = null;
     const typedWeight = dailyCheckInWeightDraft.trim();
+    const typedBodyFat = dailyCheckInBodyFatDraft.trim();
     if (typedWeight.length > 0) {
       const numeric = Number(typedWeight.replace(",", "."));
       if (!Number.isFinite(numeric) || numeric < 20 || numeric > 400) {
@@ -1556,12 +1641,26 @@ export default function App() {
       }
       weightToPersist = Number(numeric.toFixed(2));
     } else {
-      const latestRecorded = await getLatestRecordedBodyWeightKg(selectedDate);
-      weightToPersist = latestRecorded ?? profile.defaultBodyWeightKg ?? null;
+      latestRecordedMetrics = await getLatestRecordedBodyMetrics(selectedDate);
+      weightToPersist = latestRecordedMetrics.weightKg ?? profile.defaultBodyWeightKg ?? null;
       if (weightToPersist === null) {
         Alert.alert("Weight required", "Please enter today's body weight or set a default body weight in onboarding.");
         return;
       }
+      bodyFatToPersist = latestRecordedMetrics.bodyFatPercentage ?? profile.defaultBodyFatPercentage ?? null;
+    }
+    if (typedBodyFat.length > 0) {
+      const bodyFatNumeric = Number(typedBodyFat.replace(",", "."));
+      if (!Number.isFinite(bodyFatNumeric) || bodyFatNumeric < 3 || bodyFatNumeric > 60) {
+        Alert.alert("Invalid body fat", "Body fat percentage must be between 3 and 60.");
+        return;
+      }
+      bodyFatToPersist = Number(bodyFatNumeric.toFixed(1));
+    } else if (bodyFatToPersist === null) {
+      const latestBodyFat = latestRecordedMetrics
+        ? latestRecordedMetrics.bodyFatPercentage
+        : (await getLatestRecordedBodyMetrics(selectedDate)).bodyFatPercentage;
+      bodyFatToPersist = latestBodyFat ?? profile.defaultBodyFatPercentage ?? null;
     }
 
     setDailyCheckInSubmitting(true);
@@ -1602,20 +1701,24 @@ export default function App() {
         rows.map((row) => (row.date === selectedDate ? { ...row, theme: updatedRecord.theme } : row))
       );
 
-      const weightPayload = await apiJson<{ date: string; weightKg: number }>(
+      const weightPayload = await apiJson<{ date: string; weightKg: number; bodyFatPercentage: number | null }>(
         "/body-weight/by-date",
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             date: selectedDate,
-            weightKg: Number(weightToPersist.toFixed(2))
+            weightKg: Number(weightToPersist.toFixed(2)),
+            bodyFatPercentage: bodyFatToPersist
           })
         }
       );
       setSavedBodyWeightKg(weightPayload.weightKg);
       setBodyWeightDraft(String(weightPayload.weightKg));
       setDailyCheckInWeightDraft(String(weightPayload.weightKg));
+      setSavedBodyFatPercentage(weightPayload.bodyFatPercentage);
+      setBodyFatDraft(weightPayload.bodyFatPercentage === null ? "" : String(weightPayload.bodyFatPercentage));
+      setDailyCheckInBodyFatDraft(weightPayload.bodyFatPercentage === null ? "" : String(weightPayload.bodyFatPercentage));
       try {
         const targets = await fetchDailyNutritionTargets(selectedDate);
         setDailyNutritionTargets(targets);
@@ -1712,6 +1815,8 @@ export default function App() {
     const gender = onboardingGender.trim();
     const dob = onboardingDateOfBirth.trim();
     const defaultWeight = Number(onboardingDefaultWeight.trim().replace(",", "."));
+    const defaultBodyFatRaw = onboardingDefaultBodyFat.trim();
+    const defaultBodyFat = defaultBodyFatRaw ? Number(defaultBodyFatRaw.replace(",", ".")) : null;
     const height = Number(onboardingHeight.trim().replace(",", "."));
     const calorieTargetRaw = onboardingCalorieTarget.trim();
     const proteinTargetRaw = onboardingProteinTarget.trim();
@@ -1725,6 +1830,13 @@ export default function App() {
     }
     if (!Number.isFinite(defaultWeight) || defaultWeight < 20 || defaultWeight > 400) {
       setOnboardingError("Default body weight must be between 20 and 400 kg.");
+      return;
+    }
+    if (
+      defaultBodyFatRaw.length > 0 &&
+      (!Number.isFinite(defaultBodyFat) || defaultBodyFat === null || defaultBodyFat < 3 || defaultBodyFat > 60)
+    ) {
+      setOnboardingError("Default body fat percentage must be between 3 and 60.");
       return;
     }
     if (!Number.isFinite(height) || height < 50 || height > 280) {
@@ -1757,6 +1869,7 @@ export default function App() {
         body: JSON.stringify({
           gender,
           defaultBodyWeightKg: Number(defaultWeight.toFixed(2)),
+          defaultBodyFatPercentage: defaultBodyFat === null ? null : Number(defaultBodyFat.toFixed(1)),
           heightCm: Number(height.toFixed(2)),
           dailyCalorieTargetKcal: calorieTarget === null ? null : Number(calorieTarget.toFixed(2)),
           dailyProteinTargetG: proteinTarget === null ? null : Number(proteinTarget.toFixed(2)),
@@ -1814,6 +1927,11 @@ export default function App() {
         ? String(profile.defaultBodyWeightKg)
         : ""
     );
+    setOnboardingDefaultBodyFat(
+      profile.defaultBodyFatPercentage !== null && Number.isFinite(profile.defaultBodyFatPercentage)
+        ? String(profile.defaultBodyFatPercentage)
+        : ""
+    );
     setOnboardingHeight(profile.heightCm !== null && Number.isFinite(profile.heightCm) ? String(profile.heightCm) : "");
     setOnboardingCalorieTarget(
       profile.dailyCalorieTargetKcal !== null && Number.isFinite(profile.dailyCalorieTargetKcal)
@@ -1835,7 +1953,8 @@ export default function App() {
     }
     setDailyCheckInThemeDraft(recordDetail?.theme ?? "");
     setDailyCheckInWeightDraft(savedBodyWeightKg === null ? "" : String(savedBodyWeightKg));
-  }, [selectedDate, recordDetail?.theme, savedBodyWeightKg]);
+    setDailyCheckInBodyFatDraft(savedBodyFatPercentage === null ? "" : String(savedBodyFatPercentage));
+  }, [selectedDate, recordDetail?.theme, savedBodyWeightKg, savedBodyFatPercentage]);
 
   useEffect(() => {
     const today = todayDate();
@@ -2035,6 +2154,24 @@ export default function App() {
               </View>
             </View>
             <View style={styles.onboardingField}>
+              <Text style={styles.onboardingLabel}>Default Body Fat % (optional)</Text>
+              <View style={styles.onboardingUnitRow}>
+                <TextInput
+                  style={styles.onboardingInput}
+                  value={onboardingDefaultBodyFat}
+                  onChangeText={(value) => setOnboardingDefaultBodyFat(sanitizeBodyFatInput(value))}
+                  keyboardType="decimal-pad"
+                  inputAccessoryViewID={DONE_BAR_ID}
+                  placeholder="e.g. 18.5"
+                  placeholderTextColor="#78786C"
+                  editable={!onboardingSubmitting}
+                />
+                <View style={styles.onboardingUnitBadge}>
+                  <Text style={styles.onboardingUnitBadgeText}>%</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.onboardingField}>
               <Text style={styles.onboardingLabel}>Height (cm)</Text>
               <View style={styles.onboardingUnitRow}>
                 <TextInput
@@ -2206,7 +2343,7 @@ export default function App() {
               <View style={styles.homeBlockedCard}>
                 <Text style={styles.homeBlockedTitle}>Daily check-in required</Text>
                 <Text style={styles.homeBlockedHint}>
-                  Add today&apos;s theme and weight so we can generate your nutrition targets.
+                  Add today&apos;s theme and weight so we can generate your nutrition targets. Body fat is optional.
                 </Text>
               </View>
             </View>
@@ -2263,9 +2400,12 @@ export default function App() {
                 bodyWeightDraft={bodyWeightDraft}
                 setBodyWeightDraft={setBodyWeightDraft}
                 savedBodyWeightKg={savedBodyWeightKg}
+                bodyFatDraft={bodyFatDraft}
+                setBodyFatDraft={setBodyFatDraft}
+                savedBodyFatPercentage={savedBodyFatPercentage}
                 savingBodyWeight={savingBodyWeight}
                 saveBodyWeight={() => {
-                  saveBodyWeightByDate(selectedDate, bodyWeightDraft).catch(() => {});
+                  saveBodyMetricsByDate(selectedDate, bodyWeightDraft, bodyFatDraft).catch(() => {});
                 }}
                 listWorkoutTemplates={() => listWorkoutTemplates()}
                 saveWorkoutTemplate={saveWorkoutTemplate}
@@ -2317,7 +2457,7 @@ export default function App() {
             <View style={styles.dailyGateCard}>
               <Text style={styles.dailyGateTitle}>Today&apos;s check-in</Text>
               <Text style={styles.dailyGateHint}>
-                Add your theme and weight to unlock your daily nutrition targets.
+                Add your theme and weight to unlock your daily nutrition targets. Body fat is optional.
               </Text>
               <View style={styles.dailyGateField}>
                 <Text style={styles.dailyGateLabel}>Theme</Text>
@@ -2341,6 +2481,19 @@ export default function App() {
                   keyboardType="decimal-pad"
                   inputAccessoryViewID={DONE_BAR_ID}
                   placeholder="Leave empty to use weight recorded before"
+                  placeholderTextColor="#78786C"
+                  editable={!dailyCheckInSubmitting}
+                />
+              </View>
+              <View style={styles.dailyGateField}>
+                <Text style={styles.dailyGateLabel}>Body Fat % (optional)</Text>
+                <TextInput
+                  style={styles.dailyGateInput}
+                  value={dailyCheckInBodyFatDraft}
+                  onChangeText={(value) => setDailyCheckInBodyFatDraft(sanitizeBodyFatInput(value))}
+                  keyboardType="decimal-pad"
+                  inputAccessoryViewID={DONE_BAR_ID}
+                  placeholder="Leave empty to use latest/default body fat"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
                 />

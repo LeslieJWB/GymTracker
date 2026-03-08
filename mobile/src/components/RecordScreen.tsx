@@ -65,6 +65,10 @@ function sanitizeWeightInput(value: string): string {
   return `${whole}.${decimals.join("")}`;
 }
 
+function sanitizeBodyFatInput(value: string): string {
+  return sanitizeWeightInput(value);
+}
+
 function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()
@@ -116,6 +120,9 @@ type RecordScreenProps = {
   bodyWeightDraft: string;
   setBodyWeightDraft: (value: string) => void;
   savedBodyWeightKg: number | null;
+  bodyFatDraft: string;
+  setBodyFatDraft: (value: string) => void;
+  savedBodyFatPercentage: number | null;
   savingBodyWeight: boolean;
   saveBodyWeight: () => void;
   listWorkoutTemplates: () => Promise<WorkoutTemplateSummary[]>;
@@ -168,6 +175,9 @@ export function RecordScreen({
   bodyWeightDraft,
   setBodyWeightDraft,
   savedBodyWeightKg,
+  bodyFatDraft,
+  setBodyFatDraft,
+  savedBodyFatPercentage,
   savingBodyWeight,
   saveBodyWeight,
   listWorkoutTemplates,
@@ -361,8 +371,18 @@ export function RecordScreen({
     : null;
   const normalizedSavedBodyWeight = savedBodyWeightKg === null ? null : Number(savedBodyWeightKg.toFixed(2));
   const bodyWeightDirty = normalizedBodyWeightDraft !== normalizedSavedBodyWeight;
+  const trimmedBodyFatDraft = bodyFatDraft.trim();
+  const parsedBodyFatDraft = Number(trimmedBodyFatDraft.replace(",", "."));
+  const hasBodyFatDraft = trimmedBodyFatDraft.length > 0;
+  const isBodyFatDraftValid =
+    !hasBodyFatDraft ||
+    (Number.isFinite(parsedBodyFatDraft) && parsedBodyFatDraft >= 3 && parsedBodyFatDraft <= 60);
+  const normalizedBodyFatDraft = hasBodyFatDraft && isBodyFatDraftValid ? Number(parsedBodyFatDraft.toFixed(1)) : null;
+  const normalizedSavedBodyFat =
+    savedBodyFatPercentage === null ? null : Number(savedBodyFatPercentage.toFixed(1));
+  const bodyFatDirty = normalizedBodyFatDraft !== normalizedSavedBodyFat;
   const checkInSaving = savingRecordTheme || savingBodyWeight;
-  const checkInDirty = themeDirty || bodyWeightDirty;
+  const checkInDirty = themeDirty || bodyWeightDirty || bodyFatDirty;
   const totalCaloriesKcal = recordDetail?.totalCaloriesKcal ?? 0;
   const totalProteinG = recordDetail?.totalProteinG ?? 0;
   const calorieTarget = dailyNutritionTargets?.recommendedCaloriesKcal ?? null;
@@ -828,13 +848,47 @@ export function RecordScreen({
               placeholderTextColor="#78786C"
               editable={Boolean(user) && !loading && !savingBodyWeight}
               onBlur={() => {
-                if (bodyWeightDirty && isBodyWeightDraftValid && !savingBodyWeight && !loading && user) {
-                  saveBodyWeight();
+                if (!savingBodyWeight && !loading && user) {
+                  const weightCleared = !hasBodyWeightDraft && savedBodyWeightKg !== null;
+                  if ((bodyWeightDirty && isBodyWeightDraftValid) || weightCleared) {
+                    saveBodyWeight();
+                  }
                 }
               }}
             />
             <View style={styles.weightUnitPill}>
               <Text style={styles.weightUnitText}>kg</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.checkInField}>
+          <Text style={styles.checkInFieldLabel}>Body Fat %</Text>
+          <View style={styles.weightInputRow}>
+            <TextInput
+              style={styles.weightInput}
+              value={bodyFatDraft}
+              onChangeText={(value) => setBodyFatDraft(sanitizeBodyFatInput(value))}
+              keyboardType="decimal-pad"
+              inputAccessoryViewID={DONE_BAR_ID}
+              placeholder="0.0"
+              placeholderTextColor="#78786C"
+              editable={Boolean(user) && !loading && !savingBodyWeight}
+              onBlur={() => {
+                if (
+                  bodyFatDirty &&
+                  isBodyFatDraftValid &&
+                  hasBodyWeightDraft &&
+                  isBodyWeightDraftValid &&
+                  !savingBodyWeight &&
+                  !loading &&
+                  user
+                ) {
+                  saveBodyWeight();
+                }
+              }}
+            />
+            <View style={styles.weightUnitPill}>
+              <Text style={styles.weightUnitText}>%</Text>
             </View>
           </View>
         </View>

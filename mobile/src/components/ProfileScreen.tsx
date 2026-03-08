@@ -9,6 +9,7 @@ type ProfileInput = {
   heightCm: string;
   gender: string;
   defaultBodyWeightKg: string;
+  defaultBodyFatPercentage: string;
   dailyCalorieTargetKcal: string;
   dailyProteinTargetG: string;
   dateOfBirth: string;
@@ -22,6 +23,7 @@ type ProfileScreenProps = {
     heightCm: number | null;
     gender: string | null;
     defaultBodyWeightKg: number | null;
+    defaultBodyFatPercentage: number | null;
     dailyCalorieTargetKcal: number | null;
     dailyProteinTargetG: number | null;
     dateOfBirth: string | null;
@@ -41,6 +43,10 @@ function sanitizeWeightInput(value: string): string {
     return whole;
   }
   return `${whole}.${decimals.join("")}`;
+}
+
+function sanitizeBodyFatInput(value: string): string {
+  return sanitizeWeightInput(value);
 }
 
 function formatDateValue(date: Date): string {
@@ -72,6 +78,7 @@ function toInput(profile: UserProfile | null): ProfileInput {
     heightCm: profile?.heightCm != null ? String(profile.heightCm) : "",
     gender: profile?.gender ?? "",
     defaultBodyWeightKg: profile?.defaultBodyWeightKg != null ? String(profile.defaultBodyWeightKg) : "",
+    defaultBodyFatPercentage: profile?.defaultBodyFatPercentage != null ? String(profile.defaultBodyFatPercentage) : "",
     dailyCalorieTargetKcal: profile?.dailyCalorieTargetKcal != null ? String(profile.dailyCalorieTargetKcal) : "",
     dailyProteinTargetG: profile?.dailyProteinTargetG != null ? String(profile.dailyProteinTargetG) : "",
     dateOfBirth: profile?.dateOfBirth ?? "",
@@ -123,6 +130,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
     profile?.heightCm,
     profile?.gender,
     profile?.defaultBodyWeightKg,
+    profile?.defaultBodyFatPercentage,
     profile?.dailyCalorieTargetKcal,
     profile?.dailyProteinTargetG,
     profile?.dateOfBirth,
@@ -239,6 +247,24 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         </View>
 
         <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Body Fat %</Text>
+          <View style={styles.unitRow}>
+            <TextInput
+              style={styles.fieldInput}
+              value={draft.defaultBodyFatPercentage}
+              onChangeText={(value) => setDraft((current) => ({ ...current, defaultBodyFatPercentage: sanitizeBodyFatInput(value) }))}
+              placeholder="0"
+              placeholderTextColor="#A29F94"
+              keyboardType="decimal-pad"
+              inputAccessoryViewID={DONE_BAR_ID}
+            />
+            <View style={styles.unitBadge}>
+              <Text style={styles.unitBadgeText}>%</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Daily Calorie Target (optional)</Text>
           <View style={styles.unitRow}>
             <TextInput
@@ -310,6 +336,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
             heightCm: draft.heightCm.trim() ? Number(draft.heightCm) : null,
             gender: draft.gender.trim() || null,
             defaultBodyWeightKg: draft.defaultBodyWeightKg.trim() ? Number(draft.defaultBodyWeightKg) : null,
+            defaultBodyFatPercentage: draft.defaultBodyFatPercentage.trim() ? Number(draft.defaultBodyFatPercentage) : null,
             dailyCalorieTargetKcal: draft.dailyCalorieTargetKcal.trim() ? Number(draft.dailyCalorieTargetKcal) : null,
             dailyProteinTargetG: draft.dailyProteinTargetG.trim() ? Number(draft.dailyProteinTargetG) : null,
             dateOfBirth: draft.dateOfBirth.trim() || null,

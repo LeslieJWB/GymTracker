@@ -23,7 +23,8 @@ export const byDateNoUserSchema = z.object({
 });
 
 export const bodyWeightByDateSchema = byDateNoUserSchema.extend({
-  weightKg: z.number().min(20).max(400)
+  weightKg: z.number().min(20).max(400),
+  bodyFatPercentage: z.number().min(3).max(60).nullable().optional()
 });
 
 export const dateRangeNoUserSchema = z.object({

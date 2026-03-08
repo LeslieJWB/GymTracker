@@ -24,9 +24,9 @@ bodyWeightRouter.get("/body-weight/by-date", async (req, res) => {
 
   try {
     const appUser = await upsertUserFromAuth(req.auth);
-    const result = await pool.query<{ weight_kg: string }>(
+    const result = await pool.query<{ weight_kg: string; body_fat_percentage: string | null }>(
       `
-        SELECT weight_kg::text
+        SELECT weight_kg::text, body_fat_percentage::text
         FROM body_weight_records
         WHERE user_id = $1 AND record_date = $2::date
         LIMIT 1
@@ -36,7 +36,11 @@ bodyWeightRouter.get("/body-weight/by-date", async (req, res) => {
 
     return res.json({
       date: parsed.data.date,
-      weightKg: result.rowCount ? Number(result.rows[0].weight_kg) : null
+      weightKg: result.rowCount ? Number(result.rows[0].weight_kg) : null,
+      bodyFatPercentage:
+        result.rowCount && result.rows[0].body_fat_percentage !== null
+          ? Number(result.rows[0].body_fat_percentage)
+          : null
     });
   } catch (error) {
     return res.status(500).json({ error: String(error) });
@@ -54,22 +58,35 @@ bodyWeightRouter.put("/body-weight/by-date", async (req, res) => {
 
   try {
     const appUser = await upsertUserFromAuth(req.auth);
+    const hasBodyFatPercentage = Object.prototype.hasOwnProperty.call(parsed.data, "bodyFatPercentage");
     const result = await pool.query<{
       id: string;
       record_date: string;
       weight_kg: string;
+      body_fat_percentage: string | null;
       updated_at: string;
     }>(
       `
-        INSERT INTO body_weight_records (id, user_id, record_date, weight_kg)
-        VALUES ($1, $2, $3::date, $4)
+        INSERT INTO body_weight_records (id, user_id, record_date, weight_kg, body_fat_percentage)
+        VALUES ($1, $2, $3::date, $4, CASE WHEN $5::boolean THEN $6::numeric(4,1) ELSE NULL END)
         ON CONFLICT (user_id, record_date)
         DO UPDATE SET
           weight_kg = EXCLUDED.weight_kg,
+          body_fat_percentage = CASE
+            WHEN $5::boolean THEN EXCLUDED.body_fat_percentage
+            ELSE body_weight_records.body_fat_percentage
+          END,
           updated_at = now()
-        RETURNING id, record_date::text, weight_kg::text, updated_at::text
+        RETURNING id, record_date::text, weight_kg::text, body_fat_percentage::text, updated_at::text
       `,
-      [randomUUID(), appUser.id, parsed.data.date, parsed.data.weightKg]
+      [
+        randomUUID(),
+        appUser.id,
+        parsed.data.date,
+        parsed.data.weightKg,
+        hasBodyFatPercentage,
+        parsed.data.bodyFatPercentage ?? null
+      ]
     );
 
     const row = result.rows[0];
@@ -77,8 +94,30 @@ bodyWeightRouter.put("/body-weight/by-date", async (req, res) => {
       id: row.id,
       date: row.record_date,
       weightKg: Number(row.weight_kg),
+      bodyFatPercentage: row.body_fat_percentage !== null ? Number(row.body_fat_percentage) : null,
       updatedAt: row.updated_at
     });
+  } catch (error) {
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+bodyWeightRouter.delete("/body-weight/by-date", async (req, res) => {
+  if (!req.auth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const parsed = byDateNoUserSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "date is required" });
+  }
+
+  try {
+    const appUser = await upsertUserFromAuth(req.auth);
+    const result = await pool.query(
+      `DELETE FROM body_weight_records WHERE user_id = $1 AND record_date = $2::date`,
+      [appUser.id, parsed.data.date]
+    );
+    return res.json({ date: parsed.data.date, deleted: (result.rowCount ?? 0) > 0 });
   } catch (error) {
     return res.status(500).json({ error: String(error) });
   }
@@ -105,9 +144,10 @@ bodyWeightRouter.get("/body-weight/history", async (req, res) => {
     const result = await pool.query<{
       record_date: string;
       weight_kg: string;
+      body_fat_percentage: string | null;
     }>(
       `
-        SELECT record_date::text, weight_kg::text
+        SELECT record_date::text, weight_kg::text, body_fat_percentage::text
         FROM body_weight_records
         WHERE user_id = $1
           AND record_date >= $2::date
@@ -120,7 +160,8 @@ bodyWeightRouter.get("/body-weight/history", async (req, res) => {
     return res.json({
       records: result.rows.map((row) => ({
         date: row.record_date,
-        weightKg: Number(row.weight_kg)
+        weightKg: Number(row.weight_kg),
+        bodyFatPercentage: row.body_fat_percentage !== null ? Number(row.body_fat_percentage) : null
       }))
     });
   } catch (error) {

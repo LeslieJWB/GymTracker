@@ -12,6 +12,7 @@ export type UserProfile = User & {
   heightCm: number | null;
   gender: string | null;
   defaultBodyWeightKg: number | null;
+  defaultBodyFatPercentage: number | null;
   dailyCalorieTargetKcal: number | null;
   dailyProteinTargetG: number | null;
   dateOfBirth: string | null;
@@ -72,6 +73,7 @@ export type FoodConsumption = {
 export type BodyWeightRecord = {
   date: string;
   weightKg: number;
+  bodyFatPercentage: number | null;
 };
 
 export type AdviceReviewResult = {
