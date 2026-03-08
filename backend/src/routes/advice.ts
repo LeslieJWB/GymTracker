@@ -509,9 +509,9 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
       [appUser.id, date, DAILY_SUMMARY_PAST_DIET_LIMIT]
     );
 
-    const todayWeightResult = await pool.query<{ weight_kg: string }>(
+    const todayWeightResult = await pool.query<{ weight_kg: string; body_fat_percentage: string | null }>(
       `
-        SELECT weight_kg::text
+        SELECT weight_kg::text, body_fat_percentage::text
         FROM body_weight_records
         WHERE user_id = $1
           AND record_date = $2::date
@@ -523,9 +523,10 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
     const pastWeightResult = await pool.query<{
       record_date: string;
       weight_kg: string;
+      body_fat_percentage: string | null;
     }>(
       `
-        SELECT record_date::text, weight_kg::text
+        SELECT record_date::text, weight_kg::text, body_fat_percentage::text
         FROM body_weight_records
         WHERE user_id = $1
           AND record_date < $2::date
@@ -579,13 +580,17 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
             .join("\n")
         : "No prior nutrition records.";
 
+    const formatWeightLine = (dateStr: string, weightKg: string, bodyFatPct: string | null): string => {
+      const bfSuffix = bodyFatPct !== null ? ` | body fat: ${Number(bodyFatPct)}%` : "";
+      return `${dateStr} | ${Number(weightKg)} kg${bfSuffix}`;
+    };
     const todayWeightText = todayWeightResult.rowCount
-      ? `${date} | ${Number(todayWeightResult.rows[0].weight_kg)} kg`
+      ? formatWeightLine(date, todayWeightResult.rows[0].weight_kg, todayWeightResult.rows[0].body_fat_percentage)
       : `${date} | not recorded`;
     const pastWeightText =
       pastWeightResult.rows.length > 0
         ? pastWeightResult.rows
-            .map((row) => `${row.record_date} | ${Number(row.weight_kg)} kg`)
+            .map((row) => formatWeightLine(row.record_date, row.weight_kg, row.body_fat_percentage))
             .join("\n")
         : "No prior body weight records.";
 
@@ -771,6 +776,7 @@ Date: ${date}
 ${themeContext}
 Current request timestamp and daypart: ${formatNowContext()}
 Current effective body weight (kg): ${effectiveWeightKg ?? "unknown"}
+Latest body fat percentage: ${promptProfile.latestBodyFatPercentage !== null ? `${promptProfile.latestBodyFatPercentage}%` : "unknown"}
 
 Provide targets for today's calorie and protein intake.
 Respect user profile context.
