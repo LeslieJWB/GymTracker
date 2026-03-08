@@ -840,6 +840,21 @@ export default function App() {
     }
   }
 
+  async function deleteWorkoutTemplate(templateId: string): Promise<boolean> {
+    if (!user) {
+      return false;
+    }
+    try {
+      await apiJson<void>(`/templates/${encodeURIComponent(templateId)}`, {
+        method: "DELETE"
+      });
+      return true;
+    } catch (error) {
+      Alert.alert("Failed to delete template", String(error));
+      return false;
+    }
+  }
+
   async function saveRecordTheme(): Promise<void> {
     if (!user || !DATE_PATTERN.test(selectedDate) || savingRecordTheme || loading) {
       return;
@@ -2400,6 +2415,7 @@ export default function App() {
                 listWorkoutTemplates={() => listWorkoutTemplates()}
                 saveWorkoutTemplate={saveWorkoutTemplate}
                 applyWorkoutTemplate={applyWorkoutTemplate}
+                deleteWorkoutTemplate={deleteWorkoutTemplate}
                 fetchDailySummary={(date) => fetchDailySummary(date)}
                 fetchExerciseFeedback={(input) => fetchExerciseFeedback(input)}
                 dailyNutritionTargets={dailyTargetsDate === selectedDate ? dailyNutritionTargets : null}

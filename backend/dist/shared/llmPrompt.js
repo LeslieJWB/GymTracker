@@ -9,6 +9,7 @@ export function buildStructuredPrompt({ profile, customPrompt, requestContext })
         "PART_1_SYSTEM_PROMPT_USER_PROFILE",
         `- age: ${profileValue(profile.age)}`,
         `- default_body_weight_kg: ${profileValue(profile.defaultBodyWeightKg)}`,
+        `- latest_body_fat_percentage: ${profileValue(profile.latestBodyFatPercentage)}`,
         `- height_cm: ${profileValue(profile.heightCm)}`,
         `- gender: ${profileValue(profile.gender)}`,
         "",

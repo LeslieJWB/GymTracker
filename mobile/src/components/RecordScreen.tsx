@@ -129,6 +129,7 @@ type RecordScreenProps = {
     templateName: string
   ) => Promise<{ ok: true } | { ok: false; conflict: boolean; message: string }>;
   applyWorkoutTemplate: (templateId: string) => Promise<boolean>;
+  deleteWorkoutTemplate: (templateId: string) => Promise<boolean>;
   fetchDailySummary: (date: string) => Promise<AdviceReviewResult>;
   fetchExerciseFeedback: (input: {
     exerciseId: string;
@@ -182,6 +183,7 @@ export function RecordScreen({
   listWorkoutTemplates,
   saveWorkoutTemplate,
   applyWorkoutTemplate,
+  deleteWorkoutTemplate,
   fetchDailySummary,
   fetchExerciseFeedback,
   dailyNutritionTargets
@@ -198,6 +200,7 @@ export function RecordScreen({
   const [loadingTemplateOptions, setLoadingTemplateOptions] = useState(false);
   const [templateLoadError, setTemplateLoadError] = useState<string | null>(null);
   const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [exerciseMenuTarget, setExerciseMenuTarget] = useState<{
     id: string;
     exerciseItemId: string;
@@ -521,7 +524,7 @@ export function RecordScreen({
   }
 
   function closeTemplateLoadModal(): void {
-    if (applyingTemplateId) {
+    if (applyingTemplateId || deletingTemplateId) {
       return;
     }
     setShowTemplateLoadModal(false);
@@ -529,6 +532,7 @@ export function RecordScreen({
     setTemplateLoadError(null);
     setLoadingTemplateOptions(false);
     setApplyingTemplateId(null);
+    setDeletingTemplateId(null);
   }
 
   async function chooseTemplateForLoad(templateId: string): Promise<void> {
@@ -542,6 +546,41 @@ export function RecordScreen({
       return;
     }
     setTemplateLoadError("Failed to load template. Please try again.");
+  }
+
+  async function requestDeleteTemplate(template: WorkoutTemplateSummary): Promise<void> {
+    if (applyingTemplateId || deletingTemplateId) {
+      return;
+    }
+    Alert.alert(
+      "Delete template?",
+      `This will permanently delete "${template.name}".`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setDeletingTemplateId(template.id);
+            setTemplateLoadError(null);
+            deleteWorkoutTemplate(template.id)
+              .then((ok) => {
+                if (ok) {
+                  setTemplateOptions((current) => current.filter((item) => item.id !== template.id));
+                } else {
+                  setTemplateLoadError("Failed to delete template. Please try again.");
+                }
+              })
+              .catch(() => {
+                setTemplateLoadError("Failed to delete template. Please try again.");
+              })
+              .finally(() => {
+                setDeletingTemplateId(null);
+              });
+          }
+        }
+      ]
+    );
   }
 
   async function chooseExerciseForInPlaceAdd(exerciseItem: ExerciseItem): Promise<void> {
@@ -1331,25 +1370,43 @@ export function RecordScreen({
                 </View>
               ) : (
                 filteredTemplateOptions.map((template) => (
-                  <Pressable
-                    key={template.id}
-                    style={styles.searchResultRow}
-                    onPress={() => {
-                      chooseTemplateForLoad(template.id).catch(() => {});
-                    }}
-                    disabled={Boolean(applyingTemplateId)}
-                  >
-                    <Text style={styles.searchResultName}>{template.name}</Text>
-                    <Text style={styles.searchResultMeta}>
-                      {template.exerciseCount} exercises • {template.setCount} sets
-                    </Text>
-                  </Pressable>
+                  <View key={template.id} style={styles.searchResultRow}>
+                    <Pressable
+                      style={styles.templateRowContent}
+                      onPress={() => {
+                        chooseTemplateForLoad(template.id).catch(() => {});
+                      }}
+                      disabled={Boolean(applyingTemplateId || deletingTemplateId)}
+                    >
+                      <Text style={styles.searchResultName}>{template.name}</Text>
+                      <Text style={styles.searchResultMeta}>
+                        {template.exerciseCount} exercises • {template.setCount} sets
+                      </Text>
+                    </Pressable>
+                    <TouchableOpacity
+                      style={styles.templateDeleteButton}
+                      onPress={() => {
+                        requestDeleteTemplate(template).catch(() => {});
+                      }}
+                      disabled={Boolean(applyingTemplateId || deletingTemplateId)}
+                    >
+                      <Text style={styles.templateDeleteButtonText}>
+                        {deletingTemplateId === template.id ? "..." : "Delete"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 ))
               )}
             </ScrollView>
             {templateLoadError ? <Text style={styles.foodComposerErrorText}>{templateLoadError}</Text> : null}
-            <TouchableOpacity style={styles.cancelButton} onPress={closeTemplateLoadModal} disabled={Boolean(applyingTemplateId)}>
-              <Text style={styles.cancelButtonText}>{applyingTemplateId ? "Applying..." : "Close"}</Text>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={closeTemplateLoadModal}
+              disabled={Boolean(applyingTemplateId || deletingTemplateId)}
+            >
+              <Text style={styles.cancelButtonText}>
+                {applyingTemplateId ? "Applying..." : deletingTemplateId ? "Deleting..." : "Close"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2774,7 +2831,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#FEFEFA",
     padding: 12,
-    marginBottom: 8
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  templateRowContent: {
+    flex: 1
   },
   searchResultName: {
     color: "#2C2C24",
@@ -2783,6 +2846,17 @@ const styles = StyleSheet.create({
   searchResultMeta: {
     marginTop: 2,
     color: "#78786C",
+    fontSize: 12
+  },
+  templateDeleteButton: {
+    borderRadius: 8,
+    backgroundColor: "#F6E4DF",
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  templateDeleteButtonText: {
+    color: "#8E3D34",
+    fontWeight: "700",
     fontSize: 12
   },
   exerciseSelectionHeader: {

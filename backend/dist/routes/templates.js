@@ -196,3 +196,45 @@ templatesRouter.post("/templates", async (req, res) => {
         return res.status(500).json({ error: String(error) });
     }
 });
+templatesRouter.delete("/templates/:templateId", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const templateId = req.params.templateId;
+    if (!idSchema.safeParse(templateId).success) {
+        return res.status(400).json({ error: "Invalid templateId" });
+    }
+    try {
+        const appUser = await upsertUserFromAuth(req.auth);
+        const deleted = await withTransaction(async (client) => {
+            const templateResult = await client.query(`
+          SELECT id
+          FROM workout_templates
+          WHERE id = $1
+            AND user_id = $2
+          LIMIT 1
+        `, [templateId, appUser.id]);
+            if (templateResult.rowCount === 0) {
+                return false;
+            }
+            await client.query(`
+          DELETE FROM workout_template_sets
+          WHERE template_exercise_id IN (
+            SELECT id
+            FROM workout_template_exercises
+            WHERE template_id = $1
+          )
+        `, [templateId]);
+            await client.query(`DELETE FROM workout_template_exercises WHERE template_id = $1`, [templateId]);
+            await client.query(`DELETE FROM workout_templates WHERE id = $1 AND user_id = $2`, [templateId, appUser.id]);
+            return true;
+        });
+        if (!deleted) {
+            return res.status(404).json({ error: "Template not found" });
+        }
+        return res.status(204).send();
+    }
+    catch (error) {
+        return res.status(500).json({ error: String(error) });
+    }
+});

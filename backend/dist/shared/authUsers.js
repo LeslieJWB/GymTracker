@@ -91,6 +91,16 @@ export async function getPromptProfile(userId, asOfDate) {
           ORDER BY bwr.record_date DESC
           LIMIT 1
         ) AS latest_weight_kg,
+        default_body_fat_percentage::text,
+        (
+          SELECT bwr.body_fat_percentage::text
+          FROM body_weight_records bwr
+          WHERE bwr.user_id = users.id
+            AND bwr.record_date <= COALESCE($2::date, CURRENT_DATE)
+            AND bwr.body_fat_percentage IS NOT NULL
+          ORDER BY bwr.record_date DESC
+          LIMIT 1
+        ) AS latest_body_fat_percentage,
         height_cm::text,
         gender,
         daily_calorie_target_kcal::text,
@@ -105,6 +115,7 @@ export async function getPromptProfile(userId, asOfDate) {
         return {
             age: null,
             defaultBodyWeightKg: null,
+            latestBodyFatPercentage: null,
             heightCm: null,
             gender: null,
             dailyCalorieTargetKcal: null,
@@ -118,6 +129,11 @@ export async function getPromptProfile(userId, asOfDate) {
             ? Number(row.latest_weight_kg)
             : row.default_body_weight_kg
                 ? Number(row.default_body_weight_kg)
+                : null,
+        latestBodyFatPercentage: row.latest_body_fat_percentage
+            ? Number(row.latest_body_fat_percentage)
+            : row.default_body_fat_percentage
+                ? Number(row.default_body_fat_percentage)
                 : null,
         heightCm: row.height_cm ? Number(row.height_cm) : null,
         gender: row.gender,
