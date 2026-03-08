@@ -3,7 +3,6 @@ import * as ImagePicker from "expo-image-picker";
 import {
   Alert,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,8 +14,8 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { KeyboardProvider, KeyboardToolbar } from "react-native-keyboard-controller";
 import { appStyles } from "../styles/appStyles";
-import { DONE_BAR_ID } from "./KeyboardDoneBar";
 import { SwipeActionRow } from "./SwipeActionRow";
 import {
   AdviceReviewResult,
@@ -244,8 +243,6 @@ export function RecordScreen({
     exerciseId: string;
     exerciseName: string;
   } | null>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const expandedIds = useMemo(() => new Set(expandedExerciseIds), [expandedExerciseIds]);
   const filteredExerciseItems = useMemo(() => {
     const normalizedQuery = normalizeSearchText(exerciseSearchTerm);
@@ -398,23 +395,6 @@ export function RecordScreen({
   const canSaveTemplate = Boolean(user) && !loading && exerciseEntryCount > 0;
   const canLoadTemplate = Boolean(user) && !loading;
 
-  useEffect(() => {
-    if (Platform.OS !== "ios") {
-      return;
-    }
-    const showSub = Keyboard.addListener("keyboardWillShow", (event) => {
-      setKeyboardVisible(true);
-      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
-    });
-    const hideSub = Keyboard.addListener("keyboardWillHide", () => {
-      setKeyboardVisible(false);
-      setKeyboardHeight(0);
-    });
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   useEffect(() => {
     if (!adviceTarget || !user || !recordDetail) return;
@@ -823,7 +803,7 @@ export function RecordScreen({
             style={styles.themeInput}
             value={recordThemeDraft}
             onChangeText={setRecordThemeDraft}
-            inputAccessoryViewID={DONE_BAR_ID}
+
             onBlur={() => {
               if (themeDirty && !loading && !savingRecordTheme && user) {
                 saveRecordTheme();
@@ -843,7 +823,7 @@ export function RecordScreen({
               value={bodyWeightDraft}
               onChangeText={(value) => setBodyWeightDraft(sanitizeWeightInput(value))}
               keyboardType="decimal-pad"
-              inputAccessoryViewID={DONE_BAR_ID}
+  
               placeholder="0.0"
               placeholderTextColor="#78786C"
               editable={Boolean(user) && !loading && !savingBodyWeight}
@@ -869,7 +849,7 @@ export function RecordScreen({
               value={bodyFatDraft}
               onChangeText={(value) => setBodyFatDraft(sanitizeBodyFatInput(value))}
               keyboardType="decimal-pad"
-              inputAccessoryViewID={DONE_BAR_ID}
+  
               placeholder="0.0"
               placeholderTextColor="#78786C"
               editable={Boolean(user) && !loading && !savingBodyWeight}
@@ -1119,7 +1099,7 @@ export function RecordScreen({
                                             })
                                           }
                                           keyboardType="decimal-pad"
-                                          inputAccessoryViewID={DONE_BAR_ID}
+                              
                                           placeholder="0"
                                           placeholderTextColor="#78786C"
                                           onBlur={() => saveSet(item.id, setItem.id)}
@@ -1135,7 +1115,7 @@ export function RecordScreen({
                                             })
                                           }
                                           keyboardType="numeric"
-                                          inputAccessoryViewID={DONE_BAR_ID}
+                              
                                           placeholder="0"
                                           placeholderTextColor="#78786C"
                                           onBlur={() => saveSet(item.id, setItem.id)}
@@ -1266,6 +1246,7 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeTemplateSaveModal}
       >
+        <KeyboardProvider>
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeTemplateSaveModal} />
           <View style={styles.modalCard}>
@@ -1280,7 +1261,7 @@ export function RecordScreen({
               style={styles.searchInput}
               value={templateNameDraft}
               onChangeText={setTemplateNameDraft}
-              inputAccessoryViewID={DONE_BAR_ID}
+  
               placeholder="Template name"
               placeholderTextColor="#78786C"
               autoCorrect={false}
@@ -1304,6 +1285,8 @@ export function RecordScreen({
             </View>
           </View>
         </View>
+        <KeyboardToolbar />
+        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1312,6 +1295,7 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeTemplateLoadModal}
       >
+        <KeyboardProvider>
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeTemplateLoadModal} />
           <View style={styles.modalCard}>
@@ -1330,7 +1314,7 @@ export function RecordScreen({
               style={styles.searchInput}
               value={templateSearchTerm}
               onChangeText={setTemplateSearchTerm}
-              inputAccessoryViewID={DONE_BAR_ID}
+  
               placeholder="Search templates..."
               placeholderTextColor="#78786C"
               autoCorrect={false}
@@ -1369,6 +1353,8 @@ export function RecordScreen({
             </TouchableOpacity>
           </View>
         </View>
+        <KeyboardToolbar />
+        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1377,6 +1363,7 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeFoodComposerModal}
       >
+        <KeyboardProvider>
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeFoodComposerModal} />
           <View style={styles.modalCard}>
@@ -1393,7 +1380,7 @@ export function RecordScreen({
               style={[styles.modernInput, styles.foodTextInput]}
               value={foodTextDraft}
               onChangeText={setFoodTextDraft}
-              inputAccessoryViewID={DONE_BAR_ID}
+  
               multiline
               numberOfLines={3}
               placeholder="e.g. 60g steel cut oats + 200ml milk"
@@ -1451,6 +1438,8 @@ export function RecordScreen({
             </View>
           </View>
         </View>
+        <KeyboardToolbar />
+        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1459,6 +1448,7 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeExerciseSearchModal}
       >
+        <KeyboardProvider>
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeExerciseSearchModal} />
           <View style={styles.modalCard}>
@@ -1473,7 +1463,7 @@ export function RecordScreen({
               style={styles.searchInput}
               value={exerciseSearchTerm}
               onChangeText={setExerciseSearchTerm}
-              inputAccessoryViewID={DONE_BAR_ID}
+  
               placeholder="Search exercises..."
               placeholderTextColor="#78786C"
               autoCorrect={false}
@@ -1504,6 +1494,8 @@ export function RecordScreen({
             </TouchableOpacity>
           </View>
         </View>
+        <KeyboardToolbar />
+        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1572,6 +1564,7 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeSetNotesSheet}
       >
+        <KeyboardProvider>
         <KeyboardAvoidingView
           style={styles.menuBackdrop}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -1592,7 +1585,7 @@ export function RecordScreen({
                   style={styles.notesInput}
                   multiline
                   numberOfLines={4}
-                  inputAccessoryViewID={DONE_BAR_ID}
+      
                   value={setDraftsByExerciseId[setNotesTarget.exerciseId]?.[setNotesTarget.setId]?.notes ?? ""}
                   onChangeText={(value) => {
                     const draft = setDraftsByExerciseId[setNotesTarget.exerciseId]?.[setNotesTarget.setId];
@@ -1631,27 +1624,9 @@ export function RecordScreen({
               </>
             ) : null}
           </View>
-          {Platform.OS === "ios" && keyboardVisible && setNotesTarget !== null ? (
-            <View
-              pointerEvents="box-none"
-              style={[
-                styles.keyboardDoneWrap,
-                {
-                  bottom: Math.max(12, keyboardHeight + 8)
-                }
-              ]}
-            >
-              <Pressable
-                style={({ pressed }) => [styles.keyboardDoneButton, pressed ? styles.keyboardDoneButtonPressed : null]}
-                onPress={() => {
-                  Keyboard.dismiss();
-                }}
-              >
-                <Text style={styles.keyboardDoneText}>Done</Text>
-              </Pressable>
-            </View>
-          ) : null}
         </KeyboardAvoidingView>
+        <KeyboardToolbar />
+        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1660,6 +1635,7 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeExerciseNotesSheet}
       >
+        <KeyboardProvider>
         <KeyboardAvoidingView
           style={styles.menuBackdrop}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -1678,7 +1654,7 @@ export function RecordScreen({
                   style={styles.notesInput}
                   multiline
                   numberOfLines={4}
-                  inputAccessoryViewID={DONE_BAR_ID}
+      
                   value={exerciseNotesDraftById[exerciseNotesTarget.exerciseId] ?? ""}
                   onChangeText={(value) => updateExerciseNotesDraft(exerciseNotesTarget.exerciseId, value)}
                   placeholder="e.g. Keep elbows tucked and control eccentric"
@@ -1707,27 +1683,9 @@ export function RecordScreen({
               </>
             ) : null}
           </View>
-          {Platform.OS === "ios" && keyboardVisible && exerciseNotesTarget !== null ? (
-            <View
-              pointerEvents="box-none"
-              style={[
-                styles.keyboardDoneWrap,
-                {
-                  bottom: Math.max(12, keyboardHeight + 8)
-                }
-              ]}
-            >
-              <Pressable
-                style={({ pressed }) => [styles.keyboardDoneButton, pressed ? styles.keyboardDoneButtonPressed : null]}
-                onPress={() => {
-                  Keyboard.dismiss();
-                }}
-              >
-                <Text style={styles.keyboardDoneText}>Done</Text>
-              </Pressable>
-            </View>
-          ) : null}
         </KeyboardAvoidingView>
+        <KeyboardToolbar />
+        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -3113,28 +3071,5 @@ const styles = StyleSheet.create({
   },
   adviceButtonTextDecline: {
     color: "#2C2C24"
-  },
-  keyboardDoneWrap: {
-    position: "absolute",
-    right: 12,
-    zIndex: 2000
-  },
-  keyboardDoneButton: {
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    minHeight: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F6F2EA",
-    borderWidth: 1,
-    borderColor: "#DED8CF"
-  },
-  keyboardDoneButtonPressed: {
-    opacity: 0.75
-  },
-  keyboardDoneText: {
-    color: "#5D7052",
-    fontSize: 16,
-    fontWeight: "700"
   }
 });

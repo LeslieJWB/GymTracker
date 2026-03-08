@@ -19,8 +19,8 @@ import {
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardProvider, KeyboardToolbar } from "react-native-keyboard-controller";
 import { AuthScreen } from "./src/components/AuthScreen";
-import { KeyboardDoneBar, DONE_BAR_ID } from "./src/components/KeyboardDoneBar";
 import { CalendarScreen } from "./src/components/CalendarScreen";
 import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/components/RecordScreen.tsx";
 import { ProfileScreen } from "./src/components/ProfileScreen";
@@ -213,21 +213,14 @@ export default function App() {
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL.trim().replace(/\/$/, ""), []);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSub = Keyboard.addListener(showEvent, (event) => {
-      setKeyboardVisible(true);
-      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
-    });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      setKeyboardVisible(false);
-      setKeyboardHeight(0);
-    });
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
     return () => {
       showSub.remove();
       hideSub.remove();
@@ -2099,6 +2092,7 @@ export default function App() {
 
   if (profile && !profile.profileInitialized) {
     return (
+      <KeyboardProvider>
       <SafeAreaView style={appStyles.safeArea}>
         <StatusBar style="dark" />
         <View pointerEvents="none" style={styles.backgroundWrap}>
@@ -2143,7 +2137,7 @@ export default function App() {
                   value={onboardingDefaultWeight}
                   onChangeText={(value) => setOnboardingDefaultWeight(sanitizeWeightInput(value))}
                   keyboardType="decimal-pad"
-                  inputAccessoryViewID={DONE_BAR_ID}
+
                   placeholder="0"
                   placeholderTextColor="#78786C"
                   editable={!onboardingSubmitting}
@@ -2161,7 +2155,7 @@ export default function App() {
                   value={onboardingDefaultBodyFat}
                   onChangeText={(value) => setOnboardingDefaultBodyFat(sanitizeBodyFatInput(value))}
                   keyboardType="decimal-pad"
-                  inputAccessoryViewID={DONE_BAR_ID}
+
                   placeholder="e.g. 18.5"
                   placeholderTextColor="#78786C"
                   editable={!onboardingSubmitting}
@@ -2179,7 +2173,7 @@ export default function App() {
                   value={onboardingHeight}
                   onChangeText={(value) => setOnboardingHeight(digitsOnly(value))}
                   keyboardType="number-pad"
-                  inputAccessoryViewID={DONE_BAR_ID}
+
                   placeholder="0"
                   placeholderTextColor="#78786C"
                   editable={!onboardingSubmitting}
@@ -2197,7 +2191,7 @@ export default function App() {
                   value={onboardingCalorieTarget}
                   onChangeText={(value) => setOnboardingCalorieTarget(digitsOnly(value))}
                   keyboardType="number-pad"
-                  inputAccessoryViewID={DONE_BAR_ID}
+
                   placeholder="e.g. 2200"
                   placeholderTextColor="#78786C"
                   editable={!onboardingSubmitting}
@@ -2215,7 +2209,7 @@ export default function App() {
                   value={onboardingProteinTarget}
                   onChangeText={(value) => setOnboardingProteinTarget(digitsOnly(value))}
                   keyboardType="number-pad"
-                  inputAccessoryViewID={DONE_BAR_ID}
+
                   placeholder="e.g. 150"
                   placeholderTextColor="#78786C"
                   editable={!onboardingSubmitting}
@@ -2244,7 +2238,6 @@ export default function App() {
                 style={[styles.onboardingInput, styles.onboardingPromptInput]}
                 value={onboardingLlmPrompt}
                 onChangeText={setOnboardingLlmPrompt}
-                inputAccessoryViewID={DONE_BAR_ID}
                 placeholder="Optional instructions for your AI coach, e.g. Goal is muscle growth"
                 placeholderTextColor="#78786C"
                 editable={!onboardingSubmitting}
@@ -2310,11 +2303,14 @@ export default function App() {
             </Pressable>
           </Modal>
         ) : null}
+        <KeyboardToolbar />
       </SafeAreaView>
+      </KeyboardProvider>
     );
   }
 
   return (
+    <KeyboardProvider>
     <SafeAreaView edges={["top", "left", "right"]} style={appStyles.safeArea}>
       <StatusBar style="dark" />
       <View pointerEvents="none" style={styles.backgroundWrap}>
@@ -2453,6 +2449,7 @@ export default function App() {
           transparent
           onRequestClose={() => {}}
         >
+          <KeyboardProvider>
           <View style={styles.dailyGateBackdrop}>
             <View style={styles.dailyGateCard}>
               <Text style={styles.dailyGateTitle}>Today&apos;s check-in</Text>
@@ -2465,7 +2462,7 @@ export default function App() {
                   style={styles.dailyGateInput}
                   value={dailyCheckInThemeDraft}
                   onChangeText={setDailyCheckInThemeDraft}
-                  inputAccessoryViewID={DONE_BAR_ID}
+
                   placeholder="e.g. push, pull, rest"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
@@ -2479,7 +2476,7 @@ export default function App() {
                   value={dailyCheckInWeightDraft}
                   onChangeText={(value) => setDailyCheckInWeightDraft(sanitizeWeightInput(value))}
                   keyboardType="decimal-pad"
-                  inputAccessoryViewID={DONE_BAR_ID}
+
                   placeholder="Leave empty to use weight recorded before"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
@@ -2492,7 +2489,7 @@ export default function App() {
                   value={dailyCheckInBodyFatDraft}
                   onChangeText={(value) => setDailyCheckInBodyFatDraft(sanitizeBodyFatInput(value))}
                   keyboardType="decimal-pad"
-                  inputAccessoryViewID={DONE_BAR_ID}
+
                   placeholder="Leave empty to use latest/default body fat"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
@@ -2513,6 +2510,8 @@ export default function App() {
               </Pressable>
             </View>
           </View>
+          <KeyboardToolbar />
+          </KeyboardProvider>
         </Modal>
         {!keyboardVisible ? (
           <View
@@ -2581,28 +2580,9 @@ export default function App() {
           </View>
         ) : null}
       </KeyboardAvoidingView>
-      {Platform.OS === "ios" && keyboardVisible ? (
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.fallbackDoneWrap,
-            {
-              bottom: Math.max(12, keyboardHeight + 8)
-            }
-          ]}
-        >
-          <Pressable
-            style={({ pressed }) => [styles.fallbackDoneButton, pressed ? styles.fallbackDoneButtonPressed : null]}
-            onPress={() => {
-              Keyboard.dismiss();
-            }}
-          >
-            <Text style={styles.fallbackDoneText}>Done</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      <KeyboardDoneBar />
+      <KeyboardToolbar />
     </SafeAreaView>
+    </KeyboardProvider>
   );
 }
 
@@ -2894,30 +2874,6 @@ const styles = StyleSheet.create({
   },
   bottomNavLabelActive: {
     color: palette.primary
-  },
-  fallbackDoneWrap: {
-    position: "absolute",
-    right: 12,
-    zIndex: 1200
-  },
-  fallbackDoneButton: {
-    borderRadius: radius.pill,
-    paddingHorizontal: 16,
-    minHeight: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F6F2EA",
-    borderWidth: 1,
-    borderColor: "#DED8CF",
-    ...shadows.soft
-  },
-  fallbackDoneButtonPressed: {
-    opacity: 0.75
-  },
-  fallbackDoneText: {
-    color: palette.primary,
-    fontSize: 16,
-    fontFamily: textStyles.bodyBold.fontFamily
   },
   datePickerModalOverlay: {
     flex: 1,
