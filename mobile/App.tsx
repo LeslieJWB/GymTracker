@@ -156,7 +156,19 @@ export default function App() {
     Nunito_600SemiBold,
     Nunito_700Bold
   });
-  const { session, checkingSession, authError, signInWithProvider, signOut } = useAuthSession();
+  const {
+    session,
+    checkingSession,
+    authError,
+    authMessage,
+    pendingConfirmationEmail,
+    signInWithProvider,
+    signInWithEmail,
+    signUpWithEmail,
+    requestPasswordReset,
+    resendEmailConfirmation,
+    signOut
+  } = useAuthSession();
   const [screen, setScreen] = useState<Screen>("record");
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -2047,6 +2059,24 @@ export default function App() {
         <AuthScreen
           loading={authActionLoading}
           error={authError}
+          message={authMessage}
+          canResendConfirmation={Boolean(pendingConfirmationEmail)}
+          onResendConfirmation={() => {
+            setAuthActionLoading(true);
+            return resendEmailConfirmation().finally(() => setAuthActionLoading(false));
+          }}
+          onEmailSignIn={(email, password) => {
+            setAuthActionLoading(true);
+            return signInWithEmail(email, password).finally(() => setAuthActionLoading(false));
+          }}
+          onEmailSignUp={(email, password) => {
+            setAuthActionLoading(true);
+            return signUpWithEmail(email, password).finally(() => setAuthActionLoading(false));
+          }}
+          onForgotPassword={(email) => {
+            setAuthActionLoading(true);
+            return requestPasswordReset(email).finally(() => setAuthActionLoading(false));
+          }}
           onGoogle={() => {
             setAuthActionLoading(true);
             signInWithProvider("google")
