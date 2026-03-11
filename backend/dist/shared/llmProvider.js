@@ -96,10 +96,12 @@ class VertexAiProvider {
     apiKey;
     model;
     baseUrl;
-    constructor(apiKey, model, baseUrl) {
+    thinkingBudget;
+    constructor(apiKey, model, baseUrl, thinkingBudget = 0) {
         this.apiKey = apiKey;
         this.model = model;
         this.baseUrl = baseUrl.replace(/\/+$/, "");
+        this.thinkingBudget = Math.max(0, Math.floor(thinkingBudget));
     }
     parseStreamGenerateContent(rawText) {
         const normalized = rawText.trim();
@@ -166,7 +168,12 @@ class VertexAiProvider {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                contents: [{ role: "user", parts }]
+                contents: [{ role: "user", parts }],
+                generationConfig: {
+                    thinkingConfig: {
+                        thinkingBudget: this.thinkingBudget
+                    }
+                }
             })
         });
         if (!response.ok) {
@@ -199,7 +206,7 @@ export function createLlmProvider(input) {
         if (!input.vertex.apiKey) {
             return null;
         }
-        return new VertexAiProvider(input.vertex.apiKey, input.vertex.model, input.vertex.baseUrl);
+        return new VertexAiProvider(input.vertex.apiKey, input.vertex.model, input.vertex.baseUrl, input.vertex.thinkingBudget);
     }
     if (input.selectedProvider === "kimi") {
         if (!input.kimi.apiKey) {

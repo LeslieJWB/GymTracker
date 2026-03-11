@@ -27,6 +27,7 @@ GymTracker is an Expo React Native iOS app with a TypeScript backend server.
    - For Kimi: `KIMI_API_KEY=...`
    - For Gemini: `GEMINI_API_KEY=...`
    - For Vertex AI (Google Cloud): `VERTEX_API_KEY=...`
+   - Vertex thinking level: `VERTEX_THINKING_LEVEL=off|low|medium|high` (also accepts a numeric budget)
    - Without the selected provider key, advice/food endpoints use fallback mode.
 4. Configure auth:
    - `SUPABASE_URL=...`
@@ -101,6 +102,7 @@ Set these variables in Render:
 - `KIMI_API_KEY=<optional-if-LLM_PROVIDER-kimi>`
 - `GEMINI_API_KEY=<optional-if-LLM_PROVIDER-gemini>`
 - `VERTEX_API_KEY=<optional-if-LLM_PROVIDER-vertex>`
+- `VERTEX_THINKING_LEVEL=<off-or-low-or-medium-or-high-or-numeric-budget>`
 - `ALLOWED_ORIGINS=<comma-separated-origins-that-can-call-your-api>`
 - `TRUST_PROXY=true`
 

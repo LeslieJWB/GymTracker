@@ -150,11 +150,13 @@ class VertexAiProvider implements LlmProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly baseUrl: string;
+  private readonly thinkingBudget: number;
 
-  constructor(apiKey: string, model: string, baseUrl: string) {
+  constructor(apiKey: string, model: string, baseUrl: string, thinkingBudget = 0) {
     this.apiKey = apiKey;
     this.model = model;
     this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.thinkingBudget = Math.max(0, Math.floor(thinkingBudget));
   }
 
   private parseStreamGenerateContent(rawText: string): string | null {
@@ -232,7 +234,12 @@ class VertexAiProvider implements LlmProvider {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        contents: [{ role: "user", parts }]
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          thinkingConfig: {
+            thinkingBudget: this.thinkingBudget
+          }
+        }
       })
     });
 
@@ -262,6 +269,7 @@ type CreateProviderInput = {
     apiKey: string | undefined;
     baseUrl: string;
     model: string;
+    thinkingBudget: number;
   };
 };
 
@@ -291,7 +299,12 @@ export function createLlmProvider(input: CreateProviderInput): LlmProvider | nul
     if (!input.vertex.apiKey) {
       return null;
     }
-    return new VertexAiProvider(input.vertex.apiKey, input.vertex.model, input.vertex.baseUrl);
+    return new VertexAiProvider(
+      input.vertex.apiKey,
+      input.vertex.model,
+      input.vertex.baseUrl,
+      input.vertex.thinkingBudget
+    );
   }
 
   if (input.selectedProvider === "kimi") {

@@ -29,6 +29,34 @@ export const vertexModel = process.env.VERTEX_MODEL ?? "gemini-2.5-flash-lite";
 export const vertexBaseUrl =
   process.env.VERTEX_BASE_URL ?? "https://aiplatform.googleapis.com/v1/publishers/google/models";
 
+function parseVertexThinkingBudget(rawLevel: string | undefined): number {
+  const normalized = (rawLevel ?? "low").trim().toLowerCase();
+  if (!normalized) {
+    return 256;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    return Math.max(0, Number.parseInt(normalized, 10));
+  }
+
+  if (normalized === "off" || normalized === "none" || normalized === "disabled") {
+    return 0;
+  }
+  if (normalized === "low") {
+    return 256;
+  }
+  if (normalized === "medium") {
+    return 1024;
+  }
+  if (normalized === "high") {
+    return 2048;
+  }
+
+  return 256;
+}
+
+export const vertexThinkingBudget = parseVertexThinkingBudget(process.env.VERTEX_THINKING_LEVEL);
+
 export const llmProvider = createLlmProvider({
   selectedProvider: llmProviderName,
   kimi: {
@@ -44,7 +72,8 @@ export const llmProvider = createLlmProvider({
   vertex: {
     apiKey: process.env.VERTEX_API_KEY,
     baseUrl: vertexBaseUrl,
-    model: vertexModel
+    model: vertexModel,
+    thinkingBudget: vertexThinkingBudget
   }
 });
 
