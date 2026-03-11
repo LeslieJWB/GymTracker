@@ -3,7 +3,7 @@ import { useFonts } from "expo-font";
 import { Fraunces_600SemiBold, Fraunces_700Bold } from "@expo-google-fonts/fraunces";
 import { Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -208,6 +208,9 @@ export default function App() {
   const [exerciseMetricHistory, setExerciseMetricHistory] = useState<ExerciseDailyMetricsPoint[]>([]);
   const [dailyNutritionTargets, setDailyNutritionTargets] = useState<DailyNutritionTargets | null>(null);
   const [dailyTargetsDate, setDailyTargetsDate] = useState<string | null>(null);
+  const [dailyTargetsStatus, setDailyTargetsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const dailyTargetsRefreshRequestIdRef = useRef(0);
+  const dailyTargetsRefreshInFlightRef = useRef(false);
   const [dailyCheckInThemeDraft, setDailyCheckInThemeDraft] = useState("");
   const [dailyCheckInWeightDraft, setDailyCheckInWeightDraft] = useState("");
   const [dailyCheckInBodyFatDraft, setDailyCheckInBodyFatDraft] = useState("");
@@ -482,24 +485,13 @@ export default function App() {
         authProvider: next.authProvider
       });
       if (overrideChanged) {
-        setDailyNutritionTargets(null);
-        setDailyTargetsDate(null);
         if (screen === "record" && selectedDate === todayDate()) {
-          fetchDailyNutritionTargets(selectedDate)
-            .then((targets) => {
-              setDailyNutritionTargets(targets);
-              setDailyTargetsDate(selectedDate);
-            })
-            .catch(() => {
-              const fallback = fallbackNutritionTargetsFromWeight(savedBodyWeightKg);
-              setDailyNutritionTargets({
-                source: "fallback",
-                recommendedCaloriesKcal: fallback.calories,
-                recommendedProteinG: fallback.protein,
-                comment: "Auto fallback used because AI target generation was unavailable."
-              });
-              setDailyTargetsDate(selectedDate);
-            });
+          refreshDailyNutritionTargetsInBackground(selectedDate, {
+            forceRefresh: false,
+            fallbackWeightKg: savedBodyWeightKg,
+            placeholderWhileLoading: true,
+            reason: "profile-override"
+          });
         }
       }
       if (showSuccessAlert) {
@@ -903,6 +895,14 @@ export default function App() {
       setCalendarSummaries((rows) =>
         rows.map((row) => (row.date === selectedDate ? { ...row, theme: updatedRecord.theme } : row))
       );
+      if (selectedDate === todayDate()) {
+        refreshDailyNutritionTargetsInBackground(selectedDate, {
+          forceRefresh: true,
+          fallbackWeightKg: savedBodyWeightKg,
+          placeholderWhileLoading: true,
+          reason: "theme-save"
+        });
+      }
     } catch (error) {
       setRecordThemeDraft(recordDetail?.theme ?? "");
       Alert.alert("Failed to save theme", String(error));
@@ -1540,14 +1540,12 @@ export default function App() {
           setDailyCheckInWeightDraft("");
         }
         if (date === todayDate()) {
-          try {
-            const targets = await fetchDailyNutritionTargets(date);
-            setDailyNutritionTargets(targets);
-            setDailyTargetsDate(date);
-          } catch {
-            setDailyNutritionTargets(null);
-            setDailyTargetsDate(null);
-          }
+          refreshDailyNutritionTargetsInBackground(date, {
+            forceRefresh: true,
+            fallbackWeightKg: null,
+            placeholderWhileLoading: true,
+            reason: "weight-delete"
+          });
         }
       } catch (error) {
         Alert.alert("Failed to delete body metrics", String(error));
@@ -1594,14 +1592,12 @@ export default function App() {
         setDailyCheckInBodyFatDraft(payload.bodyFatPercentage === null ? "" : String(payload.bodyFatPercentage));
       }
       if (date === todayDate()) {
-        try {
-          const targets = await fetchDailyNutritionTargets(date);
-          setDailyNutritionTargets(targets);
-          setDailyTargetsDate(date);
-        } catch {
-          setDailyNutritionTargets(null);
-          setDailyTargetsDate(null);
-        }
+        refreshDailyNutritionTargetsInBackground(date, {
+          forceRefresh: true,
+          fallbackWeightKg: payload.weightKg,
+          placeholderWhileLoading: true,
+          reason: "weight-save"
+        });
       }
     } catch (error) {
       Alert.alert("Failed to save body metrics", String(error));
@@ -1610,12 +1606,66 @@ export default function App() {
     }
   }
 
-  async function fetchDailyNutritionTargets(date: string): Promise<DailyNutritionTargets> {
+  async function fetchDailyNutritionTargets(
+    date: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<DailyNutritionTargets> {
     return apiJson<DailyNutritionTargets>("/advice/daily-nutrition-targets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date })
+      body: JSON.stringify({
+        date,
+        forceRefresh: options?.forceRefresh === true
+      })
     });
+  }
+
+  function refreshDailyNutritionTargetsInBackground(
+    date: string,
+    options?: {
+      forceRefresh?: boolean;
+      fallbackWeightKg?: number | null;
+      placeholderWhileLoading?: boolean;
+      reason?: "theme-save" | "weight-save" | "weight-delete" | "daily-checkin" | "effect-hydrate" | "profile-override";
+    }
+  ): void {
+    const requestId = dailyTargetsRefreshRequestIdRef.current + 1;
+    dailyTargetsRefreshRequestIdRef.current = requestId;
+    dailyTargetsRefreshInFlightRef.current = true;
+    setDailyTargetsStatus("loading");
+    const fallback = fallbackNutritionTargetsFromWeight(options?.fallbackWeightKg ?? savedBodyWeightKg);
+    if (options?.placeholderWhileLoading === true) {
+      setDailyTargetsDate(date);
+      setDailyNutritionTargets(null);
+    }
+    void (async () => {
+      try {
+        await fetchDailyNutritionTargets(date, { forceRefresh: options?.forceRefresh === true });
+        const refreshedTargets = await fetchDailyNutritionTargets(date);
+        if (dailyTargetsRefreshRequestIdRef.current !== requestId) {
+          return;
+        }
+        setDailyNutritionTargets(refreshedTargets);
+        setDailyTargetsDate(date);
+        setDailyTargetsStatus("ready");
+      } catch {
+        if (dailyTargetsRefreshRequestIdRef.current !== requestId) {
+          return;
+        }
+        setDailyNutritionTargets({
+          source: "fallback",
+          recommendedCaloriesKcal: fallback.calories,
+          recommendedProteinG: fallback.protein,
+          comment: "Auto fallback used because AI target generation was unavailable."
+        });
+        setDailyTargetsDate(date);
+        setDailyTargetsStatus("error");
+      } finally {
+        if (dailyTargetsRefreshRequestIdRef.current === requestId) {
+          dailyTargetsRefreshInFlightRef.current = false;
+        }
+      }
+    })();
   }
 
   async function getLatestRecordedBodyMetrics(date: string): Promise<{
@@ -1733,20 +1783,12 @@ export default function App() {
       setSavedBodyFatPercentage(weightPayload.bodyFatPercentage);
       setBodyFatDraft(weightPayload.bodyFatPercentage === null ? "" : String(weightPayload.bodyFatPercentage));
       setDailyCheckInBodyFatDraft(weightPayload.bodyFatPercentage === null ? "" : String(weightPayload.bodyFatPercentage));
-      try {
-        const targets = await fetchDailyNutritionTargets(selectedDate);
-        setDailyNutritionTargets(targets);
-        setDailyTargetsDate(selectedDate);
-      } catch {
-        const fallback = fallbackNutritionTargetsFromWeight(weightPayload.weightKg);
-        setDailyNutritionTargets({
-          source: "fallback",
-          recommendedCaloriesKcal: fallback.calories,
-          recommendedProteinG: fallback.protein,
-          comment: "Auto fallback used because AI target generation was unavailable."
-        });
-        setDailyTargetsDate(selectedDate);
-      }
+      refreshDailyNutritionTargetsInBackground(selectedDate, {
+        forceRefresh: true,
+        fallbackWeightKg: weightPayload.weightKg,
+        placeholderWhileLoading: true,
+        reason: "daily-checkin"
+      });
     } catch (error) {
       Alert.alert("Failed to complete daily check-in", String(error));
     } finally {
@@ -1975,26 +2017,20 @@ export default function App() {
     if (!profile?.profileInitialized || selectedDate !== today || screen !== "record") {
       return;
     }
+    if (dailyTargetsStatus === "loading") {
+      return;
+    }
     const checkInInitialized = recordDetail?.checkInInitialized === true;
     const alreadyLoadedTargets = dailyTargetsDate === today && dailyNutritionTargets !== null;
     if (!checkInInitialized || alreadyLoadedTargets) {
       return;
     }
-    fetchDailyNutritionTargets(today)
-      .then((payload) => {
-        setDailyNutritionTargets(payload);
-        setDailyTargetsDate(today);
-      })
-      .catch(() => {
-        const fallback = fallbackNutritionTargetsFromWeight(savedBodyWeightKg);
-        setDailyNutritionTargets({
-          source: "fallback",
-          recommendedCaloriesKcal: fallback.calories,
-          recommendedProteinG: fallback.protein,
-          comment: "Auto fallback used because AI target generation was unavailable."
-        });
-        setDailyTargetsDate(today);
-      });
+    refreshDailyNutritionTargetsInBackground(today, {
+      forceRefresh: false,
+      fallbackWeightKg: savedBodyWeightKg,
+      placeholderWhileLoading: false,
+      reason: "effect-hydrate"
+    });
   }, [
     profile?.profileInitialized,
     selectedDate,
@@ -2002,6 +2038,7 @@ export default function App() {
     recordDetail?.checkInInitialized,
     dailyTargetsDate,
     dailyNutritionTargets,
+    dailyTargetsStatus,
     savedBodyWeightKg
   ]);
 

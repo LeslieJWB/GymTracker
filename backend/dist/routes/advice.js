@@ -22,7 +22,8 @@ const dailySummarySchema = z.object({
     date: z.string().regex(datePattern)
 });
 const dailyNutritionTargetsSchema = z.object({
-    date: z.string().regex(datePattern)
+    date: z.string().regex(datePattern),
+    forceRefresh: z.boolean().optional()
 });
 const exerciseFeedbackSchema = z.object({
     exerciseId: idSchema,
@@ -504,7 +505,7 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
     if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const { date } = parsed.data;
+    const { date, forceRefresh = false } = parsed.data;
     try {
         const appUser = await upsertUserFromAuth(req.auth);
         const promptProfile = await getPromptProfile(appUser.id, date);
@@ -557,8 +558,8 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
         };
         const cachedCalories = existing?.daily_calorie_target_kcal ? Number(existing.daily_calorie_target_kcal) : null;
         const cachedProtein = existing?.daily_protein_target_g ? Number(existing.daily_protein_target_g) : null;
-        const needsCaloriesFromLlm = userCalorieOverride === null && cachedCalories === null;
-        const needsProteinFromLlm = userProteinOverride === null && cachedProtein === null;
+        const needsCaloriesFromLlm = userCalorieOverride === null && (cachedCalories === null || forceRefresh);
+        const needsProteinFromLlm = userProteinOverride === null && (cachedProtein === null || forceRefresh);
         if (!needsCaloriesFromLlm && !needsProteinFromLlm) {
             const responsePayload = {
                 source: (userCalorieOverride !== null || userProteinOverride !== null
