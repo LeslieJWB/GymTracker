@@ -1444,7 +1444,6 @@ export function RecordScreen({
                   style={styles.notesInput}
                   multiline
                   numberOfLines={4}
-      
                   value={setDraftsByExerciseId[setNotesTarget.exerciseId]?.[setNotesTarget.setId]?.notes ?? ""}
                   onChangeText={(value) => {
                     const draft = setDraftsByExerciseId[setNotesTarget.exerciseId]?.[setNotesTarget.setId];
@@ -1510,7 +1509,6 @@ export function RecordScreen({
                   style={styles.notesInput}
                   multiline
                   numberOfLines={4}
-      
                   value={exerciseNotesDraftById[exerciseNotesTarget.exerciseId] ?? ""}
                   onChangeText={(value) => updateExerciseNotesDraft(exerciseNotesTarget.exerciseId, value)}
                   placeholder="e.g. Keep elbows tucked and control eccentric"

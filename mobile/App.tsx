@@ -7,13 +7,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  type TextInputProps,
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -55,7 +55,6 @@ import { requestKey } from "./src/utils/request";
 import { organicShapes, palette, radius, shadows, textStyles, withPressScale } from "./src/styles/theme";
 
 const DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
-
 type ExerciseDetailsById = Record<string, ExerciseDetail>;
 type SetDraftsByExerciseId = Record<string, SetDrafts>;
 type SavingSetIdsByExerciseId = Record<string, Record<string, boolean>>;
@@ -67,6 +66,18 @@ type FoodImagePayload = {
   mimeType: string;
   dataBase64: string;
 };
+
+type OnboardingUnitInputConfig = {
+  key: string;
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  keyboardType: TextInputProps["keyboardType"];
+  placeholder: string;
+  unit: string;
+};
+
+const onboardingGenderOptions = ["male", "female"] as const;
 
 function monthRange(monthCursor: Date): { from: string; to: string } {
   const year = monthCursor.getFullYear();
@@ -187,6 +198,7 @@ function AppContent() {
   const [showOnboardingDatePicker, setShowOnboardingDatePicker] = useState(false);
   const [onboardingPendingDate, setOnboardingPendingDate] = useState<Date>(new Date());
   const [onboardingLlmPrompt, setOnboardingLlmPrompt] = useState("");
+  const [showOnboardingAdvancedSettings, setShowOnboardingAdvancedSettings] = useState(false);
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
 
@@ -2025,6 +2037,75 @@ function AppContent() {
       !hasCompletedDailyCheckIn
   );
 
+  const onboardingRequiredFields: OnboardingUnitInputConfig[] = [
+    {
+      key: "default-weight",
+      label: "Default Body Weight (kg)",
+      value: onboardingDefaultWeight,
+      onChangeText: (value) => setOnboardingDefaultWeight(sanitizeWeightInput(value)),
+      keyboardType: "decimal-pad",
+      placeholder: "0",
+      unit: "kg"
+    },
+    {
+      key: "height",
+      label: "Height (cm)",
+      value: onboardingHeight,
+      onChangeText: (value) => setOnboardingHeight(digitsOnly(value)),
+      keyboardType: "number-pad",
+      placeholder: "0",
+      unit: "cm"
+    }
+  ];
+  const onboardingOptionalFields: OnboardingUnitInputConfig[] = [
+    {
+      key: "default-body-fat",
+      label: "Default Body Fat % (optional)",
+      value: onboardingDefaultBodyFat,
+      onChangeText: (value) => setOnboardingDefaultBodyFat(sanitizeBodyFatInput(value)),
+      keyboardType: "decimal-pad",
+      placeholder: "e.g. 18.5",
+      unit: "%"
+    },
+    {
+      key: "daily-calorie-target",
+      label: "Daily Calorie Target (kcal, optional)",
+      value: onboardingCalorieTarget,
+      onChangeText: (value) => setOnboardingCalorieTarget(digitsOnly(value)),
+      keyboardType: "number-pad",
+      placeholder: "e.g. 2200",
+      unit: "kcal"
+    },
+    {
+      key: "daily-protein-target",
+      label: "Daily Protein Target (g, optional)",
+      value: onboardingProteinTarget,
+      onChangeText: (value) => setOnboardingProteinTarget(digitsOnly(value)),
+      keyboardType: "number-pad",
+      placeholder: "e.g. 150",
+      unit: "g"
+    }
+  ];
+  const renderOnboardingUnitField = (field: OnboardingUnitInputConfig) => (
+    <View key={field.key} style={styles.onboardingField}>
+      <Text style={styles.onboardingLabel}>{field.label}</Text>
+      <View style={styles.onboardingUnitRow}>
+        <TextInput
+          style={styles.onboardingInput}
+          value={field.value}
+          onChangeText={field.onChangeText}
+          keyboardType={field.keyboardType}
+          placeholder={field.placeholder}
+          placeholderTextColor="#78786C"
+          editable={!onboardingSubmitting}
+        />
+        <View style={styles.onboardingUnitBadge}>
+          <Text style={styles.onboardingUnitBadgeText}>{field.unit}</Text>
+        </View>
+      </View>
+    </View>
+  );
+
   if (!fontsLoaded) {
     return <SafeAreaView style={appStyles.safeArea} />;
   }
@@ -2134,142 +2215,71 @@ function AppContent() {
             <Text style={styles.onboardingHint}>
               We need these details once before you can continue.
             </Text>
-            <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>Gender</Text>
-              <View style={styles.onboardingSegmentedRow}>
-                {(["male", "female"] as const).map((option) => {
-                  const selected = onboardingGender === option;
-                  return (
-                    <Pressable
-                      key={option}
-                      style={[styles.onboardingSegmentedOption, selected && styles.onboardingSegmentedOptionActive]}
-                      onPress={() => setOnboardingGender(option)}
-                      disabled={onboardingSubmitting}
-                    >
-                      <Text style={[styles.onboardingSegmentedText, selected && styles.onboardingSegmentedTextActive]}>
-                        {option.charAt(0).toUpperCase() + option.slice(1)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-            <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>Default Body Weight (kg)</Text>
-              <View style={styles.onboardingUnitRow}>
-                <TextInput
-                  style={styles.onboardingInput}
-                  value={onboardingDefaultWeight}
-                  onChangeText={(value) => setOnboardingDefaultWeight(sanitizeWeightInput(value))}
-                  keyboardType="decimal-pad"
-
-                  placeholder="0"
-                  placeholderTextColor="#78786C"
-                  editable={!onboardingSubmitting}
-                />
-                <View style={styles.onboardingUnitBadge}>
-                  <Text style={styles.onboardingUnitBadgeText}>kg</Text>
+            <View style={styles.onboardingSection}>
+              <Text style={styles.onboardingSectionTitle}>Required details</Text>
+              <View style={styles.onboardingField}>
+                <Text style={styles.onboardingLabel}>Gender</Text>
+                <View style={styles.onboardingSegmentedRow}>
+                  {onboardingGenderOptions.map((option) => {
+                    const selected = onboardingGender === option;
+                    return (
+                      <Pressable
+                        key={option}
+                        style={[styles.onboardingSegmentedOption, selected && styles.onboardingSegmentedOptionActive]}
+                        onPress={() => setOnboardingGender(option)}
+                        disabled={onboardingSubmitting}
+                      >
+                        <Text style={[styles.onboardingSegmentedText, selected && styles.onboardingSegmentedTextActive]}>
+                          {option.charAt(0).toUpperCase() + option.slice(1)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
-            </View>
-            <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>Default Body Fat % (optional)</Text>
-              <View style={styles.onboardingUnitRow}>
-                <TextInput
-                  style={styles.onboardingInput}
-                  value={onboardingDefaultBodyFat}
-                  onChangeText={(value) => setOnboardingDefaultBodyFat(sanitizeBodyFatInput(value))}
-                  keyboardType="decimal-pad"
-
-                  placeholder="e.g. 18.5"
-                  placeholderTextColor="#78786C"
-                  editable={!onboardingSubmitting}
-                />
-                <View style={styles.onboardingUnitBadge}>
-                  <Text style={styles.onboardingUnitBadgeText}>%</Text>
-                </View>
+              {onboardingRequiredFields.map(renderOnboardingUnitField)}
+              <View style={styles.onboardingField}>
+                <Text style={styles.onboardingLabel}>Date of Birth</Text>
+                <Pressable
+                  style={styles.onboardingDateButton}
+                  onPress={openOnboardingDatePicker}
+                  disabled={onboardingSubmitting}
+                >
+                  <Text style={onboardingDateOfBirth ? styles.onboardingDateText : styles.onboardingDatePlaceholder}>
+                    {onboardingDateOfBirth || "Select date"}
+                  </Text>
+                  <Text style={styles.onboardingDateChevron}>›</Text>
+                </Pressable>
               </View>
             </View>
-            <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>Height (cm)</Text>
-              <View style={styles.onboardingUnitRow}>
-                <TextInput
-                  style={styles.onboardingInput}
-                  value={onboardingHeight}
-                  onChangeText={(value) => setOnboardingHeight(digitsOnly(value))}
-                  keyboardType="number-pad"
-
-                  placeholder="0"
-                  placeholderTextColor="#78786C"
-                  editable={!onboardingSubmitting}
-                />
-                <View style={styles.onboardingUnitBadge}>
-                  <Text style={styles.onboardingUnitBadgeText}>cm</Text>
-                </View>
-              </View>
-            </View>
-            <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>Daily Calorie Target (kcal, optional)</Text>
-              <View style={styles.onboardingUnitRow}>
-                <TextInput
-                  style={styles.onboardingInput}
-                  value={onboardingCalorieTarget}
-                  onChangeText={(value) => setOnboardingCalorieTarget(digitsOnly(value))}
-                  keyboardType="number-pad"
-
-                  placeholder="e.g. 2200"
-                  placeholderTextColor="#78786C"
-                  editable={!onboardingSubmitting}
-                />
-                <View style={styles.onboardingUnitBadge}>
-                  <Text style={styles.onboardingUnitBadgeText}>kcal</Text>
-                </View>
-              </View>
-            </View>
-            <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>Daily Protein Target (g, optional)</Text>
-              <View style={styles.onboardingUnitRow}>
-                <TextInput
-                  style={styles.onboardingInput}
-                  value={onboardingProteinTarget}
-                  onChangeText={(value) => setOnboardingProteinTarget(digitsOnly(value))}
-                  keyboardType="number-pad"
-
-                  placeholder="e.g. 150"
-                  placeholderTextColor="#78786C"
-                  editable={!onboardingSubmitting}
-                />
-                <View style={styles.onboardingUnitBadge}>
-                  <Text style={styles.onboardingUnitBadgeText}>g</Text>
-                </View>
-              </View>
-            </View>
-            <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>Date of Birth</Text>
+            <View style={styles.onboardingSection}>
               <Pressable
-                style={styles.onboardingDateButton}
-                onPress={openOnboardingDatePicker}
+                style={styles.onboardingSectionToggle}
+                onPress={() => setShowOnboardingAdvancedSettings((current) => !current)}
                 disabled={onboardingSubmitting}
               >
-                <Text style={onboardingDateOfBirth ? styles.onboardingDateText : styles.onboardingDatePlaceholder}>
-                  {onboardingDateOfBirth || "Select date"}
-                </Text>
-                <Text style={styles.onboardingDateChevron}>›</Text>
+                <Text style={styles.onboardingSectionTitle}>Advanced Settings</Text>
+                <Text style={styles.onboardingSectionChevron}>{showOnboardingAdvancedSettings ? "⌄" : "›"}</Text>
               </Pressable>
-            </View>
-            <View style={styles.onboardingField}>
-              <Text style={styles.onboardingLabel}>AI Coaching Prompt(optional)</Text>
-              <TextInput
-                style={[styles.onboardingInput, styles.onboardingPromptInput]}
-                value={onboardingLlmPrompt}
-                onChangeText={setOnboardingLlmPrompt}
-                placeholder="Optional instructions for your AI coach, e.g. Goal is muscle growth"
-                placeholderTextColor="#78786C"
-                editable={!onboardingSubmitting}
-                multiline
-                textAlignVertical="top"
-                maxLength={3000}
-              />
+              {showOnboardingAdvancedSettings ? (
+                <>
+                  {onboardingOptionalFields.map(renderOnboardingUnitField)}
+                  <View style={styles.onboardingField}>
+                    <Text style={styles.onboardingLabel}>AI coaching prompt (optional)</Text>
+                    <TextInput
+                      style={[styles.onboardingInput, styles.onboardingPromptInput]}
+                      value={onboardingLlmPrompt}
+                      onChangeText={setOnboardingLlmPrompt}
+                      placeholder="Optional instructions for your AI coach, e.g. Goal is muscle growth"
+                      placeholderTextColor="#78786C"
+                      editable={!onboardingSubmitting}
+                      multiline
+                      textAlignVertical="top"
+                      maxLength={3000}
+                    />
+                  </View>
+                </>
+              ) : null}
             </View>
             <Pressable
               style={({ pressed }) => [styles.onboardingButton, withPressScale(pressed)]}
@@ -2357,85 +2367,74 @@ function AppContent() {
           </View>
         ) : null}
         {screen === "record" ? (
-          shouldBlockHomeWithDailyGate ? (
-            <View style={styles.homeBlockedWrap}>
-              <View style={styles.homeBlockedCard}>
-                <Text style={styles.homeBlockedTitle}>Daily check-in required</Text>
-                <Text style={styles.homeBlockedHint}>
-                  Add today&apos;s theme and weight so we can generate your nutrition targets. Body fat is optional.
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <ScrollView contentContainerStyle={styles.recordScrollContent}>
-              <RecordScreen
-                loading={loading}
-                savingRecordTheme={savingRecordTheme}
-                selectedDate={selectedDate}
-                recordDetail={recordDetail}
-                recordThemeDraft={recordThemeDraft}
-                setRecordThemeDraft={setRecordThemeDraft}
-                saveRecordTheme={() => {
-                  saveRecordTheme().catch(() => {});
-                }}
-                exerciseItems={exerciseItems}
-                addExercise={addExercise}
-                deleteExerciseInRecord={(exerciseId: string) => {
-                  deleteExerciseFromRecord(exerciseId).catch(() => {});
-                }}
-                user={user}
-                expandedExerciseIds={expandedExerciseIds}
-                exerciseDetailsById={exerciseDetailsById}
-                exerciseNotesDraftById={exerciseNotesDraftById}
-                savingExerciseNotesById={savingExerciseNotesById}
-                updateExerciseNotesDraft={updateExerciseNotesDraft}
-                saveExerciseNotes={(exerciseId: string) => {
-                  saveExerciseNotes(exerciseId).catch(() => {});
-                }}
-                setDraftsByExerciseId={setDraftsByExerciseId}
-                savingSetIdsByExerciseId={savingSetIdsByExerciseId}
-                toggleExerciseExpanded={(exerciseId: string) => {
-                  toggleExerciseExpanded(exerciseId).catch(() => {});
-                }}
-                setSetDraft={setSetDraft}
-                saveSet={(exerciseId: string, setId: string) => {
-                  saveSet(exerciseId, setId).catch(() => {});
-                }}
-                addSet={addSet}
-                addSetsFromPlan={addSetsFromPlan}
-                fetchExercisePlan={fetchExercisePlan}
-                deleteSet={(exerciseId: string, setId: string) => {
-                  deleteSet(exerciseId, setId).catch(() => {});
-                }}
-                toggleSetCompleted={(exerciseId: string, setId: string) => {
-                  toggleSetCompleted(exerciseId, setId).catch(() => {});
-                }}
-                savingFoodConsumption={savingFoodConsumption}
-                deletingFoodIds={deletingFoodIds}
-                addFoodConsumption={addFoodConsumption}
-                deleteFoodConsumption={(foodConsumptionId: string) => {
-                  deleteFoodConsumption(foodConsumptionId).catch(() => {});
-                }}
-                bodyWeightDraft={bodyWeightDraft}
-                setBodyWeightDraft={setBodyWeightDraft}
-                savedBodyWeightKg={savedBodyWeightKg}
-                bodyFatDraft={bodyFatDraft}
-                setBodyFatDraft={setBodyFatDraft}
-                savedBodyFatPercentage={savedBodyFatPercentage}
-                savingBodyWeight={savingBodyWeight}
-                saveBodyWeight={() => {
-                  saveBodyMetricsByDate(selectedDate, bodyWeightDraft, bodyFatDraft).catch(() => {});
-                }}
-                listWorkoutTemplates={() => listWorkoutTemplates()}
-                saveWorkoutTemplate={saveWorkoutTemplate}
-                applyWorkoutTemplate={applyWorkoutTemplate}
-                deleteWorkoutTemplate={deleteWorkoutTemplate}
-                fetchDailySummary={(date) => fetchDailySummary(date)}
-                fetchExerciseFeedback={(input) => fetchExerciseFeedback(input)}
-                dailyNutritionTargets={dailyTargetsDate === selectedDate ? dailyNutritionTargets : null}
-              />
-            </ScrollView>
-          )
+          <ScrollView contentContainerStyle={styles.recordScrollContent}>
+            <RecordScreen
+              loading={loading}
+              savingRecordTheme={savingRecordTheme}
+              selectedDate={selectedDate}
+              recordDetail={recordDetail}
+              recordThemeDraft={recordThemeDraft}
+              setRecordThemeDraft={setRecordThemeDraft}
+              saveRecordTheme={() => {
+                saveRecordTheme().catch(() => {});
+              }}
+              exerciseItems={exerciseItems}
+              addExercise={addExercise}
+              deleteExerciseInRecord={(exerciseId: string) => {
+                deleteExerciseFromRecord(exerciseId).catch(() => {});
+              }}
+              user={user}
+              expandedExerciseIds={expandedExerciseIds}
+              exerciseDetailsById={exerciseDetailsById}
+              exerciseNotesDraftById={exerciseNotesDraftById}
+              savingExerciseNotesById={savingExerciseNotesById}
+              updateExerciseNotesDraft={updateExerciseNotesDraft}
+              saveExerciseNotes={(exerciseId: string) => {
+                saveExerciseNotes(exerciseId).catch(() => {});
+              }}
+              setDraftsByExerciseId={setDraftsByExerciseId}
+              savingSetIdsByExerciseId={savingSetIdsByExerciseId}
+              toggleExerciseExpanded={(exerciseId: string) => {
+                toggleExerciseExpanded(exerciseId).catch(() => {});
+              }}
+              setSetDraft={setSetDraft}
+              saveSet={(exerciseId: string, setId: string) => {
+                saveSet(exerciseId, setId).catch(() => {});
+              }}
+              addSet={addSet}
+              addSetsFromPlan={addSetsFromPlan}
+              fetchExercisePlan={fetchExercisePlan}
+              deleteSet={(exerciseId: string, setId: string) => {
+                deleteSet(exerciseId, setId).catch(() => {});
+              }}
+              toggleSetCompleted={(exerciseId: string, setId: string) => {
+                toggleSetCompleted(exerciseId, setId).catch(() => {});
+              }}
+              savingFoodConsumption={savingFoodConsumption}
+              deletingFoodIds={deletingFoodIds}
+              addFoodConsumption={addFoodConsumption}
+              deleteFoodConsumption={(foodConsumptionId: string) => {
+                deleteFoodConsumption(foodConsumptionId).catch(() => {});
+              }}
+              bodyWeightDraft={bodyWeightDraft}
+              setBodyWeightDraft={setBodyWeightDraft}
+              savedBodyWeightKg={savedBodyWeightKg}
+              bodyFatDraft={bodyFatDraft}
+              setBodyFatDraft={setBodyFatDraft}
+              savedBodyFatPercentage={savedBodyFatPercentage}
+              savingBodyWeight={savingBodyWeight}
+              saveBodyWeight={() => {
+                saveBodyMetricsByDate(selectedDate, bodyWeightDraft, bodyFatDraft).catch(() => {});
+              }}
+              listWorkoutTemplates={() => listWorkoutTemplates()}
+              saveWorkoutTemplate={saveWorkoutTemplate}
+              applyWorkoutTemplate={applyWorkoutTemplate}
+              deleteWorkoutTemplate={deleteWorkoutTemplate}
+              fetchDailySummary={(date) => fetchDailySummary(date)}
+              fetchExerciseFeedback={(input) => fetchExerciseFeedback(input)}
+              dailyNutritionTargets={dailyTargetsDate === selectedDate ? dailyNutritionTargets : null}
+            />
+          </ScrollView>
         ) : null}
         {screen === "profile" ? (
           <View style={appStyles.flex}>
@@ -2467,12 +2466,7 @@ function AppContent() {
             />
           </View>
         ) : null}
-        <Modal
-          visible={shouldBlockHomeWithDailyGate}
-          animationType="fade"
-          transparent
-          onRequestClose={() => {}}
-        >
+        {shouldBlockHomeWithDailyGate ? (
           <View style={styles.dailyGateBackdrop}>
             <View style={styles.dailyGateCard}>
               <Text style={styles.dailyGateTitle}>Today&apos;s check-in</Text>
@@ -2485,7 +2479,12 @@ function AppContent() {
                   style={styles.dailyGateInput}
                   value={dailyCheckInThemeDraft}
                   onChangeText={setDailyCheckInThemeDraft}
-
+                  autoCorrect={false}
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  textContentType="none"
+                  keyboardType={Platform.OS === "ios" ? "ascii-capable" : "default"}
                   placeholder="e.g. push, pull, rest"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
@@ -2499,7 +2498,6 @@ function AppContent() {
                   value={dailyCheckInWeightDraft}
                   onChangeText={(value) => setDailyCheckInWeightDraft(sanitizeWeightInput(value))}
                   keyboardType="decimal-pad"
-
                   placeholder="Leave empty to use weight recorded before"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
@@ -2512,7 +2510,6 @@ function AppContent() {
                   value={dailyCheckInBodyFatDraft}
                   onChangeText={(value) => setDailyCheckInBodyFatDraft(sanitizeBodyFatInput(value))}
                   keyboardType="decimal-pad"
-
                   placeholder="Leave empty to use latest/default body fat"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
@@ -2533,7 +2530,7 @@ function AppContent() {
               </Pressable>
             </View>
           </View>
-        </Modal>
+        ) : null}
         {!keyboardVisible ? (
           <View
             style={[
@@ -2653,8 +2650,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DED8CF",
     backgroundColor: "#FEFEFA",
-    padding: 18,
-    gap: 10,
+    padding: 20,
+    gap: 14,
     ...shadows.soft
   },
   onboardingTitle: {
@@ -2666,6 +2663,27 @@ const styles = StyleSheet.create({
     color: "#78786C",
     fontSize: 14,
     fontFamily: textStyles.body.fontFamily
+  },
+  onboardingSection: {
+    gap: 10
+  },
+  onboardingSectionTitle: {
+    color: "#78786C",
+    fontSize: 12,
+    fontFamily: textStyles.bodySemiBold.fontFamily,
+    textTransform: "uppercase",
+    letterSpacing: 0.8
+  },
+  onboardingSectionToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 32
+  },
+  onboardingSectionChevron: {
+    color: "#78786C",
+    fontSize: 20,
+    fontFamily: textStyles.bodySemiBold.fontFamily
   },
   onboardingField: {
     gap: 6
@@ -2813,11 +2831,14 @@ const styles = StyleSheet.create({
     fontFamily: textStyles.body.fontFamily
   },
   dailyGateBackdrop: {
+    ...StyleSheet.absoluteFillObject,
     flex: 1,
     backgroundColor: "#2C2C2430",
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 20
+    paddingHorizontal: 20,
+    zIndex: 50,
+    elevation: 50
   },
   dailyGateCard: {
     width: "100%",
