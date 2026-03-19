@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View
 } from "react-native";
+import { KeyboardScreen } from "../keyboard/KeyboardScreen";
+import { AppButton } from "./ui/AppButton";
+import { AppCard } from "./ui/AppCard";
+import { AppTextInput } from "./ui/AppTextInput";
 import { palette, radius, shadows, textStyles, withPressScale } from "../styles/theme";
 
 type AuthScreenProps = {
@@ -96,48 +97,49 @@ export function AuthScreen({
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+    <KeyboardScreen style={styles.flex}>
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        keyboardDismissMode="on-drag"
       >
         <View pointerEvents="none" style={styles.blob} />
-        <Text style={styles.title}>Welcome to IntelliFit</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <AppCard style={styles.authCard}>
+          <Text style={styles.title}>Welcome to IntelliFit</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
 
-        <View style={styles.modeRow}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.modeButton,
-              mode === "signIn" ? styles.modeButtonActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              setMode("signIn");
-              setLocalError(null);
-            }}
-            disabled={loading}
-          >
-            <Text style={[styles.modeLabel, mode === "signIn" ? styles.modeLabelActive : null]}>Sign in</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.modeButton,
-              mode === "signUp" ? styles.modeButtonActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              setMode("signUp");
-              setLocalError(null);
-            }}
-            disabled={loading}
-          >
-            <Text style={[styles.modeLabel, mode === "signUp" ? styles.modeLabelActive : null]}>Sign up</Text>
-          </Pressable>
-        </View>
+          <View style={styles.modeRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.modeButton,
+                mode === "signIn" ? styles.modeButtonActive : null,
+                withPressScale(pressed)
+              ]}
+              onPress={() => {
+                setMode("signIn");
+                setLocalError(null);
+              }}
+              disabled={loading}
+            >
+              <Text style={[styles.modeLabel, mode === "signIn" ? styles.modeLabelActive : null]}>Sign in</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.modeButton,
+                mode === "signUp" ? styles.modeButtonActive : null,
+                withPressScale(pressed)
+              ]}
+              onPress={() => {
+                setMode("signUp");
+                setLocalError(null);
+              }}
+              disabled={loading}
+            >
+              <Text style={[styles.modeLabel, mode === "signUp" ? styles.modeLabelActive : null]}>Sign up</Text>
+            </Pressable>
+          </View>
 
-        <TextInput
+        <AppTextInput
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
@@ -145,18 +147,16 @@ export function AuthScreen({
           autoComplete="email"
           placeholder="Email"
           placeholderTextColor={palette.mutedForeground}
-          style={styles.input}
           value={email}
           onChangeText={setEmail}
           editable={!loading}
         />
-        <TextInput
+        <AppTextInput
           secureTextEntry
           textContentType={mode === "signIn" ? "password" : "newPassword"}
           autoComplete={mode === "signIn" ? "current-password" : "new-password"}
           placeholder="Password"
           placeholderTextColor={palette.mutedForeground}
-          style={styles.input}
           value={password}
           onChangeText={setPassword}
           editable={!loading}
@@ -172,18 +172,18 @@ export function AuthScreen({
             <Text style={styles.forgotPasswordLabel}>Forgot password?</Text>
           </Pressable>
         ) : null}
-        <Pressable style={({ pressed }) => [styles.primaryButton, withPressScale(pressed)]} onPress={handleEmailAuth} disabled={loading}>
-          <Text style={styles.primaryButtonLabel}>{actionLabel}</Text>
-        </Pressable>
+        <AppButton onPress={handleEmailAuth} disabled={loading}>
+          {actionLabel}
+        </AppButton>
 
         <Text style={styles.orLabel}>or continue with</Text>
 
-        <Pressable style={({ pressed }) => [styles.oauthButton, withPressScale(pressed)]} onPress={onGoogle} disabled={loading}>
-          <Text style={styles.oauthButtonLabel}>Continue with Google</Text>
-        </Pressable>
-        <Pressable style={({ pressed }) => [styles.secondaryButton, withPressScale(pressed)]} onPress={onApple} disabled={loading}>
-          <Text style={styles.secondaryButtonLabel}>Continue with Apple</Text>
-        </Pressable>
+        <AppButton variant="outline" onPress={onGoogle} disabled={loading}>
+          Continue with Google
+        </AppButton>
+        <AppButton variant="secondary" onPress={onApple} disabled={loading}>
+          Continue with Apple
+        </AppButton>
         {loading ? <ActivityIndicator size="small" color={palette.primary} style={styles.loader} /> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {canResendConfirmation ? (
@@ -199,8 +199,9 @@ export function AuthScreen({
         ) : null}
         {localError ? <Text style={styles.error}>{localError}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        </AppCard>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 
@@ -214,6 +215,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
     backgroundColor: "transparent"
+  },
+  authCard: {
+    gap: 12
   },
   blob: {
     position: "absolute",
@@ -264,29 +268,6 @@ const styles = StyleSheet.create({
   modeLabelActive: {
     color: palette.primaryForeground
   },
-  input: {
-    minHeight: 48,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: "#FFFFFFC0",
-    paddingHorizontal: 16,
-    color: palette.foreground,
-    fontFamily: textStyles.body.fontFamily,
-    fontSize: 15
-  },
-  primaryButton: {
-    backgroundColor: palette.primary,
-    borderRadius: radius.pill,
-    paddingVertical: 12,
-    alignItems: "center",
-    ...shadows.soft
-  },
-  primaryButtonLabel: {
-    color: palette.primaryForeground,
-    fontFamily: textStyles.bodyBold.fontFamily,
-    fontSize: 15
-  },
   forgotPasswordButton: {
     alignSelf: "flex-end",
     minHeight: 30,
@@ -305,32 +286,6 @@ const styles = StyleSheet.create({
     fontFamily: textStyles.body.fontFamily,
     fontSize: 13,
     marginTop: 2
-  },
-  oauthButton: {
-    borderRadius: radius.pill,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: `${palette.border}CC`,
-    backgroundColor: "#FFFFFFE0"
-  },
-  oauthButtonLabel: {
-    color: palette.foreground,
-    fontFamily: textStyles.bodyBold.fontFamily,
-    fontSize: 15
-  },
-  secondaryButton: {
-    borderRadius: radius.pill,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: palette.secondary,
-    backgroundColor: "#FFFFFFD9"
-  },
-  secondaryButtonLabel: {
-    color: palette.secondary,
-    fontFamily: textStyles.bodyBold.fontFamily,
-    fontSize: 15
   },
   loader: {
     marginTop: 6

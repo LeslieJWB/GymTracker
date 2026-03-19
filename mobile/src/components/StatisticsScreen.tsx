@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LineChart } from "react-native-chart-kit";
+import { AppTextInput } from "./ui/AppTextInput";
 import { palette, radius, shadows, textStyles, withPressScale } from "../styles/theme";
 import {
   BodyWeightRecord,
@@ -8,6 +9,7 @@ import {
   ExerciseItem,
   NutritionDailyPoint
 } from "../types/workout";
+import { normalizeSearchText } from "../utils/inputSanitizers";
 
 type StatisticsScreenProps = {
   loading: boolean;
@@ -21,14 +23,6 @@ type StatisticsScreenProps = {
 };
 
 type NumericPoint = { date: string; value: number };
-
-function normalizeSearchText(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
 
 function chartWidth(pointCount: number): number {
   return Math.max(360, pointCount * 60);
@@ -324,7 +318,7 @@ export function StatisticsScreen({
         <>
           <View style={styles.chartCard}>
             <Text style={styles.chartTitle}>Exercise Trend</Text>
-            <TextInput
+            <AppTextInput
               style={styles.searchInput}
               value={exerciseSearchTerm}
               onChangeText={setExerciseSearchTerm}

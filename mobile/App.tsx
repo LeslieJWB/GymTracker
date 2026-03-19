@@ -7,8 +7,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -19,12 +17,14 @@ import {
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { FocusedInputEvents, KeyboardProvider, KeyboardToolbar } from "react-native-keyboard-controller";
 import { AuthScreen } from "./src/components/AuthScreen";
 import { CalendarScreen } from "./src/components/CalendarScreen";
 import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/components/RecordScreen.tsx";
 import { ProfileScreen } from "./src/components/ProfileScreen";
 import { StatisticsScreen } from "./src/components/StatisticsScreen";
+import { ModalShell } from "./src/components/ui/ModalShell";
+import { KeyboardSystemProvider, useKeyboardSystem } from "./src/keyboard/KeyboardSystemProvider";
+import { KeyboardScreen } from "./src/keyboard/KeyboardScreen";
 import { useAppLifecycleEffects } from "./src/hooks/useAppLifecycleEffects";
 import { useAuthSession } from "./src/hooks/useAuthSession";
 import { useRecordEffects } from "./src/hooks/useRecordEffects";
@@ -49,6 +49,8 @@ import {
   WorkoutTemplateSummary
 } from "./src/types/workout";
 import { DATE_PATTERN, daysAgo, todayDate } from "./src/utils/date";
+import { parseDateValue, toDateString } from "./src/utils/dateInput";
+import { digitsOnly, sanitizeBodyFatInput, sanitizeWeightInput } from "./src/utils/inputSanitizers";
 import { requestKey } from "./src/utils/request";
 import { organicShapes, palette, radius, shadows, textStyles, withPressScale } from "./src/styles/theme";
 
@@ -66,13 +68,6 @@ type FoodImagePayload = {
   dataBase64: string;
 };
 
-function toDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function monthRange(monthCursor: Date): { from: string; to: string } {
   const year = monthCursor.getFullYear();
   const month = monthCursor.getMonth();
@@ -82,40 +77,6 @@ function monthRange(monthCursor: Date): { from: string; to: string } {
     from: toDateString(monthStart),
     to: toDateString(monthEnd)
   };
-}
-
-function sanitizeWeightInput(value: string): string {
-  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
-  const [whole, ...decimals] = normalized.split(".");
-  if (decimals.length === 0) {
-    return whole;
-  }
-  return `${whole}.${decimals.join("")}`;
-}
-
-function sanitizeBodyFatInput(value: string): string {
-  return sanitizeWeightInput(value);
-}
-
-function digitsOnly(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
-function parseDateValue(value: string): Date | null {
-  const matched = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!matched) {
-    return null;
-  }
-
-  const year = Number(matched[1]);
-  const month = Number(matched[2]);
-  const day = Number(matched[3]);
-  const parsed = new Date(year, month - 1, day);
-  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
-    return null;
-  }
-
-  return parsed;
 }
 
 function parseApiErrorPayload(error: unknown): { message: string; code: string | null } {
@@ -147,8 +108,9 @@ function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories
   };
 }
 
-export default function App() {
+function AppContent() {
   const insets = useSafeAreaInsets();
+  const { keyboardVisible } = useKeyboardSystem();
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
@@ -227,30 +189,8 @@ export default function App() {
   const [onboardingLlmPrompt, setOnboardingLlmPrompt] = useState("");
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [focusedInputCurrent, setFocusedInputCurrent] = useState(-1);
 
   const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL.trim().replace(/\/$/, ""), []);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    const subscription = FocusedInputEvents.addListener("focusDidSet", (e) => {
-      setFocusedInputCurrent(e.current);
-    });
-    return () => {
-      subscription.remove();
-    };
-  }, []);
 
   async function apiJson<T = unknown>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers ?? {});
@@ -2178,7 +2118,6 @@ export default function App() {
 
   if (profile && !profile.profileInitialized) {
     return (
-      <KeyboardProvider>
       <SafeAreaView edges={["top", "left", "right"]} style={appStyles.safeArea}>
         <StatusBar style="dark" />
         <View pointerEvents="none" style={styles.backgroundWrap}>
@@ -2358,54 +2297,50 @@ export default function App() {
           />
         ) : null}
         {Platform.OS === "ios" && showOnboardingDatePicker ? (
-          <Modal animationType="slide" transparent onRequestClose={() => setShowOnboardingDatePicker(false)}>
-            <Pressable style={styles.datePickerModalOverlay} onPress={() => setShowOnboardingDatePicker(false)}>
-              <Pressable style={styles.datePickerModalCard} onPress={() => {}}>
-                <View style={styles.datePickerModalHeader}>
-                  <Pressable hitSlop={12} onPress={() => setShowOnboardingDatePicker(false)}>
-                    <Text style={styles.datePickerModalCancel}>Cancel</Text>
-                  </Pressable>
-                  <Text style={styles.datePickerModalTitle}>Date of Birth</Text>
-                  <Pressable
-                    hitSlop={12}
-                    onPress={() => {
-                      setOnboardingDateOfBirth(toDateString(onboardingPendingDate));
-                      setShowOnboardingDatePicker(false);
-                    }}
-                  >
-                    <Text style={styles.datePickerModalDone}>Done</Text>
-                  </Pressable>
-                </View>
-                <View style={styles.datePickerSpinnerContainer}>
-                  <DateTimePicker
-                    value={onboardingPendingDate}
-                    mode="date"
-                    display="spinner"
-                    maximumDate={new Date()}
-                    onChange={handleOnboardingDateChange}
-                  />
-                </View>
+          <ModalShell
+            visible={showOnboardingDatePicker}
+            animationType="slide"
+            onRequestClose={() => setShowOnboardingDatePicker(false)}
+            cardStyle={styles.datePickerModalCard}
+          >
+            <View style={styles.datePickerModalHeader}>
+              <Pressable hitSlop={12} onPress={() => setShowOnboardingDatePicker(false)}>
+                <Text style={styles.datePickerModalCancel}>Cancel</Text>
               </Pressable>
-            </Pressable>
-          </Modal>
-        ) : null}
-        {Platform.OS === "ios" ? (
-          <KeyboardToolbar enabled={keyboardVisible || focusedInputCurrent >= 0} />
+              <Text style={styles.datePickerModalTitle}>Date of Birth</Text>
+              <Pressable
+                hitSlop={12}
+                onPress={() => {
+                  setOnboardingDateOfBirth(toDateString(onboardingPendingDate));
+                  setShowOnboardingDatePicker(false);
+                }}
+              >
+                <Text style={styles.datePickerModalDone}>Done</Text>
+              </Pressable>
+            </View>
+            <View style={styles.datePickerSpinnerContainer}>
+              <DateTimePicker
+                value={onboardingPendingDate}
+                mode="date"
+                display="spinner"
+                maximumDate={new Date()}
+                onChange={handleOnboardingDateChange}
+              />
+            </View>
+          </ModalShell>
         ) : null}
       </SafeAreaView>
-      </KeyboardProvider>
     );
   }
 
   return (
-    <KeyboardProvider>
     <SafeAreaView edges={["top", "left", "right"]} style={appStyles.safeArea}>
       <StatusBar style="dark" />
       <View pointerEvents="none" style={styles.backgroundWrap}>
         <View style={[styles.blob, styles.blobA]} />
         <View style={[styles.blob, styles.blobB]} />
       </View>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={appStyles.flex}>
+      <KeyboardScreen style={appStyles.flex}>
         {screen === "calendar" ? (
           <View style={appStyles.flex}>
             <CalendarScreen
@@ -2538,7 +2473,6 @@ export default function App() {
           transparent
           onRequestClose={() => {}}
         >
-          <KeyboardProvider>
           <View style={styles.dailyGateBackdrop}>
             <View style={styles.dailyGateCard}>
               <Text style={styles.dailyGateTitle}>Today&apos;s check-in</Text>
@@ -2599,10 +2533,6 @@ export default function App() {
               </Pressable>
             </View>
           </View>
-          {Platform.OS === "ios" ? (
-            <KeyboardToolbar enabled={keyboardVisible || focusedInputCurrent >= 0} />
-          ) : null}
-          </KeyboardProvider>
         </Modal>
         {!keyboardVisible ? (
           <View
@@ -2670,12 +2600,16 @@ export default function App() {
             </Pressable>
           </View>
         ) : null}
-      </KeyboardAvoidingView>
-      {Platform.OS === "ios" ? (
-        <KeyboardToolbar enabled={keyboardVisible || focusedInputCurrent >= 0} />
-      ) : null}
+      </KeyboardScreen>
     </SafeAreaView>
-    </KeyboardProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <KeyboardSystemProvider>
+      <AppContent />
+    </KeyboardSystemProvider>
   );
 }
 

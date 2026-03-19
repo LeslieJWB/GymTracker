@@ -14,8 +14,10 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { KeyboardProvider, KeyboardToolbar } from "react-native-keyboard-controller";
 import { appStyles } from "../styles/appStyles";
+import { RecordCheckInSection } from "./record/RecordCheckInSection";
+import { RecordDailyOverviewSection } from "./record/RecordDailyOverviewSection";
+import { RecordTemplateActionsSection } from "./record/RecordTemplateActionsSection";
 import { SwipeActionRow } from "./SwipeActionRow";
 import {
   AdviceReviewResult,
@@ -28,6 +30,7 @@ import {
   User,
   WorkoutTemplateSummary
 } from "../types/workout";
+import { normalizeSearchText, sanitizeBodyFatInput, sanitizeIntegerInput, sanitizeWeightInput } from "../utils/inputSanitizers";
 
 export type NewExerciseSetDraft = {
   reps: number;
@@ -50,31 +53,6 @@ type FoodImagePayload = {
 type FoodImageDraft = FoodImagePayload & {
   previewUri: string;
 };
-
-function sanitizeIntegerInput(value: string): string {
-  return value.replace(/\D+/g, "");
-}
-
-function sanitizeWeightInput(value: string): string {
-  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
-  const [whole, ...decimals] = normalized.split(".");
-  if (decimals.length === 0) {
-    return whole;
-  }
-  return `${whole}.${decimals.join("")}`;
-}
-
-function sanitizeBodyFatInput(value: string): string {
-  return sanitizeWeightInput(value);
-}
-
-function normalizeSearchText(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
 
 type RecordScreenProps = {
   loading: boolean;
@@ -381,8 +359,6 @@ export function RecordScreen({
   const normalizedSavedBodyFat =
     savedBodyFatPercentage === null ? null : Number(savedBodyFatPercentage.toFixed(1));
   const bodyFatDirty = normalizedBodyFatDraft !== normalizedSavedBodyFat;
-  const checkInSaving = savingRecordTheme || savingBodyWeight;
-  const checkInDirty = themeDirty || bodyWeightDirty || bodyFatDirty;
   const totalCaloriesKcal = recordDetail?.totalCaloriesKcal ?? 0;
   const totalProteinG = recordDetail?.totalProteinG ?? 0;
   const calorieTarget = dailyNutritionTargets?.recommendedCaloriesKcal ?? null;
@@ -754,164 +730,43 @@ export function RecordScreen({
 
   return (
     <>
-      <View style={styles.dailyMetricsSection}>
-        <View style={styles.dailyMetricsHeader}>
-          <Text style={styles.dailyMetricsTitle}>Daily Overview</Text>
-          <View style={styles.dailyMetricsBadge}>
-            <Text style={styles.dailyMetricsBadgeText}>Auto</Text>
-          </View>
-        </View>
-        <Text style={styles.dailyMetricsHint}>These values are calculated from today&apos;s workout and food logs.</Text>
-        <View style={styles.statsStrip}>
-          <View style={styles.statsItem}>
-            <Text style={styles.statsLabel}>Total Volume</Text>
-            <Text style={styles.statsValue}>{Math.round(totalVolume)} kg</Text>
-          </View>
-          <View style={styles.statsItem}>
-            <Text style={styles.statsLabel}>Completed Sets</Text>
-            <Text style={styles.statsValue}>{totalSetCount}</Text>
-          </View>
-        </View>
-        <View style={styles.nutritionProgressCard}>
-          <View style={styles.nutritionProgressSection}>
-            <Text style={styles.nutritionProgressTitle}>Calorie Progress</Text>
-            <View style={styles.progressRow}>
-              <Text style={styles.progressNumbers}>
-                {Math.round(totalCaloriesKcal)} / {calorieTarget ? Math.round(calorieTarget) : "--"} kcal
-              </Text>
-              {calorieOverflow > 0 ? <Text style={styles.progressOverflow}>+{calorieOverflow} kcal</Text> : null}
-            </View>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  styles.progressFillCalories,
-                  { width: `${Math.max(0, Math.min(100, Math.round((calorieProgress ?? 0) * 100)))}%` }
-                ]}
-              />
-            </View>
-            <Text style={styles.progressMeta}>
-              {calorieTarget ? `${Math.round((calorieProgress ?? 0) * 100)}% of target` : "Estimating daily target..."}
-            </Text>
-          </View>
-          <View style={[styles.nutritionProgressSection, styles.nutritionProgressSectionDivider]}>
-            <Text style={styles.nutritionProgressTitle}>Protein Progress</Text>
-            <View style={styles.progressRow}>
-              <Text style={styles.progressNumbers}>
-                {Math.round(totalProteinG)} / {proteinTarget ? Math.round(proteinTarget) : "--"} g
-              </Text>
-              {proteinOverflow > 0 ? <Text style={styles.progressOverflow}>+{proteinOverflow} g</Text> : null}
-            </View>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  styles.progressFillProtein,
-                  { width: `${Math.max(0, Math.min(100, Math.round((proteinProgress ?? 0) * 100)))}%` }
-                ]}
-              />
-            </View>
-            <Text style={styles.progressMeta}>
-              {proteinTarget ? `${Math.round((proteinProgress ?? 0) * 100)}% of target` : "Estimating daily target..."}
-            </Text>
-            {dailyNutritionTargets?.comment ? <Text style={styles.progressComment}>{dailyNutritionTargets.comment}</Text> : null}
-          </View>
-        </View>
-      </View>
+      <RecordDailyOverviewSection
+        styles={styles}
+        totalVolume={totalVolume}
+        totalSetCount={totalSetCount}
+        totalCaloriesKcal={totalCaloriesKcal}
+        calorieTarget={calorieTarget}
+        calorieOverflow={calorieOverflow}
+        calorieProgress={calorieProgress}
+        totalProteinG={totalProteinG}
+        proteinTarget={proteinTarget}
+        proteinOverflow={proteinOverflow}
+        proteinProgress={proteinProgress}
+        dailyNutritionTargets={dailyNutritionTargets}
+      />
 
-      <View style={styles.checkInCard}>
-        <View style={styles.checkInHeaderRow}>
-          <Text style={styles.checkInTitle}>Daily Check-in</Text>
-          <View
-            style={[
-              styles.themeStatusBadge,
-              checkInSaving
-                ? styles.themeStatusSavingBadge
-                : checkInDirty
-                  ? styles.themeStatusUnsavedBadge
-                  : styles.themeStatusSavedBadge
-            ]}
-          >
-            <Text style={styles.themeStatusBadgeText}>{checkInSaving ? "Saving..." : checkInDirty ? "Unsaved" : "Saved"}</Text>
-          </View>
-        </View>
-        <Text style={styles.checkInHint}>Auto-saves when you leave each field.</Text>
-        <View style={styles.checkInField}>
-          <Text style={styles.checkInFieldLabel}>Day Theme</Text>
-          <TextInput
-            style={styles.themeInput}
-            value={recordThemeDraft}
-            onChangeText={setRecordThemeDraft}
-
-            onBlur={() => {
-              if (themeDirty && !loading && !savingRecordTheme && user) {
-                saveRecordTheme();
-              }
-            }}
-            placeholder="e.g. pull, push, leg"
-            placeholderTextColor="#78786C"
-            editable={Boolean(user) && !loading}
-            maxLength={30}
-          />
-        </View>
-        <View style={styles.checkInField}>
-          <Text style={styles.checkInFieldLabel}>Today's Weight</Text>
-          <View style={styles.weightInputRow}>
-            <TextInput
-              style={styles.weightInput}
-              value={bodyWeightDraft}
-              onChangeText={(value) => setBodyWeightDraft(sanitizeWeightInput(value))}
-              keyboardType="decimal-pad"
-  
-              placeholder="0.0"
-              placeholderTextColor="#78786C"
-              editable={Boolean(user) && !loading && !savingBodyWeight}
-              onBlur={() => {
-                if (!savingBodyWeight && !loading && user) {
-                  const weightCleared = !hasBodyWeightDraft && savedBodyWeightKg !== null;
-                  if ((bodyWeightDirty && isBodyWeightDraftValid) || weightCleared) {
-                    saveBodyWeight();
-                  }
-                }
-              }}
-            />
-            <View style={styles.weightUnitPill}>
-              <Text style={styles.weightUnitText}>kg</Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.checkInField}>
-          <Text style={styles.checkInFieldLabel}>Body Fat %</Text>
-          <View style={styles.weightInputRow}>
-            <TextInput
-              style={styles.weightInput}
-              value={bodyFatDraft}
-              onChangeText={(value) => setBodyFatDraft(sanitizeBodyFatInput(value))}
-              keyboardType="decimal-pad"
-  
-              placeholder="0.0"
-              placeholderTextColor="#78786C"
-              editable={Boolean(user) && !loading && !savingBodyWeight}
-              onBlur={() => {
-                if (
-                  bodyFatDirty &&
-                  isBodyFatDraftValid &&
-                  hasBodyWeightDraft &&
-                  isBodyWeightDraftValid &&
-                  !savingBodyWeight &&
-                  !loading &&
-                  user
-                ) {
-                  saveBodyWeight();
-                }
-              }}
-            />
-            <View style={styles.weightUnitPill}>
-              <Text style={styles.weightUnitText}>%</Text>
-            </View>
-          </View>
-        </View>
-      </View>
+      <RecordCheckInSection
+        styles={styles}
+        loading={loading}
+        user={user}
+        savingRecordTheme={savingRecordTheme}
+        recordThemeDraft={recordThemeDraft}
+        setRecordThemeDraft={setRecordThemeDraft}
+        themeDirty={themeDirty}
+        saveRecordTheme={saveRecordTheme}
+        savingBodyWeight={savingBodyWeight}
+        bodyWeightDraft={bodyWeightDraft}
+        setBodyWeightDraft={setBodyWeightDraft}
+        bodyWeightDirty={bodyWeightDirty}
+        hasBodyWeightDraft={hasBodyWeightDraft}
+        isBodyWeightDraftValid={isBodyWeightDraftValid}
+        savedBodyWeightKg={savedBodyWeightKg}
+        bodyFatDraft={bodyFatDraft}
+        setBodyFatDraft={setBodyFatDraft}
+        bodyFatDirty={bodyFatDirty}
+        isBodyFatDraftValid={isBodyFatDraftValid}
+        saveBodyWeight={saveBodyWeight}
+      />
 
       <TouchableOpacity
         style={styles.dailySummaryButton}
@@ -1224,58 +1079,18 @@ export function RecordScreen({
           )}
           </>
           ) : null}
-          <View style={styles.templateActionStack}>
-            <View style={styles.templateActionCard}>
-              <TouchableOpacity
-                style={[
-                  styles.openAddModalButton,
-                  loading || !user ? styles.primaryActionButtonDisabled : null
-                ]}
-                onPress={openExerciseSearchModal}
-                disabled={loading || !user}
-              >
-                <Text style={styles.openAddModalButtonText}>+ Add Exercise</Text>
-              </TouchableOpacity>
-              <View style={styles.templateSecondaryActionRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.secondaryActionButton,
-                    !canSaveTemplate ? styles.secondaryActionButtonDisabled : null
-                  ]}
-                  onPress={openTemplateSaveModal}
-                  disabled={!canSaveTemplate}
-                >
-                  <Text
-                    style={[
-                      styles.secondaryActionButtonText,
-                      !canSaveTemplate ? styles.secondaryActionButtonTextDisabled : null
-                    ]}
-                  >
-                    Save Template
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.tertiaryActionButton,
-                    !canLoadTemplate ? styles.secondaryActionButtonDisabled : null
-                  ]}
-                  onPress={() => {
-                    openTemplateLoadModal().catch(() => {});
-                  }}
-                  disabled={!canLoadTemplate}
-                >
-                  <Text
-                    style={[
-                      styles.tertiaryActionButtonText,
-                      !canLoadTemplate ? styles.secondaryActionButtonTextDisabled : null
-                    ]}
-                  >
-                    Load Template
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+          <RecordTemplateActionsSection
+            styles={styles}
+            loading={loading}
+            user={user}
+            canSaveTemplate={canSaveTemplate}
+            canLoadTemplate={canLoadTemplate}
+            openExerciseSearchModal={openExerciseSearchModal}
+            openTemplateSaveModal={openTemplateSaveModal}
+            openTemplateLoadModal={() => {
+              openTemplateLoadModal().catch(() => {});
+            }}
+          />
         </>
       ) : null}
 
@@ -1285,7 +1100,6 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeTemplateSaveModal}
       >
-        <KeyboardProvider>
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeTemplateSaveModal} />
           <View style={styles.modalCard}>
@@ -1324,8 +1138,6 @@ export function RecordScreen({
             </View>
           </View>
         </View>
-        <KeyboardToolbar />
-        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1334,7 +1146,6 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeTemplateLoadModal}
       >
-        <KeyboardProvider>
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeTemplateLoadModal} />
           <View style={styles.modalCard}>
@@ -1410,8 +1221,6 @@ export function RecordScreen({
             </TouchableOpacity>
           </View>
         </View>
-        <KeyboardToolbar />
-        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1420,7 +1229,6 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeFoodComposerModal}
       >
-        <KeyboardProvider>
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeFoodComposerModal} />
           <View style={styles.modalCard}>
@@ -1495,8 +1303,6 @@ export function RecordScreen({
             </View>
           </View>
         </View>
-        <KeyboardToolbar />
-        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1505,7 +1311,6 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeExerciseSearchModal}
       >
-        <KeyboardProvider>
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeExerciseSearchModal} />
           <View style={styles.modalCard}>
@@ -1551,8 +1356,6 @@ export function RecordScreen({
             </TouchableOpacity>
           </View>
         </View>
-        <KeyboardToolbar />
-        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1621,7 +1424,6 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeSetNotesSheet}
       >
-        <KeyboardProvider>
         <KeyboardAvoidingView
           style={styles.menuBackdrop}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -1682,8 +1484,6 @@ export function RecordScreen({
             ) : null}
           </View>
         </KeyboardAvoidingView>
-        <KeyboardToolbar />
-        </KeyboardProvider>
       </Modal>
 
       <Modal
@@ -1692,7 +1492,6 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeExerciseNotesSheet}
       >
-        <KeyboardProvider>
         <KeyboardAvoidingView
           style={styles.menuBackdrop}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -1741,8 +1540,6 @@ export function RecordScreen({
             ) : null}
           </View>
         </KeyboardAvoidingView>
-        <KeyboardToolbar />
-        </KeyboardProvider>
       </Modal>
 
       <Modal

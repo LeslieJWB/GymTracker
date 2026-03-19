@@ -1,8 +1,14 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useEffect, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { radius, textStyles, withPressScale } from "../styles/theme";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppButton } from "./ui/AppButton";
+import { AppCard } from "./ui/AppCard";
+import { AppTextInput } from "./ui/AppTextInput";
+import { ModalShell } from "./ui/ModalShell";
+import { radius, textStyles } from "../styles/theme";
 import type { UserProfile } from "../types/workout";
+import { parseDateValue, toDateString } from "../utils/dateInput";
+import { digitsOnly, sanitizeBodyFatInput, sanitizeWeightInput } from "../utils/inputSanitizers";
 
 type ProfileInput = {
   heightCm: string;
@@ -30,47 +36,6 @@ type ProfileScreenProps = {
   }) => Promise<void>;
   onSignOut: () => void;
 };
-
-function digitsOnly(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
-function sanitizeWeightInput(value: string): string {
-  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
-  const [whole, ...decimals] = normalized.split(".");
-  if (decimals.length === 0) {
-    return whole;
-  }
-  return `${whole}.${decimals.join("")}`;
-}
-
-function sanitizeBodyFatInput(value: string): string {
-  return sanitizeWeightInput(value);
-}
-
-function formatDateValue(date: Date): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function parseDateValue(value: string): Date | null {
-  const matched = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!matched) {
-    return null;
-  }
-
-  const year = Number(matched[1]);
-  const month = Number(matched[2]);
-  const day = Number(matched[3]);
-  const parsed = new Date(year, month - 1, day);
-  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
-    return null;
-  }
-
-  return parsed;
-}
 
 function toInput(profile: UserProfile | null): ProfileInput {
   return {
@@ -145,7 +110,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
     if (Platform.OS === "android") {
       setShowDatePicker(false);
       if (event.type === "set" && selectedDate) {
-        setDraft((current) => ({ ...current, dateOfBirth: formatDateValue(selectedDate) }));
+        setDraft((current) => ({ ...current, dateOfBirth: toDateString(selectedDate) }));
       }
       return;
     }
@@ -169,7 +134,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
       </View>
 
       {/* Account Info */}
-      <View style={styles.card}>
+      <AppCard style={styles.card}>
         <Text style={styles.cardHeader}>Account</Text>
         <View style={styles.infoRow}>
           <Text style={styles.infoKey}>Email</Text>
@@ -182,17 +147,17 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
             <Text style={styles.providerBadgeText}>{formatProvider(profile?.authProvider)}</Text>
           </View>
         </View>
-      </View>
+      </AppCard>
 
       {/* Body Metrics */}
-      <View style={styles.card}>
+      <AppCard style={styles.card}>
         <Text style={styles.cardHeader}>Body Metrics</Text>
         <Text style={styles.cardSubheader}>Used for workout calculations and tracking</Text>
 
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Height</Text>
           <View style={styles.unitRow}>
-            <TextInput
+            <AppTextInput
               style={styles.fieldInput}
               value={draft.heightCm}
               onChangeText={(value) => setDraft((current) => ({ ...current, heightCm: digitsOnly(value) }))}
@@ -230,7 +195,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Body Weight</Text>
           <View style={styles.unitRow}>
-            <TextInput
+            <AppTextInput
               style={styles.fieldInput}
               value={draft.defaultBodyWeightKg}
               onChangeText={(value) => setDraft((current) => ({ ...current, defaultBodyWeightKg: sanitizeWeightInput(value) }))}
@@ -248,7 +213,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Body Fat %</Text>
           <View style={styles.unitRow}>
-            <TextInput
+            <AppTextInput
               style={styles.fieldInput}
               value={draft.defaultBodyFatPercentage}
               onChangeText={(value) => setDraft((current) => ({ ...current, defaultBodyFatPercentage: sanitizeBodyFatInput(value) }))}
@@ -266,7 +231,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Daily Calorie Target (optional)</Text>
           <View style={styles.unitRow}>
-            <TextInput
+            <AppTextInput
               style={styles.fieldInput}
               value={draft.dailyCalorieTargetKcal}
               onChangeText={(value) => setDraft((current) => ({ ...current, dailyCalorieTargetKcal: digitsOnly(value) }))}
@@ -284,7 +249,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Daily Protein Target (optional)</Text>
           <View style={styles.unitRow}>
-            <TextInput
+            <AppTextInput
               style={styles.fieldInput}
               value={draft.dailyProteinTargetG}
               onChangeText={(value) => setDraft((current) => ({ ...current, dailyProteinTargetG: digitsOnly(value) }))}
@@ -308,13 +273,13 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
             <Text style={styles.dateChevron}>›</Text>
           </Pressable>
         </View>
-      </View>
+      </AppCard>
 
       {/* LLM Prompt */}
-      <View style={styles.card}>
+      <AppCard style={styles.card}>
         <Text style={styles.cardHeader}>AI Coaching</Text>
         <Text style={styles.cardSubheader}>Customize how the AI assistant interacts with you</Text>
-        <TextInput
+        <AppTextInput
           style={styles.promptInput}
           value={draft.globalLlmPrompt}
           onChangeText={(value) => setDraft((current) => ({ ...current, globalLlmPrompt: value }))}
@@ -323,11 +288,11 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
           multiline
           textAlignVertical="top"
         />
-      </View>
+      </AppCard>
 
       {/* Save */}
-      <Pressable
-        style={({ pressed }) => [styles.saveButton, saving && styles.saveButtonDisabled, pressed && !saving && styles.saveButtonPressed, withPressScale(pressed)]}
+      <AppButton
+        style={[styles.saveButton, saving && styles.saveButtonDisabled]}
         disabled={saving}
         onPress={() =>
           onSave({
@@ -342,16 +307,13 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
           }).catch(() => {})
         }
       >
-        <Text style={styles.saveLabel}>{saving ? "Saving..." : "Save Changes"}</Text>
-      </Pressable>
+        {saving ? "Saving..." : "Save Changes"}
+      </AppButton>
 
       {/* Sign Out */}
-      <Pressable
-        style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutButtonPressed, withPressScale(pressed)]}
-        onPress={onSignOut}
-      >
-        <Text style={styles.signOutLabel}>Sign Out</Text>
-      </Pressable>
+      <AppButton style={styles.signOutButton} textStyle={styles.signOutLabel} variant="danger" onPress={onSignOut}>
+        Sign Out
+      </AppButton>
 
       <View style={styles.footer} />
 
@@ -366,36 +328,32 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         />
       ) : null}
       {Platform.OS === "ios" && showDatePicker ? (
-        <Modal animationType="slide" transparent onRequestClose={() => setShowDatePicker(false)}>
-          <Pressable style={styles.modalOverlay} onPress={() => setShowDatePicker(false)}>
-            <Pressable style={styles.modalCard} onPress={() => {}}>
-              <View style={styles.modalHeader}>
-                <Pressable hitSlop={12} onPress={() => setShowDatePicker(false)}>
-                  <Text style={styles.modalCancel}>Cancel</Text>
-                </Pressable>
-                <Text style={styles.modalTitle}>Date of Birth</Text>
-                <Pressable
-                  hitSlop={12}
-                  onPress={() => {
-                    setDraft((current) => ({ ...current, dateOfBirth: formatDateValue(pendingDate) }));
-                    setShowDatePicker(false);
-                  }}
-                >
-                  <Text style={styles.modalDone}>Done</Text>
-                </Pressable>
-              </View>
-              <View style={styles.spinnerContainer}>
-                <DateTimePicker
-                  value={pendingDate}
-                  mode="date"
-                  display="spinner"
-                  maximumDate={new Date()}
-                  onChange={handleDateChange}
-                />
-              </View>
+        <ModalShell visible={showDatePicker} animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
+          <View style={styles.modalHeader}>
+            <Pressable hitSlop={12} onPress={() => setShowDatePicker(false)}>
+              <Text style={styles.modalCancel}>Cancel</Text>
             </Pressable>
-          </Pressable>
-        </Modal>
+            <Text style={styles.modalTitle}>Date of Birth</Text>
+            <Pressable
+              hitSlop={12}
+              onPress={() => {
+                setDraft((current) => ({ ...current, dateOfBirth: toDateString(pendingDate) }));
+                setShowDatePicker(false);
+              }}
+            >
+              <Text style={styles.modalDone}>Done</Text>
+            </Pressable>
+          </View>
+          <View style={styles.spinnerContainer}>
+            <DateTimePicker
+              value={pendingDate}
+              mode="date"
+              display="spinner"
+              maximumDate={new Date()}
+              onChange={handleDateChange}
+            />
+          </View>
+        </ModalShell>
       ) : null}
     </ScrollView>
   );
@@ -631,31 +589,13 @@ const styles = StyleSheet.create({
   saveButtonDisabled: {
     opacity: 0.6
   },
-  saveButtonPressed: {
-    backgroundColor: "#4F6146",
-    transform: [{ scale: 0.98 }]
-  },
-  saveLabel: {
-    color: "#FEFEFA",
-    fontWeight: "700",
-    fontSize: 16,
-    letterSpacing: 0.3
-  },
-
   signOutButton: {
-    backgroundColor: "#F6E4DF",
-    borderRadius: radius.pill,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#D9A79D"
-  },
-  signOutButtonPressed: {
-    backgroundColor: "#F2D7D0"
+    backgroundColor: "#A85448",
+    borderColor: "#A85448"
   },
   signOutLabel: {
-    color: "#A85448",
-    fontWeight: "700",
+    color: "#FFFFFF",
+    fontFamily: textStyles.bodyBold.fontFamily,
     fontSize: 15
   },
 
@@ -663,17 +603,6 @@ const styles = StyleSheet.create({
     height: 20
   },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(44, 44, 36, 0.28)",
-    justifyContent: "flex-end"
-  },
-  modalCard: {
-    backgroundColor: "#FEFEFA",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 34
-  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
