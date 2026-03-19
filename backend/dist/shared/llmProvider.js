@@ -191,9 +191,6 @@ export function createLlmProvider(input) {
         }
         const normalizedGeminiBase = input.gemini.baseUrl.trim().replace(/\/+$/, "");
         const usesNativeGeminiEndpoint = /\/v1beta\/models$/i.test(normalizedGeminiBase);
-        // #region agent log
-        fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5f43b" }, body: JSON.stringify({ sessionId: "c5f43b", runId: "post-fix", hypothesisId: "H6", location: "backend/src/shared/llmProvider.ts:createLlmProvider", message: "gemini provider initialization mode", data: { usesNativeGeminiEndpoint, baseUrl: normalizedGeminiBase, model: input.gemini.model }, timestamp: Date.now() }) }).catch(() => { });
-        // #endregion
         if (usesNativeGeminiEndpoint) {
             return new GeminiNativeProvider(input.gemini.apiKey, input.gemini.model, normalizedGeminiBase);
         }

@@ -19,7 +19,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { KeyboardProvider, KeyboardToolbar } from "react-native-keyboard-controller";
+import { FocusedInputEvents, KeyboardProvider, KeyboardToolbar } from "react-native-keyboard-controller";
 import { AuthScreen } from "./src/components/AuthScreen";
 import { CalendarScreen } from "./src/components/CalendarScreen";
 import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/components/RecordScreen.tsx";
@@ -228,6 +228,7 @@ export default function App() {
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [focusedInputCurrent, setFocusedInputCurrent] = useState(-1);
 
   const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL.trim().replace(/\/$/, ""), []);
 
@@ -239,6 +240,15 @@ export default function App() {
     return () => {
       showSub.remove();
       hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const subscription = FocusedInputEvents.addListener("focusDidSet", (e) => {
+      setFocusedInputCurrent(e.current);
+    });
+    return () => {
+      subscription.remove();
     };
   }, []);
 
@@ -2169,7 +2179,7 @@ export default function App() {
   if (profile && !profile.profileInitialized) {
     return (
       <KeyboardProvider>
-      <SafeAreaView style={appStyles.safeArea}>
+      <SafeAreaView edges={["top", "left", "right"]} style={appStyles.safeArea}>
         <StatusBar style="dark" />
         <View pointerEvents="none" style={styles.backgroundWrap}>
           <View style={[styles.blob, styles.blobA]} />
@@ -2379,7 +2389,9 @@ export default function App() {
             </Pressable>
           </Modal>
         ) : null}
-        <KeyboardToolbar />
+        {Platform.OS === "ios" ? (
+          <KeyboardToolbar enabled={keyboardVisible || focusedInputCurrent >= 0} />
+        ) : null}
       </SafeAreaView>
       </KeyboardProvider>
     );
@@ -2587,7 +2599,9 @@ export default function App() {
               </Pressable>
             </View>
           </View>
-          <KeyboardToolbar />
+          {Platform.OS === "ios" ? (
+            <KeyboardToolbar enabled={keyboardVisible || focusedInputCurrent >= 0} />
+          ) : null}
           </KeyboardProvider>
         </Modal>
         {!keyboardVisible ? (
@@ -2657,7 +2671,9 @@ export default function App() {
           </View>
         ) : null}
       </KeyboardAvoidingView>
-      <KeyboardToolbar />
+      {Platform.OS === "ios" ? (
+        <KeyboardToolbar enabled={keyboardVisible || focusedInputCurrent >= 0} />
+      ) : null}
     </SafeAreaView>
     </KeyboardProvider>
   );

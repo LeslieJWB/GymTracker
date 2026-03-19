@@ -258,16 +258,10 @@ Keep recommendations safe and based on the user's history. Weight in kg.`
         });
     }
     catch (error) {
-        // #region agent log
-        fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5f43b" }, body: JSON.stringify({ sessionId: "c5f43b", runId: "post-fix", hypothesisId: "H7", location: "backend/src/routes/advice.ts:dailySummary:catch", message: "daily summary handler failed", data: { error: String(error) }, timestamp: Date.now() }) }).catch(() => { });
-        // #endregion
         return res.status(500).json({ error: String(error) });
     }
 });
 adviceRouter.post("/advice/daily-summary", async (req, res) => {
-    // #region agent log
-    fetch("http://127.0.0.1:7242/ingest/2dcdadeb-a66d-4c0e-a93d-8cc544bdbbcb", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5f43b" }, body: JSON.stringify({ sessionId: "c5f43b", runId: "initial", hypothesisId: "H4", location: "backend/src/routes/advice.ts:dailySummary:entry", message: "daily summary handler entered", data: { hasAuth: Boolean(req.auth), bodyDate: typeof req.body?.date === "string" ? req.body.date : null }, timestamp: Date.now() }) }).catch(() => { });
-    // #endregion
     if (!req.auth) {
         return res.status(401).json({ error: "Unauthorized" });
     }
