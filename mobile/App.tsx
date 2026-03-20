@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -122,6 +123,10 @@ function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories
 function AppContent() {
   const insets = useSafeAreaInsets();
   const { keyboardVisible } = useKeyboardSystem();
+  const bottomNavSafeInset = Math.max(10, insets.bottom);
+  const [keyboardTransitioning, setKeyboardTransitioning] = useState(false);
+  const [keyboardClosing, setKeyboardClosing] = useState(false);
+  const shouldRenderBottomNav = (!keyboardVisible && !keyboardTransitioning) || keyboardClosing;
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
@@ -2024,6 +2029,45 @@ function AppContent() {
     loadCalendarHistory
   });
 
+  useEffect(() => {
+    if (!keyboardVisible && keyboardClosing) {
+      setKeyboardClosing(false);
+    }
+  }, [keyboardClosing, keyboardVisible]);
+
+  useEffect(() => {
+    const onKeyboardWillShow = () => {
+      setKeyboardClosing(false);
+      setKeyboardTransitioning(true);
+    };
+
+    const onKeyboardWillHide = () => {
+      setKeyboardTransitioning(false);
+      setKeyboardClosing(true);
+    };
+
+    const onKeyboardDidShow = () => {
+      setKeyboardTransitioning(false);
+      setKeyboardClosing(false);
+    };
+
+    const onKeyboardDidHide = () => {
+      setKeyboardTransitioning(false);
+    };
+
+    const willShowSubscription = Keyboard.addListener("keyboardWillShow", onKeyboardWillShow);
+    const willHideSubscription = Keyboard.addListener("keyboardWillHide", onKeyboardWillHide);
+    const didShowSubscription = Keyboard.addListener("keyboardDidShow", onKeyboardDidShow);
+    const didHideSubscription = Keyboard.addListener("keyboardDidHide", onKeyboardDidHide);
+
+    return () => {
+      willShowSubscription.remove();
+      willHideSubscription.remove();
+      didShowSubscription.remove();
+      didHideSubscription.remove();
+    };
+  }, []);
+
   const isTodayHome = screen === "record" && selectedDate === todayDate();
   const hasResolvedSelectedRecord =
     recordDetail !== null && recordDetail.date === selectedDate;
@@ -2531,73 +2575,74 @@ function AppContent() {
             </View>
           </View>
         ) : null}
-        {!keyboardVisible ? (
-          <View
-            style={[
-              styles.bottomNav,
-              {
-                paddingBottom: Math.max(10, insets.bottom)
-              }
-            ]}
-          >
-            <Pressable
-              style={({ pressed }) => [
-                styles.bottomNavItem,
-                screen === "record" ? styles.bottomNavItemActive : null,
-                withPressScale(pressed)
-              ]}
-              onPress={() => {
-                openDate(todayDate()).catch(() => {});
-              }}
-              disabled={loading || !user}
-            >
-              <Text style={[styles.bottomNavLabel, screen === "record" ? styles.bottomNavLabelActive : null]}>Home</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.bottomNavItem,
-                screen === "calendar" ? styles.bottomNavItemActive : null,
-                withPressScale(pressed)
-              ]}
-              onPress={() => {
-                setScreen("calendar");
-              }}
-              disabled={loading || !user}
-            >
-              <Text style={[styles.bottomNavLabel, screen === "calendar" ? styles.bottomNavLabelActive : null]}>Calendar</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.bottomNavItem,
-                screen === "statistics" ? styles.bottomNavItemActive : null,
-                withPressScale(pressed)
-              ]}
-              onPress={() => {
-                setScreen("statistics");
-                if (weightHistory.length === 0 && nutritionHistory.length === 0) {
-                  loadStatisticsBase().catch(() => {});
-                }
-              }}
-              disabled={loading || !user}
-            >
-              <Text style={[styles.bottomNavLabel, screen === "statistics" ? styles.bottomNavLabelActive : null]}>Statistics</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.bottomNavItem,
-                screen === "profile" ? styles.bottomNavItemActive : null,
-                withPressScale(pressed)
-              ]}
-              onPress={() => {
-                setScreen("profile");
-              }}
-              disabled={loading || !user}
-            >
-              <Text style={[styles.bottomNavLabel, screen === "profile" ? styles.bottomNavLabelActive : null]}>Profile</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </KeyboardScreen>
+      {shouldRenderBottomNav ? (
+        <View
+          style={[
+            styles.bottomNav,
+            styles.bottomNavFloating,
+            {
+              paddingBottom: bottomNavSafeInset
+            }
+          ]}
+        >
+          <Pressable
+            style={({ pressed }) => [
+              styles.bottomNavItem,
+              screen === "record" ? styles.bottomNavItemActive : null,
+              withPressScale(pressed)
+            ]}
+            onPress={() => {
+              openDate(todayDate()).catch(() => {});
+            }}
+            disabled={loading || !user}
+          >
+            <Text style={[styles.bottomNavLabel, screen === "record" ? styles.bottomNavLabelActive : null]}>Home</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.bottomNavItem,
+              screen === "calendar" ? styles.bottomNavItemActive : null,
+              withPressScale(pressed)
+            ]}
+            onPress={() => {
+              setScreen("calendar");
+            }}
+            disabled={loading || !user}
+          >
+            <Text style={[styles.bottomNavLabel, screen === "calendar" ? styles.bottomNavLabelActive : null]}>Calendar</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.bottomNavItem,
+              screen === "statistics" ? styles.bottomNavItemActive : null,
+              withPressScale(pressed)
+            ]}
+            onPress={() => {
+              setScreen("statistics");
+              if (weightHistory.length === 0 && nutritionHistory.length === 0) {
+                loadStatisticsBase().catch(() => {});
+              }
+            }}
+            disabled={loading || !user}
+          >
+            <Text style={[styles.bottomNavLabel, screen === "statistics" ? styles.bottomNavLabelActive : null]}>Statistics</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.bottomNavItem,
+              screen === "profile" ? styles.bottomNavItemActive : null,
+              withPressScale(pressed)
+            ]}
+            onPress={() => {
+              setScreen("profile");
+            }}
+            disabled={loading || !user}
+          >
+            <Text style={[styles.bottomNavLabel, screen === "profile" ? styles.bottomNavLabelActive : null]}>Profile</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -2896,7 +2941,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderTopWidth: 1,
     borderTopColor: `${palette.border}AA`,
-    backgroundColor: "#FFFFFFC8",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 10,
@@ -2904,6 +2949,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     ...shadows.soft
+  },
+  bottomNavFloating: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    elevation: 10
   },
   bottomNavItem: {
     flex: 1,
