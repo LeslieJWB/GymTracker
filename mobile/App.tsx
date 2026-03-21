@@ -128,6 +128,8 @@ function AppContent() {
   const [keyboardTransitioning, setKeyboardTransitioning] = useState(false);
   const [keyboardClosing, setKeyboardClosing] = useState(false);
   const shouldRenderBottomNav = (!keyboardVisible && !keyboardTransitioning) || keyboardClosing;
+  /** Floating tab bar is absolutely positioned; reserve space so content does not sit underneath. */
+  const bottomTabContentPadding = shouldRenderBottomNav ? 56 + bottomNavSafeInset : 0;
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
@@ -2255,7 +2257,6 @@ function AppContent() {
           contentContainerStyle={styles.onboardingContainer}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
           bottomOffset={insets.bottom + 12 + keyboardToolbarBottomInset()}
           extraKeyboardSpace={keyboardToolbarBottomInset()}
         >
@@ -2400,6 +2401,7 @@ function AppContent() {
         <View style={[styles.blob, styles.blobB]} />
       </View>
       <KeyboardScreen style={appStyles.flex}>
+        <View style={[appStyles.flex, { paddingBottom: bottomTabContentPadding }]}>
         {screen === "calendar" ? (
           <View style={appStyles.flex}>
             <CalendarScreen
@@ -2421,7 +2423,6 @@ function AppContent() {
             contentContainerStyle={styles.recordScrollContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
-            automaticallyAdjustKeyboardInsets
             bottomOffset={insets.bottom + 12 + keyboardToolbarBottomInset()}
             extraKeyboardSpace={keyboardToolbarBottomInset()}
           >
@@ -2523,6 +2524,7 @@ function AppContent() {
             />
           </View>
         ) : null}
+        </View>
         {shouldBlockHomeWithDailyGate ? (
           <View style={styles.dailyGateBackdrop}>
             <View style={styles.dailyGateCard}>

@@ -133,7 +133,6 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      automaticallyAdjustKeyboardInsets
       bottomOffset={insets.bottom + 12 + keyboardToolbarBottomInset()}
       extraKeyboardSpace={keyboardToolbarBottomInset()}
     >
