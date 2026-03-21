@@ -3,6 +3,7 @@ import { useFonts } from "expo-font";
 import { Fraunces_600SemiBold, Fraunces_700Bold } from "@expo-google-fonts/fraunces";
 import { Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,7 +11,6 @@ import {
   Keyboard,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -24,6 +24,7 @@ import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/compo
 import { ProfileScreen } from "./src/components/ProfileScreen";
 import { StatisticsScreen } from "./src/components/StatisticsScreen";
 import { ModalShell } from "./src/components/ui/ModalShell";
+import { keyboardToolbarBottomInset } from "./src/keyboard/keyboardToolbarInset";
 import { KeyboardSystemProvider, useKeyboardSystem } from "./src/keyboard/KeyboardSystemProvider";
 import { KeyboardScreen } from "./src/keyboard/KeyboardScreen";
 import { useAppLifecycleEffects } from "./src/hooks/useAppLifecycleEffects";
@@ -2249,10 +2250,14 @@ function AppContent() {
           <View style={[styles.blob, styles.blobA]} />
           <View style={[styles.blob, styles.blobB]} />
         </View>
-        <ScrollView
+        <KeyboardAwareScrollView
+          style={appStyles.flex}
           contentContainerStyle={styles.onboardingContainer}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
+          bottomOffset={insets.bottom + 12 + keyboardToolbarBottomInset()}
+          extraKeyboardSpace={keyboardToolbarBottomInset()}
         >
           <View style={styles.onboardingCard}>
             <Text style={styles.onboardingTitle}>Complete your profile</Text>
@@ -2340,7 +2345,7 @@ function AppContent() {
             </Pressable>
             {onboardingError ? <Text style={styles.onboardingErrorText}>{onboardingError}</Text> : null}
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
         {Platform.OS === "android" && showOnboardingDatePicker ? (
           <DateTimePicker
             value={onboardingPendingDate}
@@ -2411,7 +2416,15 @@ function AppContent() {
           </View>
         ) : null}
         {screen === "record" ? (
-          <ScrollView contentContainerStyle={styles.recordScrollContent}>
+          <KeyboardAwareScrollView
+            style={appStyles.flex}
+            contentContainerStyle={styles.recordScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            automaticallyAdjustKeyboardInsets
+            bottomOffset={insets.bottom + 12 + keyboardToolbarBottomInset()}
+            extraKeyboardSpace={keyboardToolbarBottomInset()}
+          >
             <RecordScreen
               loading={loading}
               savingRecordTheme={savingRecordTheme}
@@ -2478,7 +2491,7 @@ function AppContent() {
               fetchExerciseFeedback={(input) => fetchExerciseFeedback(input)}
               dailyNutritionTargets={dailyTargetsDate === selectedDate ? dailyNutritionTargets : null}
             />
-          </ScrollView>
+          </KeyboardAwareScrollView>
         ) : null}
         {screen === "profile" ? (
           <View style={appStyles.flex}>

@@ -1,6 +1,9 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useEffect, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { keyboardToolbarBottomInset } from "../keyboard/keyboardToolbarInset";
 import { AppButton } from "./ui/AppButton";
 import { AppCard } from "./ui/AppCard";
 import { AppTextInput } from "./ui/AppTextInput";
@@ -83,6 +86,7 @@ function getAvatarColor(profile: UserProfile | null): string {
 }
 
 export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScreenProps) {
+  const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<ProfileInput>(() => toInput(profile));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingDate, setPendingDate] = useState<Date>(() => parseDateValue(profile?.dateOfBirth ?? "") ?? new Date());
@@ -123,7 +127,16 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
   const avatarColor = getAvatarColor(profile);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <KeyboardAwareScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      automaticallyAdjustKeyboardInsets
+      bottomOffset={insets.bottom + 12 + keyboardToolbarBottomInset()}
+      extraKeyboardSpace={keyboardToolbarBottomInset()}
+    >
       {/* Avatar Hero */}
       <View style={styles.heroSection}>
         <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
@@ -355,7 +368,7 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
           </View>
         </ModalShell>
       ) : null}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
