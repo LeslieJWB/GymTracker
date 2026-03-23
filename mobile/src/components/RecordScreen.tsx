@@ -367,10 +367,7 @@ export function RecordScreen({
   const proteinProgress = proteinTarget && proteinTarget > 0 ? totalProteinG / proteinTarget : null;
   const calorieOverflow = calorieTarget ? Math.max(0, Math.round(totalCaloriesKcal - calorieTarget)) : 0;
   const proteinOverflow = proteinTarget ? Math.max(0, Math.round(totalProteinG - proteinTarget)) : 0;
-  const foodEntryCount = recordDetail?.foodConsumptions.length ?? 0;
-  const foodEntryLabel = foodEntryCount === 1 ? "entry" : "entries";
   const exerciseEntryCount = recordDetail?.exercises.length ?? 0;
-  const exerciseEntryLabel = exerciseEntryCount === 1 ? "entry" : "entries";
   const canSaveTemplate = Boolean(user) && !loading && exerciseEntryCount > 0;
   const canLoadTemplate = Boolean(user) && !loading;
 
@@ -822,9 +819,6 @@ export function RecordScreen({
           >
             <View>
               <Text style={styles.foodCardTitle}>Food Log</Text>
-              <Text style={styles.foodCardSubtitle}>
-                {foodEntryCount} {foodEntryLabel} for {selectedDate}
-              </Text>
             </View>
             <Text style={styles.foodCardChevron}>{foodSectionExpanded ? "▾" : "▸"}</Text>
           </Pressable>
@@ -882,9 +876,6 @@ export function RecordScreen({
           >
             <View>
               <Text style={styles.exerciseLogTitle}>Exercise Log</Text>
-              <Text style={styles.exerciseLogSubtitle}>
-                {exerciseEntryCount} {exerciseEntryLabel} for {selectedDate}
-              </Text>
             </View>
             <Text style={styles.foodCardChevron}>{exerciseSectionExpanded ? "▾" : "▸"}</Text>
           </Pressable>
@@ -1923,11 +1914,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#2C2C24"
   },
-  checkInHint: {
-    marginTop: 4,
-    color: "#78786C",
-    fontSize: 12
-  },
   checkInField: {
     marginTop: 10
   },
@@ -2094,11 +2080,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#2C2C24"
   },
-  exerciseLogSubtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    color: "#78786C"
-  },
   foodCardHeader: {
     marginTop: 8,
     flexDirection: "row",
@@ -2109,11 +2090,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     color: "#2C2C24"
-  },
-  foodCardSubtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    color: "#78786C"
   },
   foodCardChevron: {
     color: "#4A4A40",

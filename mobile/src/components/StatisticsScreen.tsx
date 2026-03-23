@@ -335,7 +335,6 @@ export function StatisticsScreen({
       </View>
 
       <View style={styles.granularityCard}>
-        <Text style={styles.granularityHeading}>Granularity</Text>
         <View style={styles.tabBar}>
           {GRANULARITY_OPTIONS.map(({ value, label }) => (
             <Pressable
@@ -533,11 +532,6 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
     ...shadows.soft
-  },
-  granularityHeading: {
-    color: palette.mutedForeground,
-    fontSize: 12,
-    fontFamily: textStyles.bodySemiBold.fontFamily
   },
   chartCard: {
     borderRadius: radius.lg,

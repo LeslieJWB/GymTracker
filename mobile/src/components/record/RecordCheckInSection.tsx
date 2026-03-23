@@ -62,7 +62,6 @@ export function RecordCheckInSection({
           <Text style={styles.themeStatusBadgeText}>{checkInSaving ? "Saving..." : checkInDirty ? "Unsaved" : "Saved"}</Text>
         </View>
       </View>
-      <Text style={styles.checkInHint}>Auto-saves when you leave each field.</Text>
       <View style={styles.checkInField}>
         <Text style={styles.checkInFieldLabel}>Day Theme</Text>
         <TextInput
