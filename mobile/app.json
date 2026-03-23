@@ -24,6 +24,7 @@
       "bundleIdentifier": "com.lesliejiang.gymtracker"
     },
     "android": {
+      "package": "com.lesliejiang.gymtracker",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -38,6 +39,9 @@
       "eas": {
         "projectId": "53aedda8-1f83-4a57-b561-7282347bd7fe"
       }
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
