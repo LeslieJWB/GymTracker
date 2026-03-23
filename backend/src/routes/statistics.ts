@@ -3,7 +3,12 @@ import { pool } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { upsertUserFromAuth } from "../shared/authUsers.js";
 import { daysAgo, todayDate } from "../shared/dates.js";
-import { dateRangeNoUserSchema, exerciseHistorySchema } from "../shared/validation.js";
+import {
+  aggregateExerciseHistory,
+  aggregateNutritionHistory,
+  type Granularity
+} from "../shared/statisticsAggregation.js";
+import { dateRangeWithGranularitySchema, exerciseHistorySchema } from "../shared/validation.js";
 
 export const statisticsRouter = Router();
 statisticsRouter.use(requireAuth);
@@ -12,7 +17,7 @@ statisticsRouter.get("/statistics/nutrition-history", async (req, res) => {
   if (!req.auth) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  const parsed = dateRangeNoUserSchema.safeParse(req.query);
+  const parsed = dateRangeWithGranularitySchema.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({
       error: "dates must be YYYY-MM-DD when provided"
@@ -20,6 +25,7 @@ statisticsRouter.get("/statistics/nutrition-history", async (req, res) => {
   }
   const from = parsed.data.from ?? daysAgo(365);
   const to = parsed.data.to ?? todayDate();
+  const granularity = (parsed.data.granularity ?? "day") as Granularity;
   if (from > to) {
     return res.status(400).json({ error: "'from' cannot be after 'to'" });
   }
@@ -47,12 +53,13 @@ statisticsRouter.get("/statistics/nutrition-history", async (req, res) => {
       [appUser.id, from, to]
     );
 
+    const daily = result.rows.map((row) => ({
+      date: row.record_date,
+      totalCaloriesKcal: Number(row.total_calories_kcal),
+      totalProteinG: Number(row.total_protein_g)
+    }));
     return res.json({
-      records: result.rows.map((row) => ({
-        date: row.record_date,
-        totalCaloriesKcal: Number(row.total_calories_kcal),
-        totalProteinG: Number(row.total_protein_g)
-      }))
+      records: aggregateNutritionHistory(daily, granularity)
     });
   } catch (error) {
     return res.status(500).json({ error: String(error) });
@@ -71,6 +78,7 @@ statisticsRouter.get("/statistics/exercise-history", async (req, res) => {
   }
   const from = parsed.data.from ?? daysAgo(365);
   const to = parsed.data.to ?? todayDate();
+  const granularity = (parsed.data.granularity ?? "day") as Granularity;
   if (from > to) {
     return res.status(400).json({ error: "'from' cannot be after 'to'" });
   }
@@ -102,13 +110,14 @@ statisticsRouter.get("/statistics/exercise-history", async (req, res) => {
       [appUser.id, parsed.data.exerciseItemId, from, to]
     );
 
+    const daily = result.rows.map((row) => ({
+      date: row.record_date,
+      dailyVolume: Number(row.daily_volume),
+      topSetWeight: Number(row.top_set_weight),
+      topSetVolume: Number(row.top_set_volume)
+    }));
     return res.json({
-      records: result.rows.map((row) => ({
-        date: row.record_date,
-        dailyVolume: Number(row.daily_volume),
-        topSetWeight: Number(row.top_set_weight),
-        topSetVolume: Number(row.top_set_volume)
-      }))
+      records: aggregateExerciseHistory(daily, granularity)
     });
   } catch (error) {
     return res.status(500).json({ error: String(error) });

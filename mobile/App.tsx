@@ -43,6 +43,7 @@ import {
   RecordDetail,
   RecordSummary,
   Screen,
+  StatisticsGranularity,
   SetDraft,
   SetDrafts,
   User,
@@ -187,6 +188,7 @@ function AppContent() {
   const [nutritionHistory, setNutritionHistory] = useState<NutritionDailyPoint[]>([]);
   const [statisticsExerciseItemId, setStatisticsExerciseItemId] = useState<string | null>(null);
   const [exerciseMetricHistory, setExerciseMetricHistory] = useState<ExerciseDailyMetricsPoint[]>([]);
+  const [statisticsGranularity, setStatisticsGranularity] = useState<StatisticsGranularity>("day");
   const [dailyNutritionTargets, setDailyNutritionTargets] = useState<DailyNutritionTargets | null>(null);
   const [dailyTargetsDate, setDailyTargetsDate] = useState<string | null>(null);
   const [dailyTargetsStatus, setDailyTargetsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -1787,17 +1789,18 @@ function AppContent() {
     });
   }
 
-  async function loadStatisticsBase(): Promise<void> {
+  async function loadStatisticsBase(overrideGranularity?: StatisticsGranularity): Promise<void> {
     const from = daysAgo(365);
     const to = todayDate();
+    const g = overrideGranularity ?? statisticsGranularity;
     setStatisticsLoading(true);
     try {
       const [weightPayload, nutritionPayload] = await Promise.all([
         apiJson<{ records: BodyWeightRecord[] }>(
-          `/body-weight/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+          `/body-weight/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&granularity=${encodeURIComponent(g)}`
         ),
         apiJson<{ records: NutritionDailyPoint[] }>(
-          `/statistics/nutrition-history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+          `/statistics/nutrition-history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&granularity=${encodeURIComponent(g)}`
         )
       ]);
       setWeightHistory(weightPayload.records ?? []);
@@ -1809,14 +1812,15 @@ function AppContent() {
     }
   }
 
-  async function loadExerciseMetrics(exerciseItemId: string): Promise<void> {
+  async function loadExerciseMetrics(exerciseItemId: string, overrideGranularity?: StatisticsGranularity): Promise<void> {
     const from = daysAgo(365);
     const to = todayDate();
+    const g = overrideGranularity ?? statisticsGranularity;
     setStatisticsExerciseItemId(exerciseItemId);
     setStatisticsLoading(true);
     try {
       const payload = await apiJson<{ records: ExerciseDailyMetricsPoint[] }>(
-        `/statistics/exercise-history?exerciseItemId=${encodeURIComponent(exerciseItemId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        `/statistics/exercise-history?exerciseItemId=${encodeURIComponent(exerciseItemId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&granularity=${encodeURIComponent(g)}`
       );
       setExerciseMetricHistory(payload.records ?? []);
     } catch (error) {
@@ -2515,6 +2519,17 @@ function AppContent() {
               nutritionRecords={nutritionHistory}
               selectedExerciseItemId={statisticsExerciseItemId}
               exerciseMetricRecords={exerciseMetricHistory}
+              granularity={statisticsGranularity}
+              onGranularityChange={(g) => {
+                setStatisticsGranularity(g);
+                loadStatisticsBase(g)
+                  .then(() => {
+                    if (statisticsExerciseItemId) {
+                      return loadExerciseMetrics(statisticsExerciseItemId, g);
+                    }
+                  })
+                  .catch(() => {});
+              }}
               refreshStatistics={() => {
                 refreshStatistics().catch(() => {});
               }}

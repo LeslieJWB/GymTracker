@@ -32,7 +32,11 @@ export const dateRangeNoUserSchema = z.object({
   to: z.string().regex(datePattern).optional()
 });
 
-export const exerciseHistorySchema = dateRangeNoUserSchema.extend({
+export const dateRangeWithGranularitySchema = dateRangeNoUserSchema.extend({
+  granularity: z.enum(["day", "week", "month", "year"]).optional()
+});
+
+export const exerciseHistorySchema = dateRangeWithGranularitySchema.extend({
   exerciseItemId: idSchema
 });
 

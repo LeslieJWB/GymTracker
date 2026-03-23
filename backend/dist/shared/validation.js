@@ -23,7 +23,10 @@ export const dateRangeNoUserSchema = z.object({
     from: z.string().regex(datePattern).optional(),
     to: z.string().regex(datePattern).optional()
 });
-export const exerciseHistorySchema = dateRangeNoUserSchema.extend({
+export const dateRangeWithGranularitySchema = dateRangeNoUserSchema.extend({
+    granularity: z.enum(["day", "week", "month", "year"]).optional()
+});
+export const exerciseHistorySchema = dateRangeWithGranularitySchema.extend({
     exerciseItemId: idSchema
 });
 const recordThemeSchema = z

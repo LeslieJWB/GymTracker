@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LineChart } from "react-native-chart-kit";
 import { AppTextInput } from "./ui/AppTextInput";
@@ -7,9 +7,17 @@ import {
   BodyWeightRecord,
   ExerciseDailyMetricsPoint,
   ExerciseItem,
-  NutritionDailyPoint
+  NutritionDailyPoint,
+  StatisticsGranularity
 } from "../types/workout";
 import { normalizeSearchText } from "../utils/inputSanitizers";
+
+const GRANULARITY_OPTIONS: { value: StatisticsGranularity; label: string }[] = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+  { value: "year", label: "Year" }
+];
 
 type StatisticsScreenProps = {
   loading: boolean;
@@ -18,6 +26,8 @@ type StatisticsScreenProps = {
   nutritionRecords: NutritionDailyPoint[];
   selectedExerciseItemId: string | null;
   exerciseMetricRecords: ExerciseDailyMetricsPoint[];
+  granularity: StatisticsGranularity;
+  onGranularityChange: (granularity: StatisticsGranularity) => void;
   refreshStatistics: () => Promise<void> | void;
   selectExerciseForMetrics: (exerciseItemId: string) => void;
 };
@@ -28,18 +38,24 @@ function chartWidth(pointCount: number): number {
   return Math.max(360, pointCount * 60);
 }
 
-function dateLabel(date: string): string {
-  return date.slice(5);
+function periodLabel(date: string, granularity: StatisticsGranularity): string {
+  if (granularity === "day" || granularity === "week") {
+    return date.slice(5);
+  }
+  if (granularity === "month") {
+    return date.slice(0, 7);
+  }
+  return date.slice(0, 4);
 }
 
-function compactLabels(dates: string[]): string[] {
+function compactLabels(dates: string[], granularity: StatisticsGranularity): string[] {
   if (dates.length === 0) {
     return [];
   }
   const maxTickCount = 6;
   const step = Math.max(1, Math.ceil(dates.length / maxTickCount));
   return dates.map((date, index) =>
-    index === dates.length - 1 || index % step === 0 ? dateLabel(date) : ""
+    index === dates.length - 1 || index % step === 0 ? periodLabel(date, granularity) : ""
   );
 }
 
@@ -67,7 +83,8 @@ function SingleLineCard({
   unitSuffix,
   decimalPlaces,
   lineColor,
-  points
+  points,
+  granularity
 }: {
   title: string;
   emptyText: string;
@@ -75,9 +92,11 @@ function SingleLineCard({
   decimalPlaces?: number;
   lineColor: string;
   points: NumericPoint[];
+  granularity: StatisticsGranularity;
 }) {
+  const scrollRef = useRef<ScrollView>(null);
   const chartData = points.map((item) => item.value);
-  const labels = compactLabels(points.map((item) => item.date));
+  const labels = compactLabels(points.map((item) => item.date), granularity);
   const width = chartWidth(chartData.length || 1);
   const baseWidth = Dimensions.get("window").width - 56;
   const chartHeight = 260;
@@ -95,6 +114,17 @@ function SingleLineCard({
   const mainChartStyle = { borderRadius: radius.md, paddingRight: yAxisPadding };
   const overlayChartStyle = { paddingRight: yAxisPadding };
 
+  const lastPointKey = points.length > 0 ? points[points.length - 1]?.date : "";
+  useEffect(() => {
+    if (chartData.length === 0) {
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [chartData.length, lastPointKey, granularity]);
+
   return (
     <View style={styles.chartCard}>
       <Text style={styles.chartTitle}>{title}</Text>
@@ -102,7 +132,16 @@ function SingleLineCard({
         <Text style={styles.emptyText}>{emptyText}</Text>
       ) : (
         <View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            onContentSizeChange={() => {
+              requestAnimationFrame(() => {
+                scrollRef.current?.scrollToEnd({ animated: false });
+              });
+            }}
+          >
             <LineChart
               data={{ labels, datasets: [{ data: chartData }] }}
               width={actualWidth}
@@ -173,6 +212,8 @@ export function StatisticsScreen({
   nutritionRecords,
   selectedExerciseItemId,
   exerciseMetricRecords,
+  granularity,
+  onGranularityChange,
   refreshStatistics,
   selectExerciseForMetrics
 }: StatisticsScreenProps) {
@@ -293,6 +334,28 @@ export function StatisticsScreen({
         </Pressable>
       </View>
 
+      <View style={styles.granularityCard}>
+        <Text style={styles.granularityHeading}>Granularity</Text>
+        <View style={styles.tabBar}>
+          {GRANULARITY_OPTIONS.map(({ value, label }) => (
+            <Pressable
+              key={value}
+              style={[styles.tabButton, granularity === value ? styles.tabButtonActive : null]}
+              onPress={() => onGranularityChange(value)}
+            >
+              <Text
+                style={[styles.tabButtonText, granularity === value ? styles.tabButtonTextActive : null]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
       {statisticsTab === "body" ? (
         <>
           <SingleLineCard
@@ -301,6 +364,7 @@ export function StatisticsScreen({
             unitSuffix=" kg"
             decimalPlaces={1}
             lineColor={palette.primary}
+            granularity={granularity}
             points={weightRecords.map((row) => ({ date: row.date, value: row.weightKg }))}
           />
           <SingleLineCard
@@ -309,6 +373,7 @@ export function StatisticsScreen({
             unitSuffix="%"
             decimalPlaces={1}
             lineColor={palette.secondary}
+            granularity={granularity}
             points={bodyFatPoints}
           />
         </>
@@ -375,6 +440,7 @@ export function StatisticsScreen({
             emptyText="No completed volume records for selected exercise."
             unitSuffix=""
             lineColor={palette.secondary}
+            granularity={granularity}
             points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.dailyVolume }))}
           />
           <SingleLineCard
@@ -383,6 +449,7 @@ export function StatisticsScreen({
             unitSuffix=" kg"
             decimalPlaces={1}
             lineColor={palette.primary}
+            granularity={granularity}
             points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetWeight }))}
           />
           <SingleLineCard
@@ -390,6 +457,7 @@ export function StatisticsScreen({
             emptyText="No top set volume records for selected exercise."
             unitSuffix=""
             lineColor={palette.secondary}
+            granularity={granularity}
             points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetVolume }))}
           />
         </>
@@ -402,6 +470,7 @@ export function StatisticsScreen({
             emptyText="No calorie records yet."
             unitSuffix=" kcal"
             lineColor={palette.destructive}
+            granularity={granularity}
             points={nutritionCaloriesPoints}
           />
           <SingleLineCard
@@ -409,6 +478,7 @@ export function StatisticsScreen({
             emptyText="No protein records yet."
             unitSuffix=" g"
             lineColor={palette.primary}
+            granularity={granularity}
             points={nutritionProteinPoints}
           />
         </>
@@ -454,6 +524,20 @@ const styles = StyleSheet.create({
   },
   tabButtonTextActive: {
     color: palette.primaryForeground
+  },
+  granularityCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: `${palette.border}80`,
+    backgroundColor: "#FEFEFAEE",
+    padding: 12,
+    gap: 8,
+    ...shadows.soft
+  },
+  granularityHeading: {
+    color: palette.mutedForeground,
+    fontSize: 12,
+    fontFamily: textStyles.bodySemiBold.fontFamily
   },
   chartCard: {
     borderRadius: radius.lg,

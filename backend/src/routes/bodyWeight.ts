@@ -4,10 +4,11 @@ import { pool } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { upsertUserFromAuth } from "../shared/authUsers.js";
 import { daysAgo, todayDate } from "../shared/dates.js";
+import { aggregateBodyWeightHistory, type Granularity } from "../shared/statisticsAggregation.js";
 import {
   bodyWeightByDateSchema,
   byDateNoUserSchema,
-  dateRangeNoUserSchema
+  dateRangeWithGranularitySchema
 } from "../shared/validation.js";
 
 export const bodyWeightRouter = Router();
@@ -127,7 +128,7 @@ bodyWeightRouter.get("/body-weight/history", async (req, res) => {
   if (!req.auth) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  const parsed = dateRangeNoUserSchema.safeParse(req.query);
+  const parsed = dateRangeWithGranularitySchema.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({
       error: "dates must be YYYY-MM-DD when provided"
@@ -135,6 +136,7 @@ bodyWeightRouter.get("/body-weight/history", async (req, res) => {
   }
   const from = parsed.data.from ?? daysAgo(365);
   const to = parsed.data.to ?? todayDate();
+  const granularity = (parsed.data.granularity ?? "day") as Granularity;
   if (from > to) {
     return res.status(400).json({ error: "'from' cannot be after 'to'" });
   }
@@ -157,12 +159,13 @@ bodyWeightRouter.get("/body-weight/history", async (req, res) => {
       [appUser.id, from, to]
     );
 
+    const daily = result.rows.map((row) => ({
+      date: row.record_date,
+      weightKg: Number(row.weight_kg),
+      bodyFatPercentage: row.body_fat_percentage !== null ? Number(row.body_fat_percentage) : null
+    }));
     return res.json({
-      records: result.rows.map((row) => ({
-        date: row.record_date,
-        weightKg: Number(row.weight_kg),
-        bodyFatPercentage: row.body_fat_percentage !== null ? Number(row.body_fat_percentage) : null
-      }))
+      records: aggregateBodyWeightHistory(daily, granularity)
     });
   } catch (error) {
     return res.status(500).json({ error: String(error) });

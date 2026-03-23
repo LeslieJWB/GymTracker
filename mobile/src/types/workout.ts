@@ -1,5 +1,8 @@
 export type Screen = "calendar" | "record" | "statistics" | "profile";
 
+/** Statistics chart bucket size; server aggregates daily rows without padding missing days into averages. */
+export type StatisticsGranularity = "day" | "week" | "month" | "year";
+
 export type User = {
   id: string;
   username: string;
