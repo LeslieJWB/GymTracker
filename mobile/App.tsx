@@ -57,7 +57,21 @@ import { digitsOnly, sanitizeBodyFatInput, sanitizeWeightInput } from "./src/uti
 import { requestKey } from "./src/utils/request";
 import { organicShapes, palette, radius, shadows, textStyles, withPressScale } from "./src/styles/theme";
 
-const DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
+/** Base URL for API calls; must be absolute (include https:// or http:// for local). */
+function normalizeBackendBaseUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/$/, "");
+  if (!trimmed) {
+    return "http://localhost:4000";
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+const DEFAULT_BACKEND_URL = normalizeBackendBaseUrl(
+  process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:4000"
+);
 type ExerciseDetailsById = Record<string, ExerciseDetail>;
 type SetDraftsByExerciseId = Record<string, SetDrafts>;
 type SavingSetIdsByExerciseId = Record<string, Record<string, boolean>>;
@@ -212,7 +226,7 @@ function AppContent() {
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
 
-  const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL.trim().replace(/\/$/, ""), []);
+  const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL, []);
 
   async function apiJson<T = unknown>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers ?? {});
