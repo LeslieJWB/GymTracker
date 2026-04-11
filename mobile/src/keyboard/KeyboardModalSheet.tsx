@@ -1,14 +1,6 @@
 import type { ReactNode } from "react";
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  type ModalProps,
-  type StyleProp,
-  type ViewStyle
-} from "react-native";
+import { Modal, Platform, Pressable, StyleSheet, type ModalProps, type StyleProp, type ViewStyle } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 type KeyboardModalSheetProps = {
   visible: boolean;

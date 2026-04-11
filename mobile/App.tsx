@@ -8,7 +8,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   Platform,
   Pressable,
   StyleSheet,
@@ -25,8 +24,7 @@ import { ProfileScreen } from "./src/components/ProfileScreen";
 import { StatisticsScreen } from "./src/components/StatisticsScreen";
 import { ModalShell } from "./src/components/ui/ModalShell";
 import { keyboardToolbarBottomInset } from "./src/keyboard/keyboardToolbarInset";
-import { KeyboardSystemProvider, useKeyboardSystem } from "./src/keyboard/KeyboardSystemProvider";
-import { KeyboardScreen } from "./src/keyboard/KeyboardScreen";
+import { KeyboardSystemProvider } from "./src/keyboard/KeyboardSystemProvider";
 import { useAppLifecycleEffects } from "./src/hooks/useAppLifecycleEffects";
 import { useAuthSession } from "./src/hooks/useAuthSession";
 import { useRecordEffects } from "./src/hooks/useRecordEffects";
@@ -138,13 +136,10 @@ function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories
 
 function AppContent() {
   const insets = useSafeAreaInsets();
-  const { keyboardVisible } = useKeyboardSystem();
-  const bottomNavSafeInset = Math.max(10, insets.bottom);
-  const [keyboardTransitioning, setKeyboardTransitioning] = useState(false);
-  const [keyboardClosing, setKeyboardClosing] = useState(false);
-  const shouldRenderBottomNav = (!keyboardVisible && !keyboardTransitioning) || keyboardClosing;
-  /** Floating tab bar is absolutely positioned; reserve space so content does not sit underneath. */
-  const bottomTabContentPadding = shouldRenderBottomNav ? 56 + bottomNavSafeInset : 0;
+  const bottomNavBarPaddingBottom = insets.bottom > 0 ? Math.max(4, insets.bottom - 22) : 6;
+  const bottomNavBaseHeight = 50;
+  /** Keep content spacing stable and aligned with the actual floating nav height. */
+  const bottomTabContentPadding = bottomNavBaseHeight + bottomNavBarPaddingBottom;
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
@@ -2050,45 +2045,6 @@ function AppContent() {
     loadCalendarHistory
   });
 
-  useEffect(() => {
-    if (!keyboardVisible && keyboardClosing) {
-      setKeyboardClosing(false);
-    }
-  }, [keyboardClosing, keyboardVisible]);
-
-  useEffect(() => {
-    const onKeyboardWillShow = () => {
-      setKeyboardClosing(false);
-      setKeyboardTransitioning(true);
-    };
-
-    const onKeyboardWillHide = () => {
-      setKeyboardTransitioning(false);
-      setKeyboardClosing(true);
-    };
-
-    const onKeyboardDidShow = () => {
-      setKeyboardTransitioning(false);
-      setKeyboardClosing(false);
-    };
-
-    const onKeyboardDidHide = () => {
-      setKeyboardTransitioning(false);
-    };
-
-    const willShowSubscription = Keyboard.addListener("keyboardWillShow", onKeyboardWillShow);
-    const willHideSubscription = Keyboard.addListener("keyboardWillHide", onKeyboardWillHide);
-    const didShowSubscription = Keyboard.addListener("keyboardDidShow", onKeyboardDidShow);
-    const didHideSubscription = Keyboard.addListener("keyboardDidHide", onKeyboardDidHide);
-
-    return () => {
-      willShowSubscription.remove();
-      willHideSubscription.remove();
-      didShowSubscription.remove();
-      didHideSubscription.remove();
-    };
-  }, []);
-
   const isTodayHome = screen === "record" && selectedDate === todayDate();
   const hasResolvedSelectedRecord =
     recordDetail !== null && recordDetail.date === selectedDate;
@@ -2418,7 +2374,7 @@ function AppContent() {
         <View style={[styles.blob, styles.blobA]} />
         <View style={[styles.blob, styles.blobB]} />
       </View>
-      <KeyboardScreen style={appStyles.flex}>
+      <View style={appStyles.flex}>
         <View style={[appStyles.flex, { paddingBottom: bottomTabContentPadding }]}>
         {screen === "calendar" ? (
           <View style={appStyles.flex}>
@@ -2619,74 +2575,72 @@ function AppContent() {
             </View>
           </View>
         ) : null}
-      </KeyboardScreen>
-      {shouldRenderBottomNav ? (
-        <View
-          style={[
-            styles.bottomNav,
-            styles.bottomNavFloating,
-            {
-              paddingBottom: bottomNavSafeInset
-            }
+      </View>
+      <View
+        style={[
+          styles.bottomNav,
+          styles.bottomNavFloating,
+          {
+            paddingBottom: bottomNavBarPaddingBottom
+          }
+        ]}
+      >
+        <Pressable
+          style={({ pressed }) => [
+            styles.bottomNavItem,
+            screen === "record" ? styles.bottomNavItemActive : null,
+            withPressScale(pressed)
           ]}
+          onPress={() => {
+            openDate(todayDate()).catch(() => {});
+          }}
+          disabled={loading || !user}
         >
-          <Pressable
-            style={({ pressed }) => [
-              styles.bottomNavItem,
-              screen === "record" ? styles.bottomNavItemActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              openDate(todayDate()).catch(() => {});
-            }}
-            disabled={loading || !user}
-          >
-            <Text style={[styles.bottomNavLabel, screen === "record" ? styles.bottomNavLabelActive : null]}>Home</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bottomNavItem,
-              screen === "calendar" ? styles.bottomNavItemActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              setScreen("calendar");
-            }}
-            disabled={loading || !user}
-          >
-            <Text style={[styles.bottomNavLabel, screen === "calendar" ? styles.bottomNavLabelActive : null]}>Calendar</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bottomNavItem,
-              screen === "statistics" ? styles.bottomNavItemActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              setScreen("statistics");
-              if (weightHistory.length === 0 && nutritionHistory.length === 0) {
-                loadStatisticsBase().catch(() => {});
-              }
-            }}
-            disabled={loading || !user}
-          >
-            <Text style={[styles.bottomNavLabel, screen === "statistics" ? styles.bottomNavLabelActive : null]}>Statistics</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bottomNavItem,
-              screen === "profile" ? styles.bottomNavItemActive : null,
-              withPressScale(pressed)
-            ]}
-            onPress={() => {
-              setScreen("profile");
-            }}
-            disabled={loading || !user}
-          >
-            <Text style={[styles.bottomNavLabel, screen === "profile" ? styles.bottomNavLabelActive : null]}>Profile</Text>
-          </Pressable>
-        </View>
-      ) : null}
+          <Text style={[styles.bottomNavLabel, screen === "record" ? styles.bottomNavLabelActive : null]}>Home</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.bottomNavItem,
+            screen === "calendar" ? styles.bottomNavItemActive : null,
+            withPressScale(pressed)
+          ]}
+          onPress={() => {
+            setScreen("calendar");
+          }}
+          disabled={loading || !user}
+        >
+          <Text style={[styles.bottomNavLabel, screen === "calendar" ? styles.bottomNavLabelActive : null]}>Calendar</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.bottomNavItem,
+            screen === "statistics" ? styles.bottomNavItemActive : null,
+            withPressScale(pressed)
+          ]}
+          onPress={() => {
+            setScreen("statistics");
+            if (weightHistory.length === 0 && nutritionHistory.length === 0) {
+              loadStatisticsBase().catch(() => {});
+            }
+          }}
+          disabled={loading || !user}
+        >
+          <Text style={[styles.bottomNavLabel, screen === "statistics" ? styles.bottomNavLabelActive : null]}>Statistics</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.bottomNavItem,
+            screen === "profile" ? styles.bottomNavItemActive : null,
+            withPressScale(pressed)
+          ]}
+          onPress={() => {
+            setScreen("profile");
+          }}
+          disabled={loading || !user}
+        >
+          <Text style={[styles.bottomNavLabel, screen === "profile" ? styles.bottomNavLabelActive : null]}>Profile</Text>
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
@@ -2987,9 +2941,9 @@ const styles = StyleSheet.create({
     borderTopColor: `${palette.border}AA`,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 6,
     paddingBottom: 10,
-    gap: 8,
+    gap: 6,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     ...shadows.soft
@@ -3005,7 +2959,7 @@ const styles = StyleSheet.create({
   bottomNavItem: {
     flex: 1,
     borderRadius: radius.pill,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: "center",
     justifyContent: "center"
   },

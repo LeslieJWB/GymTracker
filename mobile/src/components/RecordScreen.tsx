@@ -3,7 +3,6 @@ import * as ImagePicker from "expo-image-picker";
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { appStyles } from "../styles/appStyles";
 import { RecordCheckInSection } from "./record/RecordCheckInSection";
 import { RecordDailyOverviewSection } from "./record/RecordDailyOverviewSection";

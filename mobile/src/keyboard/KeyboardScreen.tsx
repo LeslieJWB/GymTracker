@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, type KeyboardAvoidingViewProps, type StyleProp, type ViewStyle } from "react-native";
+import { Platform, type StyleProp, type ViewStyle } from "react-native";
+import {
+  KeyboardAvoidingView,
+  type KeyboardAvoidingViewProps
+} from "react-native-keyboard-controller";
 
 type KeyboardScreenProps = {
   children: ReactNode;
