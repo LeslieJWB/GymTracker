@@ -137,7 +137,7 @@ function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories
 function AppContent() {
   const insets = useSafeAreaInsets();
   const bottomNavBarPaddingBottom = insets.bottom > 0 ? Math.max(4, insets.bottom - 22) : 6;
-  const bottomNavBaseHeight = 50;
+  const bottomNavBaseHeight = 54;
   /** Keep content spacing stable and aligned with the actual floating nav height. */
   const bottomTabContentPadding = bottomNavBaseHeight + bottomNavBarPaddingBottom;
   const [fontsLoaded] = useFonts({
@@ -2941,7 +2941,7 @@ const styles = StyleSheet.create({
     borderTopColor: `${palette.border}AA`,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
-    paddingTop: 6,
+    paddingTop: 7,
     paddingBottom: 10,
     gap: 6,
     borderTopLeftRadius: radius.lg,
@@ -2959,7 +2959,7 @@ const styles = StyleSheet.create({
   bottomNavItem: {
     flex: 1,
     borderRadius: radius.pill,
-    paddingVertical: 8,
+    paddingVertical: 9,
     alignItems: "center",
     justifyContent: "center"
   },
