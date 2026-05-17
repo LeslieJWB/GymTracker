@@ -4,6 +4,13 @@ import { randomUUID } from "node:crypto";
 import { pool } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { upsertUserFromAuth } from "../shared/authUsers.js";
+import { getLlmQuotaStatus } from "../shared/llmQuota.js";
+import { syncSubscriberFromRevenueCat } from "../shared/revenueCatSync.js";
+const subscriptionSyncSchema = z.object({
+    isActive: z.boolean(),
+    expiresAt: z.string().nullable().optional(),
+    productIdentifier: z.string().trim().min(1).nullable().optional()
+});
 const profileSchema = z.object({
     heightCm: z.number().min(50).max(280).nullable().optional(),
     gender: z.string().trim().min(1).max(30).nullable().optional(),
@@ -24,6 +31,63 @@ meRouter.get("/me", async (req, res) => {
     try {
         const user = await upsertUserFromAuth(req.auth);
         return res.json(user);
+    }
+    catch (error) {
+        return res.status(500).json({ error: String(error) });
+    }
+});
+meRouter.post("/me/subscription/sync", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    const hasClientReport = req.body &&
+        typeof req.body === "object" &&
+        Object.prototype.hasOwnProperty.call(req.body, "isActive");
+    const parsed = hasClientReport ? subscriptionSyncSchema.safeParse(req.body) : null;
+    if (hasClientReport && parsed && !parsed.success) {
+        return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    const clientReport = parsed?.success
+        ? {
+            isActive: parsed.data.isActive,
+            expiresAt: parsed.data.expiresAt ?? null,
+            productIdentifier: parsed.data.productIdentifier ?? null
+        }
+        : undefined;
+    try {
+        const user = await upsertUserFromAuth(req.auth);
+        const sync = await syncSubscriberFromRevenueCat(req.auth.supabaseUserId, clientReport);
+        if (!sync.synced) {
+            return res.status(503).json({
+                error: "subscription_sync_unavailable",
+                message: "Set REVENUECAT_SECRET_API_KEY on the server, or send subscription state from the app in development."
+            });
+        }
+        const status = await getLlmQuotaStatus({
+            userId: user.id,
+            supabaseUserId: req.auth.supabaseUserId
+        });
+        return res.json({
+            subscriptionActive: sync.isActive,
+            syncSource: sync.source,
+            ...status
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ error: String(error) });
+    }
+});
+meRouter.get("/me/llm-quota", async (req, res) => {
+    if (!req.auth) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        const user = await upsertUserFromAuth(req.auth);
+        const status = await getLlmQuotaStatus({
+            userId: user.id,
+            supabaseUserId: req.auth.supabaseUserId
+        });
+        return res.json(status);
     }
     catch (error) {
         return res.status(500).json({ error: String(error) });

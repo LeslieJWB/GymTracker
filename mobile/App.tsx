@@ -4,6 +4,11 @@ import { Fraunces_600SemiBold, Fraunces_700Bold } from "@expo-google-fonts/fraun
 import { Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from "@expo-google-fonts/nunito";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import Purchases, {
+  type CustomerInfo,
+  type PurchasesOffering,
+  type PurchasesPackage
+} from "react-native-purchases";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,7 +25,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { AuthScreen } from "./src/components/AuthScreen";
 import { CalendarScreen } from "./src/components/CalendarScreen";
 import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/components/RecordScreen.tsx";
-import { ProfileScreen } from "./src/components/ProfileScreen";
+import { ProfileScreen, type LlmQuotaStatus } from "./src/components/ProfileScreen";
 import { StatisticsScreen } from "./src/components/StatisticsScreen";
 import { ModalShell } from "./src/components/ui/ModalShell";
 import { keyboardToolbarBottomInset } from "./src/keyboard/keyboardToolbarInset";
@@ -70,6 +75,8 @@ function normalizeBackendBaseUrl(raw: string): string {
 const DEFAULT_BACKEND_URL = normalizeBackendBaseUrl(
   process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:4000"
 );
+const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? "";
+const REVENUECAT_ENTITLEMENT_ID = process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID ?? "pro";
 type ExerciseDetailsById = Record<string, ExerciseDetail>;
 type SetDraftsByExerciseId = Record<string, SetDrafts>;
 type SavingSetIdsByExerciseId = Record<string, Record<string, boolean>>;
@@ -105,20 +112,47 @@ function monthRange(monthCursor: Date): { from: string; to: string } {
   };
 }
 
-function parseApiErrorPayload(error: unknown): { message: string; code: string | null } {
+type LlmQuotaErrorPayload = {
+  error: "llm_quota_exceeded";
+  reason: "free" | "subscriber";
+  limit: number;
+  used: number;
+};
+
+function parseApiErrorPayload(error: unknown): { message: string; code: string | null; quota: LlmQuotaErrorPayload | null } {
   const raw = error instanceof Error ? error.message : String(error);
   try {
-    const parsed = JSON.parse(raw) as { error?: string; code?: string };
+    const parsed = JSON.parse(raw) as { error?: string; code?: string; reason?: string; limit?: number; used?: number };
+    const quotaReason = parsed.reason === "free" || parsed.reason === "subscriber" ? parsed.reason : null;
+    const quota: LlmQuotaErrorPayload | null =
+      parsed.error === "llm_quota_exceeded" &&
+      quotaReason !== null &&
+      typeof parsed.limit === "number" &&
+      typeof parsed.used === "number"
+        ? {
+            error: "llm_quota_exceeded",
+            reason: quotaReason,
+            limit: parsed.limit,
+            used: parsed.used
+          }
+        : null;
     return {
       message: parsed.error ?? raw,
-      code: parsed.code ?? null
+      code: parsed.code ?? null,
+      quota
     };
   } catch {
     return {
       message: raw,
-      code: null
+      code: null,
+      quota: null
     };
   }
+}
+
+function isFreeQuotaExceededError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Free daily AI limit reached");
 }
 
 function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories: number; protein: number } {
@@ -203,6 +237,7 @@ function AppContent() {
   const [dailyTargetsStatus, setDailyTargetsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const dailyTargetsRefreshRequestIdRef = useRef(0);
   const dailyTargetsRefreshInFlightRef = useRef(false);
+  const suppressSubscriptionModalRef = useRef(false);
   const [dailyCheckInThemeDraft, setDailyCheckInThemeDraft] = useState("");
   const [dailyCheckInWeightDraft, setDailyCheckInWeightDraft] = useState("");
   const [dailyCheckInBodyFatDraft, setDailyCheckInBodyFatDraft] = useState("");
@@ -220,8 +255,242 @@ function AppContent() {
   const [showOnboardingAdvancedSettings, setShowOnboardingAdvancedSettings] = useState(false);
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
+
+  useEffect(() => {
+    // #region agent log
+    fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
+      body: JSON.stringify({
+        sessionId: "fa6210",
+        hypothesisId: "H1,H4",
+        location: "App.tsx:subscriptionModalVisible",
+        message: "subscription modal visibility",
+        data: { subscriptionModalVisible },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+  }, [subscriptionModalVisible]);
+
+  const [subscriptionOffering, setSubscriptionOffering] = useState<PurchasesOffering | null>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
+  const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null);
+  const [llmQuota, setLlmQuota] = useState<LlmQuotaStatus | null>(null);
+  const [llmQuotaLoading, setLlmQuotaLoading] = useState(false);
+  const [llmQuotaError, setLlmQuotaError] = useState<string | null>(null);
+  const revenueCatConfiguredRef = useRef(false);
+  const subscriptionAvailable = Platform.OS === "ios" && Boolean(REVENUECAT_IOS_API_KEY);
 
   const normalizedUrl = useMemo(() => DEFAULT_BACKEND_URL, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "ios" || !REVENUECAT_IOS_API_KEY || revenueCatConfiguredRef.current) {
+      return;
+    }
+    Purchases.configure({
+      apiKey: REVENUECAT_IOS_API_KEY,
+      appUserID: session?.user.id
+    });
+    revenueCatConfiguredRef.current = true;
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!revenueCatConfiguredRef.current || !session?.user.id) {
+      return;
+    }
+    Purchases.logIn(session.user.id).catch(() => {
+      setSubscriptionError("Could not connect to subscription service.");
+    });
+  }, [session?.user.id]);
+
+  function hasActiveSubscription(customerInfo: CustomerInfo): boolean {
+    return Boolean(customerInfo.entitlements.active[REVENUECAT_ENTITLEMENT_ID]);
+  }
+
+  function buildClientSubscriptionReport(customerInfo: CustomerInfo): {
+    isActive: boolean;
+    expiresAt: string | null;
+    productIdentifier: string | null;
+  } {
+    const entitlement = customerInfo.entitlements.active[REVENUECAT_ENTITLEMENT_ID];
+    return {
+      isActive: Boolean(entitlement),
+      expiresAt: entitlement?.expirationDate ?? null,
+      productIdentifier: entitlement?.productIdentifier ?? null
+    };
+  }
+
+  async function syncSubscriptionWithBackend(customerInfo?: CustomerInfo): Promise<void> {
+    if (!session?.access_token) {
+      return;
+    }
+    try {
+      let body: ReturnType<typeof buildClientSubscriptionReport> | undefined;
+      if (subscriptionAvailable && revenueCatConfiguredRef.current) {
+        const info = customerInfo ?? (await Purchases.getCustomerInfo());
+        body = buildClientSubscriptionReport(info);
+      }
+      const result = await apiJson<LlmQuotaStatus & { subscriptionActive?: boolean }>("/me/subscription/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      if (typeof result.subscriptionActive === "boolean") {
+        setSubscriptionActive(result.subscriptionActive);
+      }
+      setLlmQuota({
+        tier: result.tier,
+        limit: result.limit,
+        used: result.used
+      });
+      setLlmQuotaError(null);
+    } catch {
+      // Sync is best-effort; quota can still be loaded separately.
+    }
+  }
+
+  async function refreshSubscriptionStatus(): Promise<void> {
+    if (!subscriptionAvailable || !revenueCatConfiguredRef.current) {
+      setSubscriptionActive(null);
+      return;
+    }
+    try {
+      const customerInfo = await Purchases.getCustomerInfo();
+      const active = hasActiveSubscription(customerInfo);
+      setSubscriptionActive(active);
+    } catch {
+      setSubscriptionActive(null);
+    }
+  }
+
+  async function loadLlmQuota(): Promise<void> {
+    if (!session?.access_token) {
+      setLlmQuota(null);
+      setLlmQuotaError(null);
+      return;
+    }
+    setLlmQuotaLoading(true);
+    setLlmQuotaError(null);
+    try {
+      const status = await apiJson<LlmQuotaStatus>("/me/llm-quota");
+      setLlmQuota(status);
+      setLlmQuotaError(null);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setLlmQuota(null);
+      if (errorMessage.includes("Not found") || errorMessage.includes("404")) {
+        setLlmQuotaError("AI usage is unavailable — the server is missing the latest API. Redeploy the backend.");
+      } else {
+        setLlmQuotaError("Couldn't load today's AI usage. Check your connection and try again.");
+      }
+    } finally {
+      setLlmQuotaLoading(false);
+    }
+  }
+
+  async function loadSubscriptionOffering(): Promise<void> {
+    if (Platform.OS !== "ios") {
+      setSubscriptionError("Subscriptions are only available on iOS right now.");
+      return;
+    }
+    if (!REVENUECAT_IOS_API_KEY || !revenueCatConfiguredRef.current) {
+      setSubscriptionError("Subscriptions are not configured for this build.");
+      return;
+    }
+
+    setSubscriptionLoading(true);
+    setSubscriptionError(null);
+    try {
+      const offerings = await Purchases.getOfferings();
+      setSubscriptionOffering(offerings.current ?? null);
+      if (!offerings.current || offerings.current.availablePackages.length === 0) {
+        setSubscriptionError("No subscription products are available yet.");
+      }
+    } catch (error) {
+      setSubscriptionError(error instanceof Error ? error.message : "Could not load subscription options.");
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  }
+
+  function openSubscriptionModal(): void {
+    setSubscriptionModalVisible(true);
+    loadSubscriptionOffering().catch(() => {});
+    loadLlmQuota().catch(() => {});
+  }
+
+  async function withSuppressedSubscriptionModal<T>(fn: () => Promise<T>): Promise<T> {
+    suppressSubscriptionModalRef.current = true;
+    try {
+      return await fn();
+    } finally {
+      suppressSubscriptionModalRef.current = false;
+    }
+  }
+
+  async function purchaseSubscription(pkg: PurchasesPackage): Promise<void> {
+    setSubscriptionLoading(true);
+    setSubscriptionError(null);
+    try {
+      const result = await Purchases.purchasePackage(pkg);
+      if (hasActiveSubscription(result.customerInfo)) {
+        setSubscriptionActive(true);
+        setSubscriptionModalVisible(false);
+        await syncSubscriptionWithBackend(result.customerInfo);
+        Alert.alert("Subscription active", "Thanks for subscribing. Your higher AI quota is now active.");
+      } else {
+        setSubscriptionError("Purchase completed, but the subscription is not active yet.");
+      }
+    } catch (error) {
+      const maybeCancelled = error as { userCancelled?: boolean; message?: string };
+      if (!maybeCancelled.userCancelled) {
+        setSubscriptionError(maybeCancelled.message ?? "Could not complete purchase.");
+      }
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  }
+
+  async function restoreSubscription(): Promise<void> {
+    setSubscriptionLoading(true);
+    setSubscriptionError(null);
+    try {
+      const customerInfo = await Purchases.restorePurchases();
+      if (hasActiveSubscription(customerInfo)) {
+        setSubscriptionActive(true);
+        setSubscriptionModalVisible(false);
+        await syncSubscriptionWithBackend(customerInfo);
+        Alert.alert("Subscription restored", "Your subscription is active again.");
+      } else {
+        setSubscriptionError("No active subscription was found for this Apple account.");
+      }
+    } catch (error) {
+      setSubscriptionError(error instanceof Error ? error.message : "Could not restore purchases.");
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!session?.access_token) {
+      return;
+    }
+    loadLlmQuota().catch(() => {});
+  }, [session?.access_token]);
+
+  useEffect(() => {
+    if (screen !== "profile" || !session?.access_token) {
+      return;
+    }
+    (async () => {
+      await syncSubscriptionWithBackend();
+      await refreshSubscriptionStatus();
+      await loadLlmQuota();
+    })().catch(() => {});
+  }, [screen, session?.access_token]);
 
   async function apiJson<T = unknown>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers ?? {});
@@ -233,6 +502,32 @@ function AppContent() {
     if (!response.ok) {
       if (response.status === 401) {
         signOut().catch(() => {});
+      }
+      const parsed = parseApiErrorPayload(new Error(raw || `HTTP ${response.status}`));
+      if (parsed.quota?.reason === "free") {
+        const suppressModal = suppressSubscriptionModalRef.current;
+        // #region agent log
+        fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
+          body: JSON.stringify({
+            sessionId: "fa6210",
+            runId: "post-fix",
+            hypothesisId: "H1",
+            location: "App.tsx:apiJson",
+            message: "free quota",
+            data: { path, suppressModal, opensModal: !suppressModal },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+        // #endregion
+        if (!suppressModal) {
+          openSubscriptionModal();
+        }
+        throw new Error(`Free daily AI limit reached (${parsed.quota.used}/${parsed.quota.limit}). Subscribe to continue today.`);
+      }
+      if (parsed.quota?.reason === "subscriber") {
+        throw new Error(`You have used today's AI quota (${parsed.quota.used}/${parsed.quota.limit}). Try again tomorrow.`);
       }
       throw new Error(raw || `HTTP ${response.status}`);
     }
@@ -1042,15 +1337,31 @@ function AppContent() {
     exerciseName: string,
     date: string
   ): Promise<{ sets: { reps: number; weight: number }[]; advice: string }> {
-    const payload = await apiJson<{ sets: { reps: number; weight: number }[]; advice: string }>(
-      "/advice/exercise-plan",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, exerciseItemId, exerciseName, date })
-      }
-    );
-    return { sets: payload?.sets ?? [], advice: payload?.advice ?? "" };
+    // #region agent log
+    fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
+      body: JSON.stringify({
+        sessionId: "fa6210",
+        hypothesisId: "H1,H4",
+        location: "App.tsx:fetchExercisePlan",
+        message: "fetchExercisePlan start",
+        data: { exerciseItemId, suppressModal: suppressSubscriptionModalRef.current },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+    return withSuppressedSubscriptionModal(async () => {
+      const payload = await apiJson<{ sets: { reps: number; weight: number }[]; advice: string }>(
+        "/advice/exercise-plan",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, exerciseItemId, exerciseName, date })
+        }
+      );
+      return { sets: payload?.sets ?? [], advice: payload?.advice ?? "" };
+    });
   }
 
   async function addSetsFromPlan(
@@ -1424,7 +1735,7 @@ function AppContent() {
   async function addFoodConsumption(input: {
     text?: string;
     image?: FoodImagePayload;
-  }): Promise<boolean> {
+  }): Promise<boolean | "quota_free"> {
     if (!user) {
       return false;
     }
@@ -1435,7 +1746,7 @@ function AppContent() {
     }
     setSavingFoodConsumption(true);
     try {
-      const created = await apiJson<{
+      const created = await withSuppressedSubscriptionModal(() => apiJson<{
         recordId: string;
         entry: FoodConsumption;
         totalCaloriesKcal: number;
@@ -1452,7 +1763,7 @@ function AppContent() {
           text: normalizedText || undefined,
           image: input.image
         })
-      });
+      }));
 
       setRecordDetail((current) => {
         if (!current || current.date !== selectedDate) {
@@ -1469,7 +1780,12 @@ function AppContent() {
       });
       return true;
     } catch (error) {
-      Alert.alert("Failed to add food", String(error));
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (isFreeQuotaExceededError(error)) {
+        loadLlmQuota().catch(() => {});
+        return "quota_free";
+      }
+      Alert.alert("Failed to add food", errorMessage);
       return false;
     } finally {
       setSavingFoodConsumption(false);
@@ -1778,11 +2094,13 @@ function AppContent() {
   }
 
   async function fetchDailySummary(date: string): Promise<AdviceReviewResult> {
-    return apiJson<AdviceReviewResult>("/advice/daily-summary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date })
-    });
+    return withSuppressedSubscriptionModal(() =>
+      apiJson<AdviceReviewResult>("/advice/daily-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date })
+      })
+    );
   }
 
   async function fetchExerciseFeedback(input: {
@@ -1791,11 +2109,13 @@ function AppContent() {
     exerciseName: string;
     date: string;
   }): Promise<AdviceReviewResult> {
-    return apiJson<AdviceReviewResult>("/advice/exercise-feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input)
-    });
+    return withSuppressedSubscriptionModal(() =>
+      apiJson<AdviceReviewResult>("/advice/exercise-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input)
+      })
+    );
   }
 
   async function loadStatisticsBase(overrideGranularity?: StatisticsGranularity): Promise<void> {
@@ -2445,6 +2765,8 @@ function AppContent() {
               savingFoodConsumption={savingFoodConsumption}
               deletingFoodIds={deletingFoodIds}
               addFoodConsumption={addFoodConsumption}
+              onOpenSubscription={openSubscriptionModal}
+              llmQuota={llmQuota}
               deleteFoodConsumption={(foodConsumptionId: string) => {
                 deleteFoodConsumption(foodConsumptionId).catch(() => {});
               }}
@@ -2473,6 +2795,15 @@ function AppContent() {
             <ProfileScreen
               profile={profile}
               saving={savingProfile}
+              llmQuota={llmQuota}
+              llmQuotaLoading={llmQuotaLoading}
+              llmQuotaError={llmQuotaError}
+              subscriptionAvailable={subscriptionAvailable}
+              subscriptionActive={subscriptionActive}
+              onOpenSubscription={openSubscriptionModal}
+              onRestoreSubscription={() => {
+                restoreSubscription().catch(() => {});
+              }}
               onSave={saveProfile}
               onSignOut={() => {
                 signOut().catch(() => {});
@@ -2575,6 +2906,56 @@ function AppContent() {
             </View>
           </View>
         ) : null}
+        <ModalShell
+          visible={subscriptionModalVisible}
+          onRequestClose={() => setSubscriptionModalVisible(false)}
+          cardStyle={styles.subscriptionModalCard}
+        >
+          <Text style={styles.subscriptionTitle}>Unlock more AI coaching</Text>
+          <Text style={styles.subscriptionHint}>
+            Free accounts include 5 AI calls per day. Subscribe for a higher daily quota across food analysis, workout
+            plans, summaries, and feedback.
+          </Text>
+          {subscriptionLoading ? <ActivityIndicator color={palette.primary} /> : null}
+          {subscriptionError ? <Text style={styles.subscriptionError}>{subscriptionError}</Text> : null}
+          <View style={styles.subscriptionPackageList}>
+            {(subscriptionOffering?.availablePackages ?? []).map((pkg) => (
+              <Pressable
+                key={pkg.identifier}
+                style={({ pressed }) => [styles.subscriptionPackageButton, withPressScale(pressed)]}
+                disabled={subscriptionLoading}
+                onPress={() => {
+                  purchaseSubscription(pkg).catch(() => {});
+                }}
+              >
+                <View style={styles.subscriptionPackageTextWrap}>
+                  <Text style={styles.subscriptionPackageTitle}>{pkg.product.title}</Text>
+                  <Text style={styles.subscriptionPackageSubtitle}>
+                    {pkg.product.description || "Higher daily AI quota"}
+                  </Text>
+                </View>
+                <Text style={styles.subscriptionPackagePrice}>{pkg.product.priceString}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.subscriptionActions}>
+            <Pressable
+              style={({ pressed }) => [styles.subscriptionSecondaryButton, withPressScale(pressed)]}
+              disabled={subscriptionLoading}
+              onPress={() => {
+                restoreSubscription().catch(() => {});
+              }}
+            >
+              <Text style={styles.subscriptionSecondaryText}>Restore Purchases</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.subscriptionSecondaryButton, withPressScale(pressed)]}
+              onPress={() => setSubscriptionModalVisible(false)}
+            >
+              <Text style={styles.subscriptionSecondaryText}>Not Now</Text>
+            </Pressable>
+          </View>
+        </ModalShell>
       </View>
       <View
         style={[
@@ -2933,6 +3314,81 @@ const styles = StyleSheet.create({
   dailyGateButtonText: {
     color: "#F3F4F1",
     fontSize: 16,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  subscriptionModalCard: {
+    padding: 20,
+    gap: 14,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32
+  },
+  subscriptionTitle: {
+    color: palette.foreground,
+    fontSize: 26,
+    fontFamily: textStyles.headingLg.fontFamily
+  },
+  subscriptionHint: {
+    color: palette.mutedForeground,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: textStyles.body.fontFamily
+  },
+  subscriptionError: {
+    color: palette.destructive,
+    fontSize: 13,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  subscriptionPackageList: {
+    gap: 10
+  },
+  subscriptionPackageButton: {
+    minHeight: 72,
+    borderWidth: 1,
+    borderColor: `${palette.border}AA`,
+    borderRadius: 24,
+    backgroundColor: "#FFFFFFCC",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    ...shadows.soft
+  },
+  subscriptionPackageTextWrap: {
+    flex: 1,
+    gap: 4
+  },
+  subscriptionPackageTitle: {
+    color: palette.foreground,
+    fontSize: 16,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  subscriptionPackageSubtitle: {
+    color: palette.mutedForeground,
+    fontSize: 13,
+    fontFamily: textStyles.body.fontFamily
+  },
+  subscriptionPackagePrice: {
+    color: palette.primary,
+    fontSize: 16,
+    fontFamily: textStyles.bodyBold.fontFamily
+  },
+  subscriptionActions: {
+    flexDirection: "row",
+    gap: 10
+  },
+  subscriptionSecondaryButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${palette.primary}12`
+  },
+  subscriptionSecondaryText: {
+    color: palette.primary,
+    fontSize: 14,
     fontFamily: textStyles.bodyBold.fontFamily
   },
   bottomNav: {

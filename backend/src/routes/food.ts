@@ -10,6 +10,7 @@ import {
   idempotencyHeader,
   saveIdempotentResponse
 } from "../shared/idempotency.js";
+import { reserveLlmQuota, sendLlmQuotaExceeded } from "../shared/llmQuota.js";
 import { buildStructuredPrompt } from "../shared/llmPrompt.js";
 import {
   idSchema
@@ -254,6 +255,16 @@ foodRouter.post("/records/by-date/food", async (req, res) => {
   }
 
   try {
+    if (llmProvider) {
+      const quota = await reserveLlmQuota({
+        userId: appUser.id,
+        supabaseUserId: req.auth.supabaseUserId
+      });
+      if (!quota.allowed) {
+        return sendLlmQuotaExceeded(res, quota);
+      }
+    }
+
     const analysis = await analyzeFoodConsumption(cleanText(text), image, promptProfile);
     const inputMode: "text" | "text_image" | "image" =
       text && image ? "text_image" : image ? "image" : "text";

@@ -11,6 +11,7 @@ import { foodRouter } from "./routes/food.js";
 import { healthRouter } from "./routes/health.js";
 import { meRouter } from "./routes/me.js";
 import { recordsRouter } from "./routes/records.js";
+import { revenueCatRouter } from "./routes/revenuecat.js";
 import { statisticsRouter } from "./routes/statistics.js";
 import { templatesRouter } from "./routes/templates.js";
 const app = express();
@@ -43,6 +44,7 @@ app.use((req, res, next) => {
     next();
 });
 app.use(healthRouter);
+app.use(revenueCatRouter);
 app.use(meRouter);
 app.use(exerciseItemsRouter);
 app.use(recordsRouter);

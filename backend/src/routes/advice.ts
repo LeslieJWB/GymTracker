@@ -5,6 +5,7 @@ import { pool } from "../db.js";
 import { generateLlmText, llmConfigHint, llmProvider } from "../config.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth } from "../shared/authUsers.js";
+import { reserveLlmQuota, sendLlmQuotaExceeded } from "../shared/llmQuota.js";
 import { buildStructuredPrompt } from "../shared/llmPrompt.js";
 import { datePattern, idSchema } from "../shared/validation.js";
 
@@ -291,6 +292,14 @@ Respond with ONLY a single JSON object, no other text. Use this exact shape:
 - "advice": one short paragraph of coaching advice.
 Keep recommendations safe and based on the user's history. Weight in kg.`
     });
+
+    const quota = await reserveLlmQuota({
+      userId: appUser.id,
+      supabaseUserId: req.auth.supabaseUserId
+    });
+    if (!quota.allowed) {
+      return sendLlmQuotaExceeded(res, quota);
+    }
 
     const raw = await generateLlmText({ prompt });
     if (!raw) {
@@ -627,6 +636,14 @@ Respond with ONLY a single JSON object:
 {"review":"<short, concrete review with strengths, gaps, and next actions>"}`
     });
 
+    const quota = await reserveLlmQuota({
+      userId: appUser.id,
+      supabaseUserId: req.auth.supabaseUserId
+    });
+    if (!quota.allowed) {
+      return sendLlmQuotaExceeded(res, quota);
+    }
+
     const raw = await generateLlmText({ prompt });
     if (!raw) {
       return fallback("Could not generate AI summary. Try again after logging more completed sets or food.");
@@ -784,6 +801,14 @@ Rules:
 - recommendedProteinG must be between 30 and 400.
 - Keep comment practical and under 2 sentences.`
     });
+
+    const quota = await reserveLlmQuota({
+      userId: appUser.id,
+      supabaseUserId: req.auth.supabaseUserId
+    });
+    if (!quota.allowed) {
+      return sendLlmQuotaExceeded(res, quota);
+    }
 
     const raw = await generateLlmText({ prompt });
     if (!raw) {
@@ -1079,6 +1104,14 @@ ${pastText}
 Respond with ONLY JSON:
 {"review":"<concise feedback on incremental progress, form/load management, and next-step suggestion>"}`
     });
+
+    const quota = await reserveLlmQuota({
+      userId: appUser.id,
+      supabaseUserId: req.auth.supabaseUserId
+    });
+    if (!quota.allowed) {
+      return sendLlmQuotaExceeded(res, quota);
+    }
 
     const raw = await generateLlmText({ prompt });
     if (!raw) {

@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import {
   Alert,
   Image,
+  InteractionManager,
   Modal,
   Platform,
   Pressable,
@@ -13,7 +14,11 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { isFreeTierQuotaExhausted, type LlmQuotaStatus } from "./ProfileScreen";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { AppKeyboardToolbar } from "../keyboard/AppKeyboardToolbar";
+import { useKeyboardSystem } from "../keyboard/KeyboardSystemProvider";
+import { keyboardToolbarBottomInset } from "../keyboard/keyboardToolbarInset";
 import { appStyles } from "../styles/appStyles";
 import { RecordCheckInSection } from "./record/RecordCheckInSection";
 import { RecordDailyOverviewSection } from "./record/RecordDailyOverviewSection";
@@ -92,7 +97,8 @@ type RecordScreenProps = {
   addFoodConsumption: (input: {
     text?: string;
     image?: FoodImagePayload;
-  }) => Promise<boolean>;
+  }) => Promise<boolean | "quota_free">;
+  onOpenSubscription: () => void;
   deleteFoodConsumption: (foodConsumptionId: string) => void;
   bodyWeightDraft: string;
   setBodyWeightDraft: (value: string) => void;
@@ -116,6 +122,7 @@ type RecordScreenProps = {
     date: string;
   }) => Promise<AdviceReviewResult>;
   dailyNutritionTargets: DailyNutritionTargets | null;
+  llmQuota: LlmQuotaStatus | null;
 };
 
 export function RecordScreen({
@@ -149,6 +156,7 @@ export function RecordScreen({
   savingFoodConsumption,
   deletingFoodIds,
   addFoodConsumption,
+  onOpenSubscription,
   deleteFoodConsumption,
   bodyWeightDraft,
   setBodyWeightDraft,
@@ -164,7 +172,8 @@ export function RecordScreen({
   deleteWorkoutTemplate,
   fetchDailySummary,
   fetchExerciseFeedback,
-  dailyNutritionTargets
+  dailyNutritionTargets,
+  llmQuota
 }: RecordScreenProps) {
   const [showExerciseSearchModal, setShowExerciseSearchModal] = useState(false);
   const [exerciseSearchTerm, setExerciseSearchTerm] = useState("");
@@ -224,6 +233,15 @@ export function RecordScreen({
     exerciseId: string;
     exerciseName: string;
   } | null>(null);
+  const { keyboardVisible, focusedInputCurrent, setToolbarSuppressed } = useKeyboardSystem();
+  const foodComposerToolbarEnabled =
+    showFoodComposerModal && (keyboardVisible || focusedInputCurrent >= 0);
+
+  useEffect(() => {
+    setToolbarSuppressed(showFoodComposerModal);
+    return () => setToolbarSuppressed(false);
+  }, [showFoodComposerModal, setToolbarSuppressed]);
+
   const expandedIds = useMemo(() => new Set(expandedExerciseIds), [expandedExerciseIds]);
   const filteredExerciseItems = useMemo(() => {
     const normalizedQuery = normalizeSearchText(exerciseSearchTerm);
@@ -371,12 +389,60 @@ export function RecordScreen({
   const canSaveTemplate = Boolean(user) && !loading && exerciseEntryCount > 0;
   const canLoadTemplate = Boolean(user) && !loading;
 
+  function handleFreeQuotaExceeded(error: unknown, onClose: () => void): boolean {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!errorMessage.includes("Free daily AI limit reached")) {
+      return false;
+    }
+    onClose();
+    InteractionManager.runAfterInteractions(() => {
+      onOpenSubscription();
+    });
+    return true;
+  }
+
+  function tryStartAiFeature(start: () => void): void {
+    if (isFreeTierQuotaExhausted(llmQuota)) {
+      // #region agent log
+      fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
+        body: JSON.stringify({
+          sessionId: "fa6210",
+          runId: "post-fix-v2",
+          hypothesisId: "H6",
+          location: "RecordScreen.tsx:tryStartAiFeature",
+          message: "quota exhausted client-side, skipping modal",
+          data: { used: llmQuota?.used, limit: llmQuota?.limit },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      onOpenSubscription();
+      return;
+    }
+    start();
+  }
 
   useEffect(() => {
     if (!adviceTarget || !user || !recordDetail) return;
     setAdviceLoading(true);
     setAdviceError(null);
     setAdviceResult(null);
+    // #region agent log
+    fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
+      body: JSON.stringify({
+        sessionId: "fa6210",
+        hypothesisId: "H2,H3",
+        location: "RecordScreen.tsx:adviceEffect",
+        message: "advice fetch started",
+        data: { adviceModalOpen: adviceTarget !== null, exerciseItemId: adviceTarget.exerciseItemId },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     fetchExercisePlan(
       recordDetail.userId,
       adviceTarget.exerciseItemId,
@@ -388,7 +454,34 @@ export function RecordScreen({
         setAdviceLoading(false);
       })
       .catch((err) => {
-        setAdviceError(String(err));
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const isQuota = errorMessage.includes("Free daily AI limit reached");
+        // #region agent log
+        fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
+          body: JSON.stringify({
+            sessionId: "fa6210",
+            runId: "post-fix",
+            hypothesisId: "H1,H2,H3,H4",
+            location: "RecordScreen.tsx:adviceEffect:catch",
+            message: isQuota ? "quota: closing advice modal then subscription" : "advice fetch failed",
+            data: { errorMessage, isQuota },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+        // #endregion
+        if (
+          handleFreeQuotaExceeded(err, () => {
+            setAdviceTarget(null);
+            setAdviceResult(null);
+            setAdviceError(null);
+            setAdviceLoading(false);
+          })
+        ) {
+          return;
+        }
+        setAdviceError(errorMessage);
         setAdviceLoading(false);
       });
   }, [adviceTarget]);
@@ -411,25 +504,47 @@ export function RecordScreen({
         setFeedbackLoading(false);
       })
       .catch((error) => {
+        if (
+          handleFreeQuotaExceeded(error, () => {
+            setFeedbackTarget(null);
+            setFeedbackResult(null);
+            setFeedbackError(null);
+            setFeedbackLoading(false);
+          })
+        ) {
+          return;
+        }
         setFeedbackError(String(error));
         setFeedbackLoading(false);
       });
   }, [feedbackTarget]);
 
   function openDailySummaryModal(): void {
-    setDailySummaryVisible(true);
-    setDailySummaryLoading(true);
-    setDailySummaryError(null);
-    setDailySummaryResult(null);
-    fetchDailySummary(selectedDate)
+    tryStartAiFeature(() => {
+      setDailySummaryVisible(true);
+      setDailySummaryLoading(true);
+      setDailySummaryError(null);
+      setDailySummaryResult(null);
+      fetchDailySummary(selectedDate)
       .then((payload) => {
         setDailySummaryResult(payload);
         setDailySummaryLoading(false);
       })
       .catch((error) => {
+        if (
+          handleFreeQuotaExceeded(error, () => {
+            setDailySummaryVisible(false);
+            setDailySummaryResult(null);
+            setDailySummaryError(null);
+            setDailySummaryLoading(false);
+          })
+        ) {
+          return;
+        }
         setDailySummaryError(String(error));
         setDailySummaryLoading(false);
       });
+    });
   }
 
   function openExerciseSearchModal(): void {
@@ -571,10 +686,12 @@ export function RecordScreen({
 
 
   function openAdviceSheetForExercise(item: { id: string; exerciseItemId: string; exerciseItemName: string }): void {
-    setAdviceTarget({
-      exerciseId: item.id,
-      exerciseItemId: item.exerciseItemId,
-      exerciseItemName: item.exerciseItemName
+    tryStartAiFeature(() => {
+      setAdviceTarget({
+        exerciseId: item.id,
+        exerciseItemId: item.exerciseItemId,
+        exerciseItemName: item.exerciseItemName
+      });
     });
   }
 
@@ -706,7 +823,7 @@ export function RecordScreen({
       return;
     }
     setFoodComposerError(null);
-    const ok = await addFoodConsumption({
+    const result = await addFoodConsumption({
       text: text || undefined,
       image: foodImageDraft
         ? {
@@ -715,7 +832,15 @@ export function RecordScreen({
           }
         : undefined
     });
-    if (!ok) {
+    if (result === "quota_free") {
+      setFoodTextDraft("");
+      setFoodImageDraft(null);
+      setFoodComposerError(null);
+      setShowFoodComposerModal(false);
+      onOpenSubscription();
+      return;
+    }
+    if (!result) {
       setFoodComposerError("Failed to save. Please try again.");
       return;
     }
@@ -1220,62 +1345,73 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeFoodComposerModal}
       >
-        <View style={styles.modalBackdrop}>
-          <Pressable style={styles.modalBackdropTapTarget} onPress={closeFoodComposerModal} />
-          <View style={styles.modalCard}>
+        <View style={styles.foodComposerModalRoot}>
+          <KeyboardAvoidingView
+            style={styles.modalBackdrop}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={16 + keyboardToolbarBottomInset()}
+          >
+            <Pressable style={styles.modalBackdropTapTarget} onPress={closeFoodComposerModal} />
+            <View style={[styles.modalCard, styles.foodComposerModalCard]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Log Food</Text>
               <TouchableOpacity style={styles.modalCloseButton} onPress={closeFoodComposerModal}>
                 <Text style={styles.modalCloseButtonText}>x</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>
-              Add a sentence, a photo, or both. We will estimate calories and protein with AI.
-            </Text>
-            <TextInput
-              style={[styles.modernInput, styles.foodTextInput]}
-              value={foodTextDraft}
-              onChangeText={setFoodTextDraft}
-  
-              multiline
-              numberOfLines={3}
-              placeholder="e.g. 60g steel cut oats + 200ml milk"
-              placeholderTextColor="#78786C"
-              editable={!savingFoodConsumption}
-            />
-            <View style={styles.foodPhotoActions}>
-              <TouchableOpacity
-                style={styles.foodPhotoActionButton}
-                onPress={() => {
-                  pickFoodPhotoFromLibrary().catch(() => {});
-                }}
-                disabled={savingFoodConsumption}
-              >
-                <Text style={styles.foodPhotoActionButtonText}>Choose Photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.foodPhotoActionButton}
-                onPress={() => {
-                  takeFoodPhoto().catch(() => {});
-                }}
-                disabled={savingFoodConsumption}
-              >
-                <Text style={styles.foodPhotoActionButtonText}>Take Photo</Text>
-              </TouchableOpacity>
-            </View>
-            {foodImageDraft ? (
-              <View style={styles.foodImagePreviewWrap}>
-                <Image source={{ uri: foodImageDraft.previewUri }} style={styles.foodImagePreview} />
+            <ScrollView
+              style={styles.foodComposerScroll}
+              contentContainerStyle={styles.foodComposerScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalSubtitle}>
+                Add a sentence, a photo, or both. We will estimate calories and protein with AI.
+              </Text>
+              <TextInput
+                style={[styles.modernInput, styles.foodTextInput]}
+                value={foodTextDraft}
+                onChangeText={setFoodTextDraft}
+                multiline
+                numberOfLines={3}
+                placeholder="e.g. 60g steel cut oats + 200ml milk"
+                placeholderTextColor="#78786C"
+                editable={!savingFoodConsumption}
+              />
+              <View style={styles.foodPhotoActions}>
                 <TouchableOpacity
-                  style={styles.clearFoodImageButton}
-                  onPress={() => setFoodImageDraft(null)}
+                  style={styles.foodPhotoActionButton}
+                  onPress={() => {
+                    pickFoodPhotoFromLibrary().catch(() => {});
+                  }}
                   disabled={savingFoodConsumption}
                 >
-                  <Text style={styles.clearFoodImageButtonText}>Remove Photo</Text>
+                  <Text style={styles.foodPhotoActionButtonText}>Choose Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.foodPhotoActionButton}
+                  onPress={() => {
+                    takeFoodPhoto().catch(() => {});
+                  }}
+                  disabled={savingFoodConsumption}
+                >
+                  <Text style={styles.foodPhotoActionButtonText}>Take Photo</Text>
                 </TouchableOpacity>
               </View>
-            ) : null}
-            {foodComposerError ? <Text style={styles.foodComposerErrorText}>{foodComposerError}</Text> : null}
+              {foodImageDraft ? (
+                <View style={styles.foodImagePreviewWrap}>
+                  <Image source={{ uri: foodImageDraft.previewUri }} style={styles.foodImagePreview} />
+                  <TouchableOpacity
+                    style={styles.clearFoodImageButton}
+                    onPress={() => setFoodImageDraft(null)}
+                    disabled={savingFoodConsumption}
+                  >
+                    <Text style={styles.clearFoodImageButtonText}>Remove Photo</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              {foodComposerError ? <Text style={styles.foodComposerErrorText}>{foodComposerError}</Text> : null}
+            </ScrollView>
             <View style={styles.composerActionRow}>
               <TouchableOpacity style={styles.composerCancelButton} onPress={closeFoodComposerModal}>
                 <Text style={styles.composerCancelButtonText}>Cancel</Text>
@@ -1292,7 +1428,9 @@ export function RecordScreen({
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+            </View>
+          </KeyboardAvoidingView>
+          <AppKeyboardToolbar enabled={foodComposerToolbarEnabled} />
         </View>
       </Modal>
 
@@ -1383,10 +1521,12 @@ export function RecordScreen({
                 const target = exerciseMenuTarget;
                 closeExerciseMenu();
                 if (target) {
-                  setFeedbackTarget({
-                    exerciseId: target.id,
-                    exerciseItemId: target.exerciseItemId,
-                    exerciseItemName: target.exerciseItemName
+                  tryStartAiFeature(() => {
+                    setFeedbackTarget({
+                      exerciseId: target.id,
+                      exerciseItemId: target.exerciseItemId,
+                      exerciseItemName: target.exerciseItemName
+                    });
                   });
                 }
               }}
@@ -2582,6 +2722,19 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: "#A85448",
     fontSize: 13
+  },
+  foodComposerModalRoot: {
+    flex: 1
+  },
+  foodComposerModalCard: {
+    maxHeight: "85%"
+  },
+  foodComposerScroll: {
+    flexGrow: 0,
+    flexShrink: 1
+  },
+  foodComposerScrollContent: {
+    paddingBottom: 4
   },
   searchInput: {
     marginTop: 8,

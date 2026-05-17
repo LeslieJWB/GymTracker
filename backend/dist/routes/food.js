@@ -6,6 +6,7 @@ import { pool, withTransaction } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth } from "../shared/authUsers.js";
 import { findIdempotentResponse, idempotencyHeader, saveIdempotentResponse } from "../shared/idempotency.js";
+import { reserveLlmQuota, sendLlmQuotaExceeded } from "../shared/llmQuota.js";
 import { buildStructuredPrompt } from "../shared/llmPrompt.js";
 import { idSchema } from "../shared/validation.js";
 const foodAnalysisSchema = z.object({
@@ -198,6 +199,15 @@ foodRouter.post("/records/by-date/food", async (req, res) => {
         }
     }
     try {
+        if (llmProvider) {
+            const quota = await reserveLlmQuota({
+                userId: appUser.id,
+                supabaseUserId: req.auth.supabaseUserId
+            });
+            if (!quota.allowed) {
+                return sendLlmQuotaExceeded(res, quota);
+            }
+        }
         const analysis = await analyzeFoodConsumption(cleanText(text), image, promptProfile);
         const inputMode = text && image ? "text_image" : image ? "image" : "text";
         const payload = await withTransaction(async (client) => {

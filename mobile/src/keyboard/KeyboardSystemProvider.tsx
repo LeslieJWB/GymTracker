@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Platform } from "react-native";
-import { FocusedInputEvents, KeyboardProvider, KeyboardToolbar, useKeyboardState } from "react-native-keyboard-controller";
+import { FocusedInputEvents, KeyboardProvider, useKeyboardState } from "react-native-keyboard-controller";
+import { AppKeyboardToolbar } from "./AppKeyboardToolbar";
 
 type KeyboardSystemContextValue = {
   keyboardVisible: boolean;
@@ -47,7 +48,7 @@ export function KeyboardSystemProvider({ children }: KeyboardSystemProviderProps
     <KeyboardProvider>
       <KeyboardSystemContext.Provider value={value}>
         {children}
-        {Platform.OS === "ios" ? <KeyboardToolbar enabled={toolbarEnabled} /> : null}
+        <AppKeyboardToolbar enabled={toolbarEnabled} />
       </KeyboardSystemContext.Provider>
     </KeyboardProvider>
   );

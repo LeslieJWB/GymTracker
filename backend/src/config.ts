@@ -11,6 +11,17 @@ export const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+export const freeLlmCallsPerDay = Math.max(0, Number(process.env.FREE_LLM_CALLS_PER_DAY || 5));
+export const subscriberLlmCallsPerDay = Math.max(0, Number(process.env.SUBSCRIBER_LLM_CALLS_PER_DAY || 30));
+export const unlimitedLlmSupabaseUserIds = new Set(
+  (process.env.LLM_UNLIMITED_SUPABASE_USER_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+);
+export const revenueCatWebhookAuthToken = process.env.REVENUECAT_WEBHOOK_AUTH_TOKEN ?? "";
+export const revenueCatSecretApiKey = process.env.REVENUECAT_SECRET_API_KEY ?? "";
+export const revenueCatEntitlementId = process.env.REVENUECAT_ENTITLEMENT_ID ?? "pro";
 
 const selectedProviderRaw = (process.env.LLM_PROVIDER ?? "kimi").trim().toLowerCase();
 export const llmProviderName: SupportedLlmProvider =

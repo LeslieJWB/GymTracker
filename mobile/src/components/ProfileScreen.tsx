@@ -1,6 +1,6 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useEffect, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { keyboardToolbarBottomInset } from "../keyboard/keyboardToolbarInset";
@@ -24,9 +24,26 @@ type ProfileInput = {
   globalLlmPrompt: string;
 };
 
+export type LlmQuotaStatus = {
+  tier: "free" | "subscriber" | "unlimited";
+  limit: number | null;
+  used: number;
+};
+
+export function isFreeTierQuotaExhausted(quota: LlmQuotaStatus | null): boolean {
+  return quota?.tier === "free" && quota.limit !== null && quota.used >= quota.limit;
+}
+
 type ProfileScreenProps = {
   profile: UserProfile | null;
   saving: boolean;
+  llmQuota: LlmQuotaStatus | null;
+  llmQuotaLoading: boolean;
+  llmQuotaError: string | null;
+  subscriptionAvailable: boolean;
+  subscriptionActive: boolean | null;
+  onOpenSubscription: () => void;
+  onRestoreSubscription: () => void;
   onSave: (payload: {
     heightCm: number | null;
     gender: string | null;
@@ -85,7 +102,48 @@ function getAvatarColor(profile: UserProfile | null): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScreenProps) {
+function formatQuotaSummary(quota: LlmQuotaStatus | null, error: string | null): string {
+  if (error) {
+    return error;
+  }
+  if (!quota) {
+    return "—";
+  }
+  if (quota.tier === "unlimited") {
+    return "Unlimited AI coaching";
+  }
+  if (quota.limit === null) {
+    return `${quota.used} AI calls used today`;
+  }
+  return `${quota.used} of ${quota.limit} AI calls used today`;
+}
+
+function formatPlanLabel(quota: LlmQuotaStatus | null, subscriptionActive: boolean | null): string {
+  if (subscriptionActive) {
+    return "Pro subscriber";
+  }
+  if (quota?.tier === "subscriber") {
+    return "Pro subscriber";
+  }
+  if (quota?.tier === "unlimited") {
+    return "Unlimited";
+  }
+  return "Free plan";
+}
+
+export function ProfileScreen({
+  profile,
+  saving,
+  llmQuota,
+  llmQuotaLoading,
+  llmQuotaError,
+  subscriptionAvailable,
+  subscriptionActive,
+  onOpenSubscription,
+  onRestoreSubscription,
+  onSave,
+  onSignOut
+}: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<ProfileInput>(() => toInput(profile));
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -287,9 +345,57 @@ export function ProfileScreen({ profile, saving, onSave, onSignOut }: ProfileScr
         </View>
       </AppCard>
 
+      {/* Subscription & AI quota */}
+      <AppCard style={styles.card}>
+        <Text style={styles.cardHeader}>AI Coaching Plan</Text>
+        <Text style={styles.cardSubheader}>
+          Food analysis, workout plans, summaries, and feedback all count toward your daily AI quota.
+        </Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoKey}>Plan</Text>
+          <View style={styles.planBadge}>
+            <Text style={styles.planBadgeText}>{formatPlanLabel(llmQuota, subscriptionActive)}</Text>
+          </View>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.infoRow}>
+          <Text style={styles.infoKey}>Today</Text>
+          {llmQuotaLoading ? (
+            <ActivityIndicator color="#5D7052" />
+          ) : (
+            <Text style={[styles.infoValue, llmQuotaError ? styles.infoValueError : null]}>
+              {formatQuotaSummary(llmQuota, llmQuotaError)}
+            </Text>
+          )}
+        </View>
+        {subscriptionAvailable ? (
+          <>
+            <View style={styles.subscriptionSpacer} />
+            {subscriptionActive ? (
+              <Text style={styles.subscriptionFootnote}>
+                Your subscription is active. Manage or cancel it anytime in the App Store.
+              </Text>
+            ) : (
+              <>
+                <AppButton onPress={onOpenSubscription}>View subscription plans</AppButton>
+                <Pressable style={styles.restoreLink} onPress={onRestoreSubscription} hitSlop={8}>
+                  <Text style={styles.restoreLinkText}>Restore purchases</Text>
+                </Pressable>
+              </>
+            )}
+          </>
+        ) : (
+          <Text style={styles.subscriptionFootnote}>
+            {Platform.OS === "ios"
+              ? "Subscriptions are not configured in this build yet."
+              : "Subscriptions are available on iOS. Sign in on an iPhone to upgrade."}
+          </Text>
+        )}
+      </AppCard>
+
       {/* LLM Prompt */}
       <AppCard style={styles.card}>
-        <Text style={styles.cardHeader}>AI Coaching</Text>
+        <Text style={styles.cardHeader}>AI Coaching Style</Text>
         <Text style={styles.cardSubheader}>Customize how the AI assistant interacts with you</Text>
         <AppTextInput
           style={styles.promptInput}
@@ -458,6 +564,11 @@ const styles = StyleSheet.create({
     textAlign: "right",
     maxWidth: "60%"
   },
+  infoValueError: {
+    color: "#A85448",
+    fontWeight: "500",
+    fontSize: 13
+  },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#DED8CF"
@@ -470,6 +581,35 @@ const styles = StyleSheet.create({
   },
   providerBadgeText: {
     fontSize: 13,
+    fontWeight: "600",
+    color: "#5D7052"
+  },
+  planBadge: {
+    backgroundColor: "#5D7052",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8
+  },
+  planBadgeText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#F3F4F1"
+  },
+  subscriptionSpacer: {
+    height: 12
+  },
+  subscriptionFootnote: {
+    fontSize: 13,
+    color: "#78786C",
+    lineHeight: 20
+  },
+  restoreLink: {
+    alignSelf: "center",
+    marginTop: 12,
+    paddingVertical: 4
+  },
+  restoreLinkText: {
+    fontSize: 14,
     fontWeight: "600",
     color: "#5D7052"
   },
