@@ -5,6 +5,7 @@ import { Nunito_500Medium, Nunito_600SemiBold, Nunito_700Bold } from "@expo-goog
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import Purchases, {
+  LOG_LEVEL,
   type CustomerInfo,
   type PurchasesOffering,
   type PurchasesPackage
@@ -257,23 +258,6 @@ function AppContent() {
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
 
-  useEffect(() => {
-    // #region agent log
-    fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
-      body: JSON.stringify({
-        sessionId: "fa6210",
-        hypothesisId: "H1,H4",
-        location: "App.tsx:subscriptionModalVisible",
-        message: "subscription modal visibility",
-        data: { subscriptionModalVisible },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-  }, [subscriptionModalVisible]);
-
   const [subscriptionOffering, setSubscriptionOffering] = useState<PurchasesOffering | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
@@ -293,6 +277,30 @@ function AppContent() {
     Purchases.configure({
       apiKey: REVENUECAT_IOS_API_KEY,
       appUserID: session?.user.id
+    });
+    Purchases.setLogHandler((logLevel, message) => {
+      const isPurchaseCancelledLog =
+        logLevel === LOG_LEVEL.ERROR && /purchase was cancelled/i.test(message);
+      if (isPurchaseCancelledLog) {
+        console.debug(`[RevenueCat] ${message}`);
+        return;
+      }
+      switch (logLevel) {
+        case LOG_LEVEL.DEBUG:
+          console.debug(`[RevenueCat] ${message}`);
+          break;
+        case LOG_LEVEL.INFO:
+          console.info(`[RevenueCat] ${message}`);
+          break;
+        case LOG_LEVEL.WARN:
+          console.warn(`[RevenueCat] ${message}`);
+          break;
+        case LOG_LEVEL.ERROR:
+          console.error(`[RevenueCat] ${message}`);
+          break;
+        default:
+          console.log(`[RevenueCat] ${message}`);
+      }
     });
     revenueCatConfiguredRef.current = true;
   }, [session?.user.id]);
@@ -506,21 +514,6 @@ function AppContent() {
       const parsed = parseApiErrorPayload(new Error(raw || `HTTP ${response.status}`));
       if (parsed.quota?.reason === "free") {
         const suppressModal = suppressSubscriptionModalRef.current;
-        // #region agent log
-        fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
-          body: JSON.stringify({
-            sessionId: "fa6210",
-            runId: "post-fix",
-            hypothesisId: "H1",
-            location: "App.tsx:apiJson",
-            message: "free quota",
-            data: { path, suppressModal, opensModal: !suppressModal },
-            timestamp: Date.now()
-          })
-        }).catch(() => {});
-        // #endregion
         if (!suppressModal) {
           openSubscriptionModal();
         }
@@ -1337,20 +1330,6 @@ function AppContent() {
     exerciseName: string,
     date: string
   ): Promise<{ sets: { reps: number; weight: number }[]; advice: string }> {
-    // #region agent log
-    fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
-      body: JSON.stringify({
-        sessionId: "fa6210",
-        hypothesisId: "H1,H4",
-        location: "App.tsx:fetchExercisePlan",
-        message: "fetchExercisePlan start",
-        data: { exerciseItemId, suppressModal: suppressSubscriptionModalRef.current },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
     return withSuppressedSubscriptionModal(async () => {
       const payload = await apiJson<{ sets: { reps: number; weight: number }[]; advice: string }>(
         "/advice/exercise-plan",

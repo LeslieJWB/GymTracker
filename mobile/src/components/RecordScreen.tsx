@@ -234,13 +234,17 @@ export function RecordScreen({
     exerciseName: string;
   } | null>(null);
   const { keyboardVisible, focusedInputCurrent, setToolbarSuppressed } = useKeyboardSystem();
-  const foodComposerToolbarEnabled =
-    showFoodComposerModal && (keyboardVisible || focusedInputCurrent >= 0);
+  const keyboardAccessoryVisible = keyboardVisible || focusedInputCurrent >= 0;
+  const foodComposerToolbarEnabled = showFoodComposerModal && keyboardAccessoryVisible;
+  const setNotesToolbarEnabled = setNotesTarget !== null && keyboardAccessoryVisible;
+  const exerciseNotesToolbarEnabled = exerciseNotesTarget !== null && keyboardAccessoryVisible;
+  const keyboardModalOpen =
+    showFoodComposerModal || setNotesTarget !== null || exerciseNotesTarget !== null;
 
   useEffect(() => {
-    setToolbarSuppressed(showFoodComposerModal);
+    setToolbarSuppressed(keyboardModalOpen);
     return () => setToolbarSuppressed(false);
-  }, [showFoodComposerModal, setToolbarSuppressed]);
+  }, [keyboardModalOpen, setToolbarSuppressed]);
 
   const expandedIds = useMemo(() => new Set(expandedExerciseIds), [expandedExerciseIds]);
   const filteredExerciseItems = useMemo(() => {
@@ -403,21 +407,6 @@ export function RecordScreen({
 
   function tryStartAiFeature(start: () => void): void {
     if (isFreeTierQuotaExhausted(llmQuota)) {
-      // #region agent log
-      fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
-        body: JSON.stringify({
-          sessionId: "fa6210",
-          runId: "post-fix-v2",
-          hypothesisId: "H6",
-          location: "RecordScreen.tsx:tryStartAiFeature",
-          message: "quota exhausted client-side, skipping modal",
-          data: { used: llmQuota?.used, limit: llmQuota?.limit },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
       onOpenSubscription();
       return;
     }
@@ -429,20 +418,6 @@ export function RecordScreen({
     setAdviceLoading(true);
     setAdviceError(null);
     setAdviceResult(null);
-    // #region agent log
-    fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
-      body: JSON.stringify({
-        sessionId: "fa6210",
-        hypothesisId: "H2,H3",
-        location: "RecordScreen.tsx:adviceEffect",
-        message: "advice fetch started",
-        data: { adviceModalOpen: adviceTarget !== null, exerciseItemId: adviceTarget.exerciseItemId },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
     fetchExercisePlan(
       recordDetail.userId,
       adviceTarget.exerciseItemId,
@@ -456,21 +431,6 @@ export function RecordScreen({
       .catch((err) => {
         const errorMessage = err instanceof Error ? err.message : String(err);
         const isQuota = errorMessage.includes("Free daily AI limit reached");
-        // #region agent log
-        fetch("http://127.0.0.1:7340/ingest/19cf889d-707c-4d08-9192-deb1bbe2cffd", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "fa6210" },
-          body: JSON.stringify({
-            sessionId: "fa6210",
-            runId: "post-fix",
-            hypothesisId: "H1,H2,H3,H4",
-            location: "RecordScreen.tsx:adviceEffect:catch",
-            message: isQuota ? "quota: closing advice modal then subscription" : "advice fetch failed",
-            data: { errorMessage, isQuota },
-            timestamp: Date.now()
-          })
-        }).catch(() => {});
-        // #endregion
         if (
           handleFreeQuotaExceeded(err, () => {
             setAdviceTarget(null);
@@ -1345,7 +1305,7 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeFoodComposerModal}
       >
-        <View style={styles.foodComposerModalRoot}>
+        <View style={styles.keyboardModalRoot}>
           <KeyboardAvoidingView
             style={styles.modalBackdrop}
             behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -1555,13 +1515,14 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeSetNotesSheet}
       >
-        <KeyboardAvoidingView
-          style={styles.menuBackdrop}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={16}
-        >
-          <Pressable style={styles.modalBackdropTapTarget} onPress={closeSetNotesSheet} />
-          <View style={styles.notesSheet}>
+        <View style={styles.keyboardModalRoot}>
+          <KeyboardAvoidingView
+            style={styles.menuBackdrop}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={16 + keyboardToolbarBottomInset()}
+          >
+            <Pressable style={styles.modalBackdropTapTarget} onPress={closeSetNotesSheet} />
+            <View style={styles.notesSheet}>
             <View style={styles.menuHandle} />
             {setNotesTarget ? (
               <>
@@ -1612,8 +1573,10 @@ export function RecordScreen({
                 </View>
               </>
             ) : null}
-          </View>
-        </KeyboardAvoidingView>
+            </View>
+          </KeyboardAvoidingView>
+          <AppKeyboardToolbar enabled={setNotesToolbarEnabled} />
+        </View>
       </Modal>
 
       <Modal
@@ -1622,13 +1585,14 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeExerciseNotesSheet}
       >
-        <KeyboardAvoidingView
-          style={styles.menuBackdrop}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={16}
-        >
-          <Pressable style={styles.modalBackdropTapTarget} onPress={closeExerciseNotesSheet} />
-          <View style={styles.notesSheet}>
+        <View style={styles.keyboardModalRoot}>
+          <KeyboardAvoidingView
+            style={styles.menuBackdrop}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={16 + keyboardToolbarBottomInset()}
+          >
+            <Pressable style={styles.modalBackdropTapTarget} onPress={closeExerciseNotesSheet} />
+            <View style={styles.notesSheet}>
             <View style={styles.menuHandle} />
             {exerciseNotesTarget ? (
               <>
@@ -1667,8 +1631,10 @@ export function RecordScreen({
                 </View>
               </>
             ) : null}
-          </View>
-        </KeyboardAvoidingView>
+            </View>
+          </KeyboardAvoidingView>
+          <AppKeyboardToolbar enabled={exerciseNotesToolbarEnabled} />
+        </View>
       </Modal>
 
       <Modal
@@ -2723,7 +2689,7 @@ const styles = StyleSheet.create({
     color: "#A85448",
     fontSize: 13
   },
-  foodComposerModalRoot: {
+  keyboardModalRoot: {
     flex: 1
   },
   foodComposerModalCard: {
