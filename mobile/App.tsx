@@ -195,10 +195,11 @@ function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories
 function AppContent() {
   const insets = useSafeAreaInsets();
   const bottomNavHorizontalInset = 16;
-  const bottomNavBarBottom = 8;
+  /** Sit just above the home indicator on notched iPhones; modest offset elsewhere. */
+  const bottomNavBarBottom = insets.bottom > 0 ? Math.max(12, insets.bottom - 16) : 12;
   const bottomNavIslandHeight = 52;
   /** Scroll inset so the last items can clear the floating nav — not layout padding. */
-  const bottomNavScrollInset = bottomNavIslandHeight + bottomNavBarBottom + 16;
+  const bottomNavScrollInset = bottomNavIslandHeight + bottomNavBarBottom + Math.max(insets.bottom, 16);
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
