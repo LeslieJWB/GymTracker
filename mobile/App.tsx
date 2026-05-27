@@ -43,6 +43,7 @@ import {
   ExerciseDailyMetricsPoint,
   ExerciseDetail,
   ExerciseItem,
+  ExerciseSet,
   FoodConsumption,
   NutritionDailyPoint,
   RecordDetail,
@@ -80,6 +81,25 @@ const DEFAULT_BACKEND_URL = normalizeBackendBaseUrl(
 const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? "";
 const REVENUECAT_ENTITLEMENT_ID = process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID ?? "pro";
 type ExerciseDetailsById = Record<string, ExerciseDetail>;
+
+function patchExerciseSetInState(
+  current: ExerciseDetailsById,
+  exerciseId: string,
+  setId: string,
+  mapSet: (setItem: ExerciseSet) => ExerciseSet
+): ExerciseDetailsById {
+  const detail = current[exerciseId];
+  if (!detail) {
+    return current;
+  }
+  return {
+    ...current,
+    [exerciseId]: {
+      ...detail,
+      sets: detail.sets.map((setItem) => (setItem.id === setId ? mapSet(setItem) : setItem))
+    }
+  };
+}
 type SetDraftsByExerciseId = Record<string, SetDrafts>;
 type SavingSetIdsByExerciseId = Record<string, Record<string, boolean>>;
 type ExerciseNotesDraftById = Record<string, string>;
@@ -240,6 +260,8 @@ function AppContent() {
   const dailyTargetsRefreshRequestIdRef = useRef(0);
   const dailyTargetsRefreshInFlightRef = useRef(false);
   const suppressSubscriptionModalRef = useRef(false);
+  const bootstrappedForRef = useRef<string | null>(null);
+  const exerciseStateGenerationRef = useRef(0);
   const [dailyCheckInThemeDraft, setDailyCheckInThemeDraft] = useState("");
   const [dailyCheckInWeightDraft, setDailyCheckInWeightDraft] = useState("");
   const [dailyCheckInBodyFatDraft, setDailyCheckInBodyFatDraft] = useState("");
@@ -541,7 +563,16 @@ function AppContent() {
     return JSON.parse(raw) as T;
   }
 
+  function invalidateInFlightSetSaves(): void {
+    exerciseStateGenerationRef.current += 1;
+  }
+
+  function isSetSaveStale(saveGeneration: number): boolean {
+    return saveGeneration !== exerciseStateGenerationRef.current;
+  }
+
   function resetExerciseState(): void {
+    invalidateInFlightSetSaves();
     setExpandedExerciseIds([]);
     setExerciseDetailsById({});
     setExerciseNotesDraftById({});
@@ -581,6 +612,7 @@ function AppContent() {
 
   async function bootstrap(): Promise<void> {
     if (!session?.access_token) {
+      bootstrappedForRef.current = null;
       setUser(null);
       setProfile(null);
       setBootstrapError(null);
@@ -698,7 +730,9 @@ function AppContent() {
       setDailyCheckInThemeDraft(detail?.theme ?? "");
       setDailyCheckInWeightDraft(weight === null ? "" : String(weight));
       setDailyCheckInBodyFatDraft(bodyFat === null ? "" : String(bodyFat));
+      bootstrappedForRef.current = `${bootUser.id}:${normalizedUrl}`;
     } catch (error) {
+      bootstrappedForRef.current = null;
       const message = error instanceof Error ? error.message : String(error);
       setBootstrapError(message);
       Alert.alert("Failed to bootstrap", message);
@@ -1262,6 +1296,7 @@ function AppContent() {
         ? previousSet.weight
         : 0;
     setLoading(true);
+    const saveGeneration = exerciseStateGenerationRef.current;
     try {
       const createdSet = await apiJson<{
         id: string;
@@ -1283,13 +1318,22 @@ function AppContent() {
           setOrder: detail.sets.length
         })
       });
-      setExerciseDetailsById((current) => ({
-        ...current,
-        [exerciseId]: {
-          ...current[exerciseId],
-          sets: [...current[exerciseId].sets, createdSet].sort((a, b) => a.setOrder - b.setOrder)
+      if (isSetSaveStale(saveGeneration)) {
+        return false;
+      }
+      setExerciseDetailsById((current) => {
+        const currentDetail = current[exerciseId];
+        if (!currentDetail) {
+          return current;
         }
-      }));
+        return {
+          ...current,
+          [exerciseId]: {
+            ...currentDetail,
+            sets: [...currentDetail.sets, createdSet].sort((a, b) => a.setOrder - b.setOrder)
+          }
+        };
+      });
       setSetDraftsByExerciseId((current) => ({
         ...current,
         [exerciseId]: {
@@ -1360,6 +1404,7 @@ function AppContent() {
   ): Promise<boolean> {
     if (!user || sets.length === 0) return false;
     setLoading(true);
+    const saveGeneration = exerciseStateGenerationRef.current;
     try {
       const detail = exerciseDetailsById[exerciseId];
       const startOrder = detail ? detail.sets.length : 0;
@@ -1390,13 +1435,22 @@ function AppContent() {
         created.push(createdSet);
       }
       const newSets = created.sort((a, b) => a.setOrder - b.setOrder);
-      setExerciseDetailsById((current) => ({
-        ...current,
-        [exerciseId]: {
-          ...current[exerciseId],
-          sets: [...(current[exerciseId]?.sets ?? []), ...newSets].sort((a, b) => a.setOrder - b.setOrder)
+      if (isSetSaveStale(saveGeneration)) {
+        return false;
+      }
+      setExerciseDetailsById((current) => {
+        const currentDetail = current[exerciseId];
+        if (!currentDetail) {
+          return current;
         }
-      }));
+        return {
+          ...current,
+          [exerciseId]: {
+            ...currentDetail,
+            sets: [...currentDetail.sets, ...newSets].sort((a, b) => a.setOrder - b.setOrder)
+          }
+        };
+      });
       setSetDraftsByExerciseId((current) => {
         const next: Record<string, SetDraft> = { ...(current[exerciseId] ?? {}) };
         for (const s of newSets) {
@@ -1454,6 +1508,7 @@ function AppContent() {
         [setId]: true
       }
     }));
+    const saveGeneration = exerciseStateGenerationRef.current;
     try {
       const normalizedNotes = draft.notes.trim();
       const updatedSet = await apiJson<{
@@ -1472,26 +1527,23 @@ function AppContent() {
           notes: normalizedNotes.length > 0 ? normalizedNotes : null
         })
       });
-      setExerciseDetailsById((current) => ({
-        ...current,
-        [exerciseId]: {
-          ...current[exerciseId],
-          sets: current[exerciseId].sets.map((item) =>
-            item.id === setId
-              ? {
-                  ...item,
-                  reps: updatedSet.reps,
-                  weight: updatedSet.weight,
-                  setOrder: updatedSet.setOrder,
-                  notes: updatedSet.notes,
-                  isCompleted: updatedSet.isCompleted
-                }
-              : item
-          )
-        }
-      }));
+      if (isSetSaveStale(saveGeneration)) {
+        return;
+      }
+      setExerciseDetailsById((current) =>
+        patchExerciseSetInState(current, exerciseId, setId, (item) => ({
+          ...item,
+          reps: updatedSet.reps,
+          weight: updatedSet.weight,
+          setOrder: updatedSet.setOrder,
+          notes: updatedSet.notes,
+          isCompleted: updatedSet.isCompleted
+        }))
+      );
     } catch (error) {
-      Alert.alert("Failed to update set", String(error));
+      if (!isSetSaveStale(saveGeneration)) {
+        Alert.alert("Failed to update set", String(error));
+      }
     } finally {
       setSavingSetIdsByExerciseId((current) => ({
         ...current,
@@ -1513,16 +1565,38 @@ function AppContent() {
       return;
     }
     const nextIsCompleted = !currentSet.isCompleted;
+    const saveGeneration = exerciseStateGenerationRef.current;
+    const draft = setDraftsByExerciseId[exerciseId]?.[setId];
+    const draftReps = draft ? Number(draft.reps) : NaN;
+    const draftWeight = draft ? Number(draft.weight) : NaN;
+    const hasValidDraftValues =
+      Number.isInteger(draftReps) && draftReps > 0 && Number.isFinite(draftWeight) && draftWeight >= 0;
+    const patchBody: {
+      isCompleted: boolean;
+      reps?: number;
+      weight?: number;
+      notes?: string | null;
+    } = { isCompleted: nextIsCompleted };
+    if (hasValidDraftValues) {
+      patchBody.reps = draftReps;
+      patchBody.weight = draftWeight;
+      const normalizedNotes = draft.notes.trim();
+      patchBody.notes = normalizedNotes.length > 0 ? normalizedNotes : null;
+    }
 
-    setExerciseDetailsById((current) => ({
-      ...current,
-      [exerciseId]: {
-        ...current[exerciseId],
-        sets: current[exerciseId].sets.map((setItem) =>
-          setItem.id === setId ? { ...setItem, isCompleted: nextIsCompleted } : setItem
-        )
-      }
-    }));
+    setExerciseDetailsById((current) =>
+      patchExerciseSetInState(current, exerciseId, setId, (setItem) => ({
+        ...setItem,
+        isCompleted: nextIsCompleted,
+        ...(hasValidDraftValues
+          ? {
+              reps: draftReps,
+              weight: draftWeight,
+              notes: draft.notes.trim().length > 0 ? draft.notes.trim() : null
+            }
+          : {})
+      }))
+    );
     setSavingSetIdsByExerciseId((current) => ({
       ...current,
       [exerciseId]: {
@@ -1542,48 +1616,31 @@ function AppContent() {
       }>(`/exercise-sets/${setId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isCompleted: nextIsCompleted })
+        body: JSON.stringify(patchBody)
       });
-      setExerciseDetailsById((current) => ({
-        ...current,
-        [exerciseId]: {
-          ...current[exerciseId],
-          sets: current[exerciseId].sets.map((setItem) =>
-            setItem.id === setId
-              ? {
-                  ...setItem,
-                  reps: updatedSet.reps,
-                  weight: updatedSet.weight,
-                  setOrder: updatedSet.setOrder,
-                  notes: updatedSet.notes,
-                  isCompleted: updatedSet.isCompleted
-                }
-              : setItem
-          )
-        }
-      }));
-      setSetDraftsByExerciseId((current) => ({
-        ...current,
-        [exerciseId]: {
-          ...(current[exerciseId] ?? {}),
-          [setId]: {
-            reps: String(updatedSet.reps),
-            weight: String(updatedSet.weight),
-            notes: updatedSet.notes ?? ""
-          }
-        }
-      }));
+      if (isSetSaveStale(saveGeneration)) {
+        return;
+      }
+      setExerciseDetailsById((current) =>
+        patchExerciseSetInState(current, exerciseId, setId, (setItem) => ({
+          ...setItem,
+          reps: updatedSet.reps,
+          weight: updatedSet.weight,
+          setOrder: updatedSet.setOrder,
+          notes: updatedSet.notes,
+          isCompleted: updatedSet.isCompleted
+        }))
+      );
     } catch (error) {
-      setExerciseDetailsById((current) => ({
-        ...current,
-        [exerciseId]: {
-          ...current[exerciseId],
-          sets: current[exerciseId].sets.map((setItem) =>
-            setItem.id === setId ? { ...setItem, isCompleted: currentSet.isCompleted } : setItem
-          )
-        }
-      }));
-      Alert.alert("Failed to update set completion", String(error));
+      if (!isSetSaveStale(saveGeneration)) {
+        setExerciseDetailsById((current) =>
+          patchExerciseSetInState(current, exerciseId, setId, (setItem) => ({
+            ...setItem,
+            isCompleted: currentSet.isCompleted
+          }))
+        );
+        Alert.alert("Failed to update set completion", String(error));
+      }
     } finally {
       setSavingSetIdsByExerciseId((current) => ({
         ...current,
@@ -1596,6 +1653,7 @@ function AppContent() {
   }
 
   async function deleteSet(exerciseId: string, setId: string): Promise<void> {
+    invalidateInFlightSetSaves();
     setLoading(true);
     try {
       await apiJson(`/exercise-sets/${setId}`, { method: "DELETE" });
@@ -1654,6 +1712,7 @@ function AppContent() {
     if (loading) {
       return;
     }
+    invalidateInFlightSetSaves();
     setLoading(true);
     try {
       await apiJson(`/exercises/${exerciseId}`, { method: "DELETE" });
@@ -2341,11 +2400,20 @@ function AppContent() {
   });
 
   useEffect(() => {
-    if (!checkingSession) {
-      bootstrap().catch(() => {});
+    if (checkingSession) {
+      return;
     }
+    if (!session?.access_token) {
+      bootstrap().catch(() => {});
+      return;
+    }
+    const bootstrapKey = `${session.user?.id ?? ""}:${normalizedUrl}`;
+    if (bootstrappedForRef.current === bootstrapKey) {
+      return;
+    }
+    bootstrap().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkingSession, normalizedUrl, session?.access_token]);
+  }, [checkingSession, normalizedUrl, session?.access_token, session?.user?.id]);
 
   useAppLifecycleEffects({
     user,
