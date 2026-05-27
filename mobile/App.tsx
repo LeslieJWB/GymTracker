@@ -33,6 +33,7 @@ import { keyboardToolbarBottomInset } from "./src/keyboard/keyboardToolbarInset"
 import { KeyboardSystemProvider } from "./src/keyboard/KeyboardSystemProvider";
 import { useAppLifecycleEffects } from "./src/hooks/useAppLifecycleEffects";
 import { useAuthSession } from "./src/hooks/useAuthSession";
+import { supabase } from "./src/lib/supabase";
 import { useRecordEffects } from "./src/hooks/useRecordEffects";
 import { appStyles } from "./src/styles/appStyles";
 import {
@@ -500,14 +501,24 @@ function AppContent() {
     })().catch(() => {});
   }, [screen, session?.access_token]);
 
-  async function apiJson<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+  async function apiJson<T = unknown>(path: string, init?: RequestInit, authRetried = false): Promise<T> {
     const headers = new Headers(init?.headers ?? {});
-    if (session?.access_token) {
-      headers.set("Authorization", `Bearer ${session.access_token}`);
+    const {
+      data: { session: activeSession }
+    } = await supabase.auth.getSession();
+    const accessToken = activeSession?.access_token ?? session?.access_token;
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
     }
     const response = await fetch(`${normalizedUrl}${path}`, { ...init, headers });
     const raw = await response.text();
     if (!response.ok) {
+      if (response.status === 401 && !authRetried) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+        if (!refreshError && refreshed.session) {
+          return apiJson<T>(path, init, true);
+        }
+      }
       if (response.status === 401) {
         signOut().catch(() => {});
       }

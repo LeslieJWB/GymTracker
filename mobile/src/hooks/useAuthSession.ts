@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { AppState } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { makeRedirectUri } from "expo-auth-session";
@@ -59,6 +60,25 @@ export function useAuthSession() {
     return () => {
       mounted = false;
       subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (AppState.currentState === "active") {
+      supabase.auth.startAutoRefresh();
+    }
+
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    });
+
+    return () => {
+      appStateSubscription.remove();
+      supabase.auth.stopAutoRefresh();
     };
   }, []);
 
