@@ -1,0 +1,90 @@
+{
+  "identifier" : "A1B2C3D4",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21482456",
+      "localizations" : [
+
+      ],
+      "name" : "IntelliFit Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6739182601",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Higher daily AI quota for IntelliFit Pro.",
+              "displayName" : "IntelliFit Pro Monthly Subscription",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "intellifit_pro_monthly_subscription",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "IntelliFit Pro Monthly Subscription",
+          "subscriptionGroupID" : "21482456",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "79.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6739182602",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Higher daily AI quota for IntelliFit Pro.",
+              "displayName" : "IntelliFit Pro Yearly Subscription",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "intellifit_pro_yearly_subscription",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "IntelliFit Pro Yearly Subscription",
+          "subscriptionGroupID" : "21482456",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
