@@ -20,6 +20,7 @@ const profileSchema = z.object({
   defaultBodyFatPercentage: z.number().min(3).max(60).nullable().optional(),
   dailyCalorieTargetKcal: z.number().min(800).max(6000).nullable().optional(),
   dailyProteinTargetG: z.number().min(30).max(400).nullable().optional(),
+  dailyFatTargetG: z.number().min(20).max(200).nullable().optional(),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   globalLlmPrompt: z.string().trim().max(3000).nullable().optional(),
   profileInitialized: z.boolean().optional()
@@ -117,6 +118,7 @@ meRouter.get("/me/profile", async (req, res) => {
       default_body_fat_percentage: string | null;
       daily_calorie_target_kcal: string | null;
       daily_protein_target_g: string | null;
+      daily_fat_target_g: string | null;
       date_of_birth: string | null;
       global_llm_prompt: string | null;
       profile_initialized: boolean;
@@ -129,6 +131,7 @@ meRouter.get("/me/profile", async (req, res) => {
           default_body_fat_percentage::text,
           daily_calorie_target_kcal::text,
           daily_protein_target_g::text,
+          daily_fat_target_g::text,
           date_of_birth::text,
           global_llm_prompt,
           profile_initialized
@@ -147,6 +150,7 @@ meRouter.get("/me/profile", async (req, res) => {
       defaultBodyFatPercentage: row?.default_body_fat_percentage ? Number(row.default_body_fat_percentage) : null,
       dailyCalorieTargetKcal: row?.daily_calorie_target_kcal ? Number(row.daily_calorie_target_kcal) : null,
       dailyProteinTargetG: row?.daily_protein_target_g ? Number(row.daily_protein_target_g) : null,
+      dailyFatTargetG: row?.daily_fat_target_g ? Number(row.daily_fat_target_g) : null,
       dateOfBirth: row?.date_of_birth ?? null,
       globalLlmPrompt: row?.global_llm_prompt ?? null,
       profileInitialized: row?.profile_initialized ?? false
@@ -173,6 +177,7 @@ meRouter.put("/me/profile", async (req, res) => {
     const hasDefaultBodyFatPercentage = Object.prototype.hasOwnProperty.call(data, "defaultBodyFatPercentage");
     const hasDailyCalorieTargetKcal = Object.prototype.hasOwnProperty.call(data, "dailyCalorieTargetKcal");
     const hasDailyProteinTargetG = Object.prototype.hasOwnProperty.call(data, "dailyProteinTargetG");
+    const hasDailyFatTargetG = Object.prototype.hasOwnProperty.call(data, "dailyFatTargetG");
     const hasDateOfBirth = Object.prototype.hasOwnProperty.call(data, "dateOfBirth");
     const hasGlobalLlmPrompt = Object.prototype.hasOwnProperty.call(data, "globalLlmPrompt");
     const wantsInitialize = data.profileInitialized === true;
@@ -224,6 +229,7 @@ meRouter.put("/me/profile", async (req, res) => {
       default_body_fat_percentage: string | null;
       daily_calorie_target_kcal: string | null;
       daily_protein_target_g: string | null;
+      daily_fat_target_g: string | null;
       date_of_birth: string | null;
       global_llm_prompt: string | null;
       profile_initialized: boolean;
@@ -237,11 +243,12 @@ meRouter.put("/me/profile", async (req, res) => {
           default_body_fat_percentage = CASE WHEN $8::boolean THEN $9::numeric(4,1) ELSE default_body_fat_percentage END,
           daily_calorie_target_kcal = CASE WHEN $10::boolean THEN $11 ELSE daily_calorie_target_kcal END,
           daily_protein_target_g = CASE WHEN $12::boolean THEN $13 ELSE daily_protein_target_g END,
-          date_of_birth = CASE WHEN $14::boolean THEN $15::date ELSE date_of_birth END,
-          global_llm_prompt = CASE WHEN $16::boolean THEN $17 ELSE global_llm_prompt END,
+          daily_fat_target_g = CASE WHEN $14::boolean THEN $15 ELSE daily_fat_target_g END,
+          date_of_birth = CASE WHEN $16::boolean THEN $17::date ELSE date_of_birth END,
+          global_llm_prompt = CASE WHEN $18::boolean THEN $19 ELSE global_llm_prompt END,
           profile_initialized = CASE
             WHEN profile_initialized THEN true
-            WHEN $18::boolean THEN true
+            WHEN $20::boolean THEN true
             ELSE false
           END,
           updated_at = now()
@@ -253,6 +260,7 @@ meRouter.put("/me/profile", async (req, res) => {
           default_body_fat_percentage::text,
           daily_calorie_target_kcal::text,
           daily_protein_target_g::text,
+          daily_fat_target_g::text,
           date_of_birth::text,
           global_llm_prompt,
           profile_initialized
@@ -271,6 +279,8 @@ meRouter.put("/me/profile", async (req, res) => {
         data.dailyCalorieTargetKcal ?? null,
         hasDailyProteinTargetG,
         data.dailyProteinTargetG ?? null,
+        hasDailyFatTargetG,
+        data.dailyFatTargetG ?? null,
         hasDateOfBirth,
         data.dateOfBirth ?? null,
         hasGlobalLlmPrompt,
@@ -279,8 +289,11 @@ meRouter.put("/me/profile", async (req, res) => {
       ]
     );
     const row = result.rows[0];
-    if (hasDailyCalorieTargetKcal || hasDailyProteinTargetG) {
-      const hasAnyOverride = row.daily_calorie_target_kcal !== null || row.daily_protein_target_g !== null;
+    if (hasDailyCalorieTargetKcal || hasDailyProteinTargetG || hasDailyFatTargetG) {
+      const hasAnyOverride =
+        row.daily_calorie_target_kcal !== null ||
+        row.daily_protein_target_g !== null ||
+        row.daily_fat_target_g !== null;
       await pool.query(
         `
           INSERT INTO records (
@@ -289,16 +302,18 @@ meRouter.put("/me/profile", async (req, res) => {
             record_date,
             daily_calorie_target_kcal,
             daily_protein_target_g,
+            daily_fat_target_g,
             daily_target_source,
             daily_target_comment
           )
-          VALUES ($1, $2, CURRENT_DATE, $3, $4, $5, $6)
+          VALUES ($1, $2, CURRENT_DATE, $3, $4, $5, $6, $7)
           ON CONFLICT (user_id, record_date)
           DO UPDATE SET
             daily_calorie_target_kcal = $3,
             daily_protein_target_g = $4,
-            daily_target_source = $5,
-            daily_target_comment = $6,
+            daily_fat_target_g = $5,
+            daily_target_source = $6,
+            daily_target_comment = $7,
             updated_at = now()
         `,
         [
@@ -306,6 +321,7 @@ meRouter.put("/me/profile", async (req, res) => {
           user.id,
           row.daily_calorie_target_kcal,
           row.daily_protein_target_g,
+          row.daily_fat_target_g,
           hasAnyOverride ? "override" : null,
           hasAnyOverride ? "Using your custom daily nutrition targets from profile settings." : null
         ]
@@ -319,6 +335,7 @@ meRouter.put("/me/profile", async (req, res) => {
       defaultBodyFatPercentage: row.default_body_fat_percentage ? Number(row.default_body_fat_percentage) : null,
       dailyCalorieTargetKcal: row.daily_calorie_target_kcal ? Number(row.daily_calorie_target_kcal) : null,
       dailyProteinTargetG: row.daily_protein_target_g ? Number(row.daily_protein_target_g) : null,
+      dailyFatTargetG: row.daily_fat_target_g ? Number(row.daily_fat_target_g) : null,
       dateOfBirth: row.date_of_birth,
       globalLlmPrompt: row.global_llm_prompt,
       profileInitialized: row.profile_initialized

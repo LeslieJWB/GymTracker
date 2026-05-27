@@ -119,12 +119,14 @@ function fallbackNutritionTargets(weightKg) {
         return {
             recommendedCaloriesKcal: Math.round(weightKg * 42),
             recommendedProteinG: Math.round(weightKg * 2),
+            recommendedFatG: Math.round(weightKg * 0.8),
             comment: "Default targets based on your body weight."
         };
     }
     return {
         recommendedCaloriesKcal: 2200,
         recommendedProteinG: 140,
+        recommendedFatG: 70,
         comment: "Default targets based on generic defaults."
     };
 }
@@ -137,13 +139,15 @@ function parseDailyNutritionTargets(raw) {
         const parsed = JSON.parse(cleaned);
         const calories = Number(parsed.recommendedCaloriesKcal);
         const protein = Number(parsed.recommendedProteinG);
-        if (!Number.isFinite(calories) || !Number.isFinite(protein)) {
+        const fat = Number(parsed.recommendedFatG);
+        if (!Number.isFinite(calories) || !Number.isFinite(protein) || !Number.isFinite(fat)) {
             return null;
         }
         const comment = typeof parsed.comment === "string" ? parsed.comment.trim().slice(0, 500) : null;
         return {
             recommendedCaloriesKcal: Math.round(Math.min(6000, Math.max(800, calories))),
             recommendedProteinG: Math.round(Math.min(400, Math.max(30, protein))),
+            recommendedFatG: Math.round(Math.min(200, Math.max(20, fat))),
             comment: comment && comment.length > 0 ? comment : null
         };
     }
@@ -363,6 +367,7 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
           fc.description,
           fc.calories_kcal::text,
           fc.protein_g::text,
+          fc.fat_g::text,
           fc.llm_comment,
           fc.created_at::text
         FROM records r
@@ -374,7 +379,8 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
         const todayFoodTotalsResult = await pool.query(`
         SELECT
           COALESCE(SUM(fc.calories_kcal), 0)::text AS total_calories_kcal,
-          COALESCE(SUM(fc.protein_g), 0)::text AS total_protein_g
+          COALESCE(SUM(fc.protein_g), 0)::text AS total_protein_g,
+          COALESCE(SUM(fc.fat_g), 0)::text AS total_fat_g
         FROM records r
         JOIN food_consumptions fc ON fc.record_id = r.id
         WHERE r.user_id = $1
@@ -384,7 +390,8 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
         SELECT
           r.record_date::text,
           COALESCE(SUM(fc.calories_kcal), 0)::text AS total_calories_kcal,
-          COALESCE(SUM(fc.protein_g), 0)::text AS total_protein_g
+          COALESCE(SUM(fc.protein_g), 0)::text AS total_protein_g,
+          COALESCE(SUM(fc.fat_g), 0)::text AS total_fat_g
         FROM records r
         JOIN food_consumptions fc ON fc.record_id = r.id
         WHERE r.user_id = $1
@@ -424,16 +431,17 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
         const todayFoodRows = todayFoodEntriesResult.rows;
         const todayFoodDetailsText = todayFoodRows.length > 0
             ? todayFoodRows
-                .map((row) => `${row.created_at} | ${row.description} | ${Number(row.calories_kcal)} kcal | ${Number(row.protein_g)} g protein | note: ${row.llm_comment}`)
+                .map((row) => `${row.created_at} | ${row.description} | ${Number(row.calories_kcal)} kcal | ${Number(row.protein_g)} g protein | ${Number(row.fat_g)} g fat | note: ${row.llm_comment}`)
                 .join("\n")
             : "No food entries logged yet for today.";
         const todayFoodTotals = todayFoodTotalsResult.rows[0] ?? {
             total_calories_kcal: "0",
-            total_protein_g: "0"
+            total_protein_g: "0",
+            total_fat_g: "0"
         };
         const pastNutritionText = pastNutritionResult.rows.length > 0
             ? pastNutritionResult.rows
-                .map((row) => `${row.record_date} | ${Number(row.total_calories_kcal)} kcal | ${Number(row.total_protein_g)} g protein`)
+                .map((row) => `${row.record_date} | ${Number(row.total_calories_kcal)} kcal | ${Number(row.total_protein_g)} g protein | ${Number(row.total_fat_g)} g fat`)
                 .join("\n")
             : "No prior nutrition records.";
         const formatWeightLine = (dateStr, weightKg, bodyFatPct) => {
@@ -468,9 +476,9 @@ ${pastExerciseText}
 
 Today's diet detail:
 ${todayFoodDetailsText}
-Today's diet totals: ${Number(todayFoodTotals.total_calories_kcal)} kcal, ${Number(todayFoodTotals.total_protein_g)} g protein
+Today's diet totals: ${Number(todayFoodTotals.total_calories_kcal)} kcal, ${Number(todayFoodTotals.total_protein_g)} g protein, ${Number(todayFoodTotals.total_fat_g)} g fat
 
-Past ${DAILY_SUMMARY_PAST_DIET_LIMIT} daily calorie/protein records (with dates):
+Past ${DAILY_SUMMARY_PAST_DIET_LIMIT} daily calorie/protein/fat records (with dates):
 ${pastNutritionText}
 
 Today's body weight:
@@ -520,10 +528,12 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
         const promptProfile = await getPromptProfile(appUser.id, date);
         const userCalorieOverride = promptProfile.dailyCalorieTargetKcal;
         const userProteinOverride = promptProfile.dailyProteinTargetG;
+        const userFatOverride = promptProfile.dailyFatTargetG;
         const recordResult = await pool.query(`
         SELECT
           daily_calorie_target_kcal::text,
           daily_protein_target_g::text,
+          daily_fat_target_g::text,
           daily_target_comment,
           daily_target_source
         FROM records
@@ -544,16 +554,18 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
             record_date,
             daily_calorie_target_kcal,
             daily_protein_target_g,
+            daily_fat_target_g,
             daily_target_source,
             daily_target_comment
           )
-          VALUES ($1, $2, $3::date, $4, $5, $6, $7)
+          VALUES ($1, $2, $3::date, $4, $5, $6, $7, $8)
           ON CONFLICT (user_id, record_date)
           DO UPDATE SET
             daily_calorie_target_kcal = $4,
             daily_protein_target_g = $5,
-            daily_target_source = $6,
-            daily_target_comment = $7,
+            daily_fat_target_g = $6,
+            daily_target_source = $7,
+            daily_target_comment = $8,
             updated_at = now()
         `, [
                 randomUUID(),
@@ -561,22 +573,26 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
                 date,
                 targetPayload.recommendedCaloriesKcal,
                 targetPayload.recommendedProteinG,
+                targetPayload.recommendedFatG,
                 targetPayload.source,
                 targetPayload.comment
             ]);
         };
         const cachedCalories = existing?.daily_calorie_target_kcal ? Number(existing.daily_calorie_target_kcal) : null;
         const cachedProtein = existing?.daily_protein_target_g ? Number(existing.daily_protein_target_g) : null;
+        const cachedFat = existing?.daily_fat_target_g ? Number(existing.daily_fat_target_g) : null;
         const needsCaloriesFromLlm = userCalorieOverride === null && (cachedCalories === null || forceRefresh);
         const needsProteinFromLlm = userProteinOverride === null && (cachedProtein === null || forceRefresh);
-        if (!needsCaloriesFromLlm && !needsProteinFromLlm) {
+        const needsFatFromLlm = userFatOverride === null && (cachedFat === null || forceRefresh);
+        if (!needsCaloriesFromLlm && !needsProteinFromLlm && !needsFatFromLlm) {
             const responsePayload = {
-                source: (userCalorieOverride !== null || userProteinOverride !== null
+                source: (userCalorieOverride !== null || userProteinOverride !== null || userFatOverride !== null
                     ? "override"
                     : existing?.daily_target_source ?? "fallback"),
                 recommendedCaloriesKcal: userCalorieOverride ?? cachedCalories ?? fallbackTargets.recommendedCaloriesKcal,
                 recommendedProteinG: userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
-                comment: userCalorieOverride !== null || userProteinOverride !== null
+                recommendedFatG: userFatOverride ?? cachedFat ?? fallbackTargets.recommendedFatG,
+                comment: userCalorieOverride !== null || userProteinOverride !== null || userFatOverride !== null
                     ? "Using your custom daily nutrition targets from profile settings."
                     : existing?.daily_target_comment ?? fallbackTargets.comment
             };
@@ -592,6 +608,9 @@ adviceRouter.post("/advice/daily-nutrition-targets", async (req, res) => {
                 recommendedProteinG: needsProteinFromLlm
                     ? fallbackTargets.recommendedProteinG
                     : userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+                recommendedFatG: needsFatFromLlm
+                    ? fallbackTargets.recommendedFatG
+                    : userFatOverride ?? cachedFat ?? fallbackTargets.recommendedFatG,
                 comment: "AI targets unavailable. Using fallback estimates."
             };
             await persistTargets(responsePayload);
@@ -607,13 +626,14 @@ Current request timestamp and daypart: ${formatNowContext()}
 Current effective body weight (kg): ${effectiveWeightKg ?? "unknown"}
 Latest body fat percentage: ${promptProfile.latestBodyFatPercentage !== null ? `${promptProfile.latestBodyFatPercentage}%` : "unknown"}
 
-Provide targets for today's calorie and protein intake.
+Provide targets for today's calorie, protein, and fat intake.
 Respect user profile context.
 Return ONLY a single JSON object with this exact shape:
-{"recommendedCaloriesKcal":<number>,"recommendedProteinG":<number>,"comment":"<short rationale>"}
+{"recommendedCaloriesKcal":<number>,"recommendedProteinG":<number>,"recommendedFatG":<number>,"comment":"<short rationale>"}
 Rules:
 - recommendedCaloriesKcal must be between 800 and 6000.
 - recommendedProteinG must be between 30 and 400.
+- recommendedFatG must be between 20 and 200.
 - Keep comment practical and under 2 sentences.`
         });
         const quota = await reserveLlmQuota({
@@ -633,6 +653,9 @@ Rules:
                 recommendedProteinG: needsProteinFromLlm
                     ? fallbackTargets.recommendedProteinG
                     : userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+                recommendedFatG: needsFatFromLlm
+                    ? fallbackTargets.recommendedFatG
+                    : userFatOverride ?? cachedFat ?? fallbackTargets.recommendedFatG,
                 comment: fallbackTargets.comment
             };
             await persistTargets(responsePayload);
@@ -648,13 +671,16 @@ Rules:
                 recommendedProteinG: needsProteinFromLlm
                     ? fallbackTargets.recommendedProteinG
                     : userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+                recommendedFatG: needsFatFromLlm
+                    ? fallbackTargets.recommendedFatG
+                    : userFatOverride ?? cachedFat ?? fallbackTargets.recommendedFatG,
                 comment: fallbackTargets.comment
             };
             await persistTargets(responsePayload);
             return res.json(responsePayload);
         }
         const responsePayload = {
-            source: (userCalorieOverride !== null || userProteinOverride !== null
+            source: (userCalorieOverride !== null || userProteinOverride !== null || userFatOverride !== null
                 ? "override"
                 : (llmProvider?.name ?? "fallback")),
             recommendedCaloriesKcal: needsCaloriesFromLlm
@@ -663,6 +689,9 @@ Rules:
             recommendedProteinG: needsProteinFromLlm
                 ? targets.recommendedProteinG
                 : userProteinOverride ?? cachedProtein ?? fallbackTargets.recommendedProteinG,
+            recommendedFatG: needsFatFromLlm
+                ? targets.recommendedFatG
+                : userFatOverride ?? cachedFat ?? fallbackTargets.recommendedFatG,
             comment: targets.comment
         };
         await persistTargets(responsePayload);
@@ -676,7 +705,8 @@ Rules:
             const recordResult = await pool.query(`
           SELECT
             daily_calorie_target_kcal::text,
-            daily_protein_target_g::text
+            daily_protein_target_g::text,
+            daily_fat_target_g::text
           FROM records
           WHERE user_id = $1
             AND record_date = $2::date
@@ -684,7 +714,9 @@ Rules:
         `, [appUser.id, date]);
             const existing = recordResult.rows[0];
             const responsePayload = {
-                source: (promptProfile.dailyCalorieTargetKcal !== null || promptProfile.dailyProteinTargetG !== null
+                source: (promptProfile.dailyCalorieTargetKcal !== null ||
+                    promptProfile.dailyProteinTargetG !== null ||
+                    promptProfile.dailyFatTargetG !== null
                     ? "override"
                     : "fallback"),
                 recommendedCaloriesKcal: promptProfile.dailyCalorieTargetKcal ??
@@ -693,6 +725,9 @@ Rules:
                 recommendedProteinG: promptProfile.dailyProteinTargetG ??
                     (existing?.daily_protein_target_g ? Number(existing.daily_protein_target_g) : null) ??
                     fallbackTargets.recommendedProteinG,
+                recommendedFatG: promptProfile.dailyFatTargetG ??
+                    (existing?.daily_fat_target_g ? Number(existing.daily_fat_target_g) : null) ??
+                    fallbackTargets.recommendedFatG,
                 comment: fallbackTargets.comment
             };
             await pool.query(`
@@ -702,16 +737,18 @@ Rules:
             record_date,
             daily_calorie_target_kcal,
             daily_protein_target_g,
+            daily_fat_target_g,
             daily_target_source,
             daily_target_comment
           )
-          VALUES ($1, $2, $3::date, $4, $5, $6, $7)
+          VALUES ($1, $2, $3::date, $4, $5, $6, $7, $8)
           ON CONFLICT (user_id, record_date)
           DO UPDATE SET
             daily_calorie_target_kcal = $4,
             daily_protein_target_g = $5,
-            daily_target_source = $6,
-            daily_target_comment = $7,
+            daily_fat_target_g = $6,
+            daily_target_source = $7,
+            daily_target_comment = $8,
             updated_at = now()
         `, [
                 randomUUID(),
@@ -719,6 +756,7 @@ Rules:
                 date,
                 responsePayload.recommendedCaloriesKcal,
                 responsePayload.recommendedProteinG,
+                responsePayload.recommendedFatG,
                 responsePayload.source,
                 responsePayload.comment
             ]);

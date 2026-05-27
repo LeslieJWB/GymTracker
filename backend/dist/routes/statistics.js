@@ -29,7 +29,8 @@ statisticsRouter.get("/statistics/nutrition-history", async (req, res) => {
         SELECT
           r.record_date::text,
           COALESCE(SUM(fc.calories_kcal), 0)::text AS total_calories_kcal,
-          COALESCE(SUM(fc.protein_g), 0)::text AS total_protein_g
+          COALESCE(SUM(fc.protein_g), 0)::text AS total_protein_g,
+          COALESCE(SUM(fc.fat_g), 0)::text AS total_fat_g
         FROM records r
         LEFT JOIN food_consumptions fc ON fc.record_id = r.id
         WHERE r.user_id = $1
@@ -41,7 +42,8 @@ statisticsRouter.get("/statistics/nutrition-history", async (req, res) => {
         const daily = result.rows.map((row) => ({
             date: row.record_date,
             totalCaloriesKcal: Number(row.total_calories_kcal),
-            totalProteinG: Number(row.total_protein_g)
+            totalProteinG: Number(row.total_protein_g),
+            totalFatG: Number(row.total_fat_g)
         }));
         return res.json({
             records: aggregateNutritionHistory(daily, granularity)

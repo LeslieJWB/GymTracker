@@ -177,16 +177,18 @@ function isFreeQuotaExceededError(error: unknown): boolean {
   return message.includes("Free daily AI limit reached");
 }
 
-function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories: number; protein: number } {
+function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories: number; protein: number; fat: number } {
   if (weightKg !== null && Number.isFinite(weightKg) && weightKg > 0) {
     return {
       calories: Math.round(weightKg * 42),
-      protein: Math.round(weightKg * 2)
+      protein: Math.round(weightKg * 2),
+      fat: Math.round(weightKg * 0.8)
     };
   }
   return {
     calories: 2200,
-    protein: 140
+    protein: 140,
+    fat: 70
   };
 }
 
@@ -597,8 +599,9 @@ function AppContent() {
     entries: FoodConsumption[];
     totalCaloriesKcal: number;
     totalProteinG: number;
+    totalFatG: number;
   }> {
-    return apiJson<{ entries: FoodConsumption[]; totalCaloriesKcal: number; totalProteinG: number }>(
+    return apiJson<{ entries: FoodConsumption[]; totalCaloriesKcal: number; totalProteinG: number; totalFatG: number }>(
       `/records/by-date/food?userId=${encodeURIComponent(userId)}&date=${encodeURIComponent(date)}`
     );
   }
@@ -674,7 +677,7 @@ function AppContent() {
       setScreen("record");
       resetExerciseState();
       const [detail, food, weightPayload] = await Promise.all([
-        apiJson<Omit<RecordDetail, "foodConsumptions" | "totalCaloriesKcal" | "totalProteinG"> | null>(
+        apiJson<Omit<RecordDetail, "foodConsumptions" | "totalCaloriesKcal" | "totalProteinG" | "totalFatG"> | null>(
           `/records/by-date?userId=${encodeURIComponent(bootUser.id)}&date=${encodeURIComponent(today)}`
         ),
         loadFoodByDate(bootUser.id, today),
@@ -688,15 +691,21 @@ function AppContent() {
             ...detail,
             foodConsumptions: food.entries,
             totalCaloriesKcal: food.totalCaloriesKcal,
-            totalProteinG: food.totalProteinG
+            totalProteinG: food.totalProteinG,
+            totalFatG: food.totalFatG
           }, items)
         );
         setRecordThemeDraft(detail.theme ?? "");
-        if (detail.dailyCalorieTargetKcal !== null && detail.dailyProteinTargetG !== null) {
+        if (
+          detail.dailyCalorieTargetKcal !== null &&
+          detail.dailyProteinTargetG !== null &&
+          detail.dailyFatTargetG !== null
+        ) {
           setDailyNutritionTargets({
             source: detail.dailyTargetSource ?? "fallback",
             recommendedCaloriesKcal: detail.dailyCalorieTargetKcal,
             recommendedProteinG: detail.dailyProteinTargetG,
+            recommendedFatG: detail.dailyFatTargetG,
             comment: detail.dailyTargetComment
           });
           setDailyTargetsDate(today);
@@ -713,12 +722,14 @@ function AppContent() {
           checkInInitialized: false,
           dailyCalorieTargetKcal: null,
           dailyProteinTargetG: null,
+          dailyFatTargetG: null,
           dailyTargetComment: null,
           dailyTargetSource: null,
           exercises: [],
           foodConsumptions: food.entries,
           totalCaloriesKcal: food.totalCaloriesKcal,
-          totalProteinG: food.totalProteinG
+          totalProteinG: food.totalProteinG,
+          totalFatG: food.totalFatG
         });
         setRecordThemeDraft("");
         setDailyNutritionTargets(null);
@@ -871,7 +882,7 @@ function AppContent() {
     resetExerciseState();
     try {
       const [detail, food, weight] = await Promise.all([
-        apiJson<Omit<RecordDetail, "foodConsumptions" | "totalCaloriesKcal" | "totalProteinG"> | null>(
+        apiJson<Omit<RecordDetail, "foodConsumptions" | "totalCaloriesKcal" | "totalProteinG" | "totalFatG"> | null>(
           `/records/by-date?userId=${encodeURIComponent(user.id)}&date=${encodeURIComponent(date)}`
         ),
         loadFoodByDate(user.id, date),
@@ -883,15 +894,21 @@ function AppContent() {
             ...detail,
             foodConsumptions: food.entries,
             totalCaloriesKcal: food.totalCaloriesKcal,
-            totalProteinG: food.totalProteinG
+            totalProteinG: food.totalProteinG,
+            totalFatG: food.totalFatG
           })
         );
         setRecordThemeDraft(detail.theme ?? "");
-        if (detail.dailyCalorieTargetKcal !== null && detail.dailyProteinTargetG !== null) {
+        if (
+          detail.dailyCalorieTargetKcal !== null &&
+          detail.dailyProteinTargetG !== null &&
+          detail.dailyFatTargetG !== null
+        ) {
           setDailyNutritionTargets({
             source: detail.dailyTargetSource ?? "fallback",
             recommendedCaloriesKcal: detail.dailyCalorieTargetKcal,
             recommendedProteinG: detail.dailyProteinTargetG,
+            recommendedFatG: detail.dailyFatTargetG,
             comment: detail.dailyTargetComment
           });
           setDailyTargetsDate(date);
@@ -908,12 +925,14 @@ function AppContent() {
           checkInInitialized: false,
           dailyCalorieTargetKcal: null,
           dailyProteinTargetG: null,
+          dailyFatTargetG: null,
           dailyTargetComment: null,
           dailyTargetSource: null,
           exercises: [],
           foodConsumptions: food.entries,
           totalCaloriesKcal: food.totalCaloriesKcal,
-          totalProteinG: food.totalProteinG
+          totalProteinG: food.totalProteinG,
+          totalFatG: food.totalFatG
         });
         setRecordThemeDraft("");
         setDailyNutritionTargets(null);
@@ -1801,6 +1820,7 @@ function AppContent() {
         entry: FoodConsumption;
         totalCaloriesKcal: number;
         totalProteinG: number;
+        totalFatG: number;
       }>("/records/by-date/food", {
         method: "POST",
         headers: {
@@ -1825,7 +1845,8 @@ function AppContent() {
           recordId: current.recordId || created.recordId,
           foodConsumptions: nextFood,
           totalCaloriesKcal: created.totalCaloriesKcal,
-          totalProteinG: created.totalProteinG
+          totalProteinG: created.totalProteinG,
+          totalFatG: created.totalFatG
         };
       });
       return true;
@@ -1848,7 +1869,7 @@ function AppContent() {
     }
     setDeletingFoodIds((current) => ({ ...current, [foodConsumptionId]: true }));
     try {
-      const payload = await apiJson<{ totalCaloriesKcal: number; totalProteinG: number }>(
+      const payload = await apiJson<{ totalCaloriesKcal: number; totalProteinG: number; totalFatG: number }>(
         `/food-consumptions/${foodConsumptionId}?userId=${encodeURIComponent(user.id)}`,
         { method: "DELETE" }
       );
@@ -1860,7 +1881,8 @@ function AppContent() {
           ...current,
           foodConsumptions: current.foodConsumptions.filter((item) => item.id !== foodConsumptionId),
           totalCaloriesKcal: payload.totalCaloriesKcal,
-          totalProteinG: payload.totalProteinG
+          totalProteinG: payload.totalProteinG,
+          totalFatG: payload.totalFatG
         };
       });
     } catch (error) {
@@ -2003,6 +2025,7 @@ function AppContent() {
           source: "fallback",
           recommendedCaloriesKcal: fallback.calories,
           recommendedProteinG: fallback.protein,
+          recommendedFatG: fallback.fat,
           comment: "Auto fallback used because AI target generation was unavailable."
         });
         setDailyTargetsDate(date);

@@ -18,6 +18,7 @@ export type UserProfile = User & {
   defaultBodyFatPercentage: number | null;
   dailyCalorieTargetKcal: number | null;
   dailyProteinTargetG: number | null;
+  dailyFatTargetG: number | null;
   dateOfBirth: string | null;
   globalLlmPrompt: string | null;
   profileInitialized: boolean;
@@ -51,12 +52,14 @@ export type RecordDetail = {
   checkInInitialized: boolean;
   dailyCalorieTargetKcal: number | null;
   dailyProteinTargetG: number | null;
+  dailyFatTargetG: number | null;
   dailyTargetComment: string | null;
   dailyTargetSource: "kimi" | "gemini" | "fallback" | "override" | null;
   exercises: RecordExerciseSummary[];
   foodConsumptions: FoodConsumption[];
   totalCaloriesKcal: number;
   totalProteinG: number;
+  totalFatG: number;
 };
 
 export type FoodConsumptionInputMode = "text" | "text_image" | "image";
@@ -67,6 +70,7 @@ export type FoodConsumption = {
   inputMode: FoodConsumptionInputMode;
   caloriesKcal: number;
   proteinG: number;
+  fatG: number;
   comment: string;
   llmSource: string;
   createdAt: string;
@@ -88,6 +92,7 @@ export type DailyNutritionTargets = {
   source: "kimi" | "gemini" | "fallback" | "override";
   recommendedCaloriesKcal: number;
   recommendedProteinG: number;
+  recommendedFatG: number;
   comment: string | null;
 };
 
@@ -102,6 +107,7 @@ export type NutritionDailyPoint = {
   date: string;
   totalCaloriesKcal: number;
   totalProteinG: number;
+  totalFatG: number;
 };
 
 export type ExerciseItem = {

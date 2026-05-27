@@ -105,6 +105,7 @@ export async function getPromptProfile(userId, asOfDate) {
         gender,
         daily_calorie_target_kcal::text,
         daily_protein_target_g::text,
+        daily_fat_target_g::text,
         global_llm_prompt
       FROM users
       WHERE id = $1
@@ -120,6 +121,7 @@ export async function getPromptProfile(userId, asOfDate) {
             gender: null,
             dailyCalorieTargetKcal: null,
             dailyProteinTargetG: null,
+            dailyFatTargetG: null,
             globalLlmPrompt: null
         };
     }
@@ -139,6 +141,7 @@ export async function getPromptProfile(userId, asOfDate) {
         gender: row.gender,
         dailyCalorieTargetKcal: row.daily_calorie_target_kcal ? Number(row.daily_calorie_target_kcal) : null,
         dailyProteinTargetG: row.daily_protein_target_g ? Number(row.daily_protein_target_g) : null,
+        dailyFatTargetG: row.daily_fat_target_g ? Number(row.daily_fat_target_g) : null,
         globalLlmPrompt: row.global_llm_prompt
     };
 }

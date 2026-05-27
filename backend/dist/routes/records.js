@@ -72,6 +72,7 @@ recordsRouter.get("/records/by-date", async (req, res) => {
           check_in_initialized,
           daily_calorie_target_kcal::text,
           daily_protein_target_g::text,
+          daily_fat_target_g::text,
           daily_target_source,
           daily_target_comment
         FROM records
@@ -111,6 +112,9 @@ recordsRouter.get("/records/by-date", async (req, res) => {
             dailyProteinTargetG: recordResult.rows[0].daily_protein_target_g
                 ? Number(recordResult.rows[0].daily_protein_target_g)
                 : null,
+            dailyFatTargetG: recordResult.rows[0].daily_fat_target_g
+                ? Number(recordResult.rows[0].daily_fat_target_g)
+                : null,
             dailyTargetSource: recordResult.rows[0].daily_target_source,
             dailyTargetComment: recordResult.rows[0].daily_target_comment,
             exercises: detail.rows.map((row) => ({
@@ -146,6 +150,7 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
           check_in_initialized,
           daily_calorie_target_kcal::text,
           daily_protein_target_g::text,
+          daily_fat_target_g::text,
           daily_target_source,
           daily_target_comment
         FROM records
@@ -182,6 +187,7 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
             checkInInitialized: base.check_in_initialized,
             dailyCalorieTargetKcal: base.daily_calorie_target_kcal ? Number(base.daily_calorie_target_kcal) : null,
             dailyProteinTargetG: base.daily_protein_target_g ? Number(base.daily_protein_target_g) : null,
+            dailyFatTargetG: base.daily_fat_target_g ? Number(base.daily_fat_target_g) : null,
             dailyTargetSource: base.daily_target_source,
             dailyTargetComment: base.daily_target_comment,
             exercises: detail.rows.map((row) => ({

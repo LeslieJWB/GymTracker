@@ -270,6 +270,12 @@ export function StatisticsScreen({
       date: row.date,
       value: row.totalProteinG
     }));
+  const nutritionFatPoints = nutritionRecords
+    .filter((row) => row.totalFatG > 0)
+    .map((row) => ({
+      date: row.date,
+      value: row.totalFatG
+    }));
   const bodyFatPoints = weightRecords
     .filter((row): row is BodyWeightRecord & { bodyFatPercentage: number } => row.bodyFatPercentage !== null)
     .map((row) => ({
@@ -479,6 +485,14 @@ export function StatisticsScreen({
             lineColor={palette.primary}
             granularity={granularity}
             points={nutritionProteinPoints}
+          />
+          <SingleLineCard
+            title="Fat Trend"
+            emptyText="No fat records yet."
+            unitSuffix=" g"
+            lineColor="#8B7355"
+            granularity={granularity}
+            points={nutritionFatPoints}
           />
         </>
       ) : null}

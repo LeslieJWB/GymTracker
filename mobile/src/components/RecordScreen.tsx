@@ -383,12 +383,16 @@ export function RecordScreen({
   const bodyFatDirty = normalizedBodyFatDraft !== normalizedSavedBodyFat;
   const totalCaloriesKcal = recordDetail?.totalCaloriesKcal ?? 0;
   const totalProteinG = recordDetail?.totalProteinG ?? 0;
+  const totalFatG = recordDetail?.totalFatG ?? 0;
   const calorieTarget = dailyNutritionTargets?.recommendedCaloriesKcal ?? null;
   const proteinTarget = dailyNutritionTargets?.recommendedProteinG ?? null;
+  const fatTarget = dailyNutritionTargets?.recommendedFatG ?? null;
   const calorieProgress = calorieTarget && calorieTarget > 0 ? totalCaloriesKcal / calorieTarget : null;
   const proteinProgress = proteinTarget && proteinTarget > 0 ? totalProteinG / proteinTarget : null;
+  const fatProgress = fatTarget && fatTarget > 0 ? totalFatG / fatTarget : null;
   const calorieOverflow = calorieTarget ? Math.max(0, Math.round(totalCaloriesKcal - calorieTarget)) : 0;
   const proteinOverflow = proteinTarget ? Math.max(0, Math.round(totalProteinG - proteinTarget)) : 0;
+  const fatOverflow = fatTarget ? Math.max(0, Math.round(totalFatG - fatTarget)) : 0;
   const exerciseEntryCount = recordDetail?.exercises.length ?? 0;
   const canSaveTemplate = Boolean(user) && !loading && exerciseEntryCount > 0;
   const canLoadTemplate = Boolean(user) && !loading;
@@ -824,6 +828,10 @@ export function RecordScreen({
         proteinTarget={proteinTarget}
         proteinOverflow={proteinOverflow}
         proteinProgress={proteinProgress}
+        totalFatG={totalFatG}
+        fatTarget={fatTarget}
+        fatOverflow={fatOverflow}
+        fatProgress={fatProgress}
         dailyNutritionTargets={dailyNutritionTargets}
       />
 
@@ -937,7 +945,8 @@ export function RecordScreen({
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.foodMacrosText}>
-                        {Math.round(entry.caloriesKcal)} kcal • {Math.round(entry.proteinG)} g protein
+                        {Math.round(entry.caloriesKcal)} kcal • {Math.round(entry.proteinG)} g protein •{" "}
+                        {Math.round(entry.fatG)} g fat
                       </Text>
                       <Text style={styles.foodCommentText}>{entry.comment}</Text>
                     </View>
@@ -1993,6 +2002,9 @@ const styles = StyleSheet.create({
   },
   progressFillProtein: {
     backgroundColor: "#5D7052"
+  },
+  progressFillFat: {
+    backgroundColor: "#8B7355"
   },
   progressMeta: {
     marginTop: 6,

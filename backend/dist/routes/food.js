@@ -13,6 +13,7 @@ const foodAnalysisSchema = z.object({
     description: z.string().trim().min(1).max(2000),
     caloriesKcal: z.number().nonnegative(),
     proteinG: z.number().nonnegative(),
+    fatG: z.number().nonnegative(),
     comment: z.string().trim().min(1).max(2000)
 });
 export const foodRouter = Router();
@@ -61,6 +62,7 @@ function parseFoodAnalysis(raw) {
             description: validated.data.description.slice(0, 2000),
             caloriesKcal: toSafeNumber(validated.data.caloriesKcal),
             proteinG: toSafeNumber(validated.data.proteinG),
+            fatG: toSafeNumber(validated.data.fatG),
             comment: validated.data.comment.slice(0, 2000),
             source: llmProvider?.name ?? "fallback"
         };
@@ -76,7 +78,8 @@ async function analyzeFoodConsumption(text, image, promptProfile) {
         description: fallbackDescription.slice(0, 2000),
         caloriesKcal: 0,
         proteinG: 0,
-        comment: "AI nutrition analysis is not available right now. Calories and protein are set to 0 until analysis succeeds.",
+        fatG: 0,
+        comment: "AI nutrition analysis is not available right now. Calories, protein, and fat are set to 0 until analysis succeeds.",
         source: "fallback"
     };
     if (!llmProvider) {
@@ -88,12 +91,12 @@ async function analyzeFoodConsumption(text, image, promptProfile) {
         requestContext: `You are a nutrition assistant.
 Analyze the provided food intake text and/or image.
 Return ONLY JSON with this exact shape:
-{"description":"<one concise sentence describing the intake>","caloriesKcal":<number>,"proteinG":<number>,"comment":"<one short practical nutrition comment>"}
+{"description":"<one concise sentence describing the intake>","caloriesKcal":<number>,"proteinG":<number>,"fatG":<number>,"comment":"<one short practical nutrition comment>"}
 Rules:
 - If text is missing, infer description from image.
 - If image is missing, infer from text.
 - If both exist, combine both sources.
-- caloriesKcal and proteinG must be non-negative numbers.
+- caloriesKcal, proteinG, and fatG must be non-negative numbers.
 - Keep the comment concise and actionable.`
     });
     try {
@@ -133,7 +136,8 @@ foodRouter.get("/records/by-date/food", async (req, res) => {
             return res.json({
                 entries: [],
                 totalCaloriesKcal: 0,
-                totalProteinG: 0
+                totalProteinG: 0,
+                totalFatG: 0
             });
         }
         const recordId = recordResult.rows[0].id;
@@ -144,6 +148,7 @@ foodRouter.get("/records/by-date/food", async (req, res) => {
           input_mode,
           calories_kcal::text,
           protein_g::text,
+          fat_g::text,
           llm_comment,
           llm_source,
           created_at::text,
@@ -155,7 +160,8 @@ foodRouter.get("/records/by-date/food", async (req, res) => {
         const totalsResult = await pool.query(`
         SELECT
           COALESCE(SUM(calories_kcal), 0)::text AS total_calories_kcal,
-          COALESCE(SUM(protein_g), 0)::text AS total_protein_g
+          COALESCE(SUM(protein_g), 0)::text AS total_protein_g,
+          COALESCE(SUM(fat_g), 0)::text AS total_fat_g
         FROM food_consumptions
         WHERE record_id = $1
       `, [recordId]);
@@ -166,13 +172,15 @@ foodRouter.get("/records/by-date/food", async (req, res) => {
                 inputMode: row.input_mode,
                 caloriesKcal: Number(row.calories_kcal),
                 proteinG: Number(row.protein_g),
+                fatG: Number(row.fat_g),
                 comment: row.llm_comment,
                 llmSource: row.llm_source,
                 createdAt: row.created_at,
                 updatedAt: row.updated_at
             })),
             totalCaloriesKcal: Number(totalsResult.rows[0].total_calories_kcal),
-            totalProteinG: Number(totalsResult.rows[0].total_protein_g)
+            totalProteinG: Number(totalsResult.rows[0].total_protein_g),
+            totalFatG: Number(totalsResult.rows[0].total_fat_g)
         });
     }
     catch (error) {
@@ -229,16 +237,18 @@ foodRouter.post("/records/by-date/food", async (req, res) => {
             image_mime_type,
             calories_kcal,
             protein_g,
+            fat_g,
             llm_comment,
             llm_source
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           RETURNING
             id,
             description,
             input_mode,
             calories_kcal::text,
             protein_g::text,
+            fat_g::text,
             llm_comment,
             llm_source,
             created_at::text,
@@ -251,13 +261,15 @@ foodRouter.post("/records/by-date/food", async (req, res) => {
                 image?.mimeType ?? null,
                 analysis.caloriesKcal,
                 analysis.proteinG,
+                analysis.fatG,
                 analysis.comment,
                 analysis.source
             ]);
             const totals = await client.query(`
           SELECT
             COALESCE(SUM(calories_kcal), 0)::text AS total_calories_kcal,
-            COALESCE(SUM(protein_g), 0)::text AS total_protein_g
+            COALESCE(SUM(protein_g), 0)::text AS total_protein_g,
+            COALESCE(SUM(fat_g), 0)::text AS total_fat_g
           FROM food_consumptions
           WHERE record_id = $1
         `, [recordId]);
@@ -270,13 +282,15 @@ foodRouter.post("/records/by-date/food", async (req, res) => {
                     inputMode: row.input_mode,
                     caloriesKcal: Number(row.calories_kcal),
                     proteinG: Number(row.protein_g),
+                    fatG: Number(row.fat_g),
                     comment: row.llm_comment,
                     llmSource: row.llm_source,
                     createdAt: row.created_at,
                     updatedAt: row.updated_at
                 },
                 totalCaloriesKcal: Number(totals.rows[0].total_calories_kcal),
-                totalProteinG: Number(totals.rows[0].total_protein_g)
+                totalProteinG: Number(totals.rows[0].total_protein_g),
+                totalFatG: Number(totals.rows[0].total_fat_g)
             };
         });
         if (key) {
@@ -312,13 +326,15 @@ foodRouter.delete("/food-consumptions/:foodConsumptionId", async (req, res) => {
         const totals = await pool.query(`
         SELECT
           COALESCE(SUM(calories_kcal), 0)::text AS total_calories_kcal,
-          COALESCE(SUM(protein_g), 0)::text AS total_protein_g
+          COALESCE(SUM(protein_g), 0)::text AS total_protein_g,
+          COALESCE(SUM(fat_g), 0)::text AS total_fat_g
         FROM food_consumptions
         WHERE record_id = $1
       `, [result.rows[0].record_id]);
         return res.json({
             totalCaloriesKcal: Number(totals.rows[0].total_calories_kcal),
-            totalProteinG: Number(totals.rows[0].total_protein_g)
+            totalProteinG: Number(totals.rows[0].total_protein_g),
+            totalFatG: Number(totals.rows[0].total_fat_g)
         });
     }
     catch (error) {

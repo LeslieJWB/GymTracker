@@ -13,6 +13,10 @@ type RecordDailyOverviewSectionProps = {
   proteinTarget: number | null;
   proteinOverflow: number;
   proteinProgress: number | null;
+  totalFatG: number;
+  fatTarget: number | null;
+  fatOverflow: number;
+  fatProgress: number | null;
   dailyNutritionTargets: DailyNutritionTargets | null;
 };
 
@@ -28,6 +32,10 @@ export function RecordDailyOverviewSection({
   proteinTarget,
   proteinOverflow,
   proteinProgress,
+  totalFatG,
+  fatTarget,
+  fatOverflow,
+  fatProgress,
   dailyNutritionTargets
 }: RecordDailyOverviewSectionProps) {
   return (
@@ -90,6 +98,27 @@ export function RecordDailyOverviewSection({
           </View>
           <Text style={styles.progressMeta}>
             {proteinTarget ? `${Math.round((proteinProgress ?? 0) * 100)}% of target` : "Estimating daily target..."}
+          </Text>
+        </View>
+        <View style={[styles.nutritionProgressSection, styles.nutritionProgressSectionDivider]}>
+          <Text style={styles.nutritionProgressTitle}>Fat Progress</Text>
+          <View style={styles.progressRow}>
+            <Text style={styles.progressNumbers}>
+              {Math.round(totalFatG)} / {fatTarget ? Math.round(fatTarget) : "--"} g
+            </Text>
+            {fatOverflow > 0 ? <Text style={styles.progressOverflow}>+{fatOverflow} g</Text> : null}
+          </View>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                styles.progressFillFat,
+                { width: `${Math.max(0, Math.min(100, Math.round((fatProgress ?? 0) * 100)))}%` }
+              ]}
+            />
+          </View>
+          <Text style={styles.progressMeta}>
+            {fatTarget ? `${Math.round((fatProgress ?? 0) * 100)}% of target` : "Estimating daily target..."}
           </Text>
           {dailyNutritionTargets?.comment ? <Text style={styles.progressComment}>{dailyNutritionTargets.comment}</Text> : null}
         </View>

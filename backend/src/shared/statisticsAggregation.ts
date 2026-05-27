@@ -89,6 +89,7 @@ type NutritionDaily = {
   date: string;
   totalCaloriesKcal: number;
   totalProteinG: number;
+  totalFatG: number;
 };
 
 export function aggregateNutritionHistory(
@@ -100,13 +101,13 @@ export function aggregateNutritionHistory(
   }
   const groups = new Map<
     string,
-    { calSum: number; calN: number; protSum: number; protN: number }
+    { calSum: number; calN: number; protSum: number; protN: number; fatSum: number; fatN: number }
   >();
   for (const row of rows) {
     const key = bucketStartDate(row.date, g);
     let bucket = groups.get(key);
     if (!bucket) {
-      bucket = { calSum: 0, calN: 0, protSum: 0, protN: 0 };
+      bucket = { calSum: 0, calN: 0, protSum: 0, protN: 0, fatSum: 0, fatN: 0 };
       groups.set(key, bucket);
     }
     if (row.totalCaloriesKcal > 0) {
@@ -117,13 +118,18 @@ export function aggregateNutritionHistory(
       bucket.protSum += row.totalProteinG;
       bucket.protN += 1;
     }
+    if (row.totalFatG > 0) {
+      bucket.fatSum += row.totalFatG;
+      bucket.fatN += 1;
+    }
   }
   const out: NutritionDaily[] = [];
   for (const [bucketStart, bucket] of groups) {
     out.push({
       date: bucketStart,
       totalCaloriesKcal: bucket.calN > 0 ? bucket.calSum / bucket.calN : 0,
-      totalProteinG: bucket.protN > 0 ? bucket.protSum / bucket.protN : 0
+      totalProteinG: bucket.protN > 0 ? bucket.protSum / bucket.protN : 0,
+      totalFatG: bucket.fatN > 0 ? bucket.fatSum / bucket.fatN : 0
     });
   }
   out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
