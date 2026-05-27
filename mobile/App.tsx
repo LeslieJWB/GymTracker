@@ -192,10 +192,11 @@ function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories
 
 function AppContent() {
   const insets = useSafeAreaInsets();
-  const bottomNavBarPaddingBottom = insets.bottom > 0 ? Math.max(4, insets.bottom - 22) : 6;
-  const bottomNavBaseHeight = 54;
-  /** Keep content spacing stable and aligned with the actual floating nav height. */
-  const bottomTabContentPadding = bottomNavBaseHeight + bottomNavBarPaddingBottom;
+  const bottomNavHorizontalInset = 16;
+  const bottomNavBarBottom = 8;
+  const bottomNavIslandHeight = 52;
+  /** Scroll inset so the last items can clear the floating nav — not layout padding. */
+  const bottomNavScrollInset = bottomNavIslandHeight + bottomNavBarBottom + 16;
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
@@ -2750,7 +2751,7 @@ function AppContent() {
         <View style={[styles.blob, styles.blobB]} />
       </View>
       <View style={appStyles.flex}>
-        <View style={[appStyles.flex, { paddingBottom: bottomTabContentPadding }]}>
+        <View style={appStyles.flex}>
         {screen === "calendar" ? (
           <View style={appStyles.flex}>
             <CalendarScreen
@@ -2769,10 +2770,10 @@ function AppContent() {
         {screen === "record" ? (
           <KeyboardAwareScrollView
             style={appStyles.flex}
-            contentContainerStyle={styles.recordScrollContent}
+            contentContainerStyle={[styles.recordScrollContent, { paddingBottom: bottomNavScrollInset }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
-            bottomOffset={insets.bottom + 12 + keyboardToolbarBottomInset()}
+            bottomOffset={bottomNavScrollInset + keyboardToolbarBottomInset()}
             extraKeyboardSpace={keyboardToolbarBottomInset()}
           >
             <RecordScreen
@@ -3017,7 +3018,9 @@ function AppContent() {
           styles.bottomNav,
           styles.bottomNavFloating,
           {
-            paddingBottom: bottomNavBarPaddingBottom
+            bottom: bottomNavBarBottom,
+            left: bottomNavHorizontalInset,
+            right: bottomNavHorizontalInset
           }
         ]}
       >
@@ -3115,8 +3118,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E7EFE3"
   },
   recordScrollContent: {
-    ...appStyles.container,
-    paddingBottom: 24
+    ...appStyles.container
   },
   onboardingContainer: {
     flexGrow: 1,
@@ -3448,22 +3450,17 @@ const styles = StyleSheet.create({
   },
   bottomNav: {
     flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: `${palette.border}AA`,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingTop: 7,
-    paddingBottom: 10,
-    gap: 6,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    ...shadows.soft
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 4,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${palette.border}AA`,
+    ...shadows.float
   },
   bottomNavFloating: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
     zIndex: 10,
     elevation: 10
   },
