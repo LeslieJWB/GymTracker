@@ -835,6 +835,9 @@ export function RecordScreen({
         recordThemeDraft={recordThemeDraft}
         setRecordThemeDraft={setRecordThemeDraft}
         themeDirty={themeDirty}
+        themePlaceholder={
+          savedTheme.length === 0 && recordDetail?.checkInInitialized === true ? "Not provided" : "e.g. pull, push, leg"
+        }
         saveRecordTheme={saveRecordTheme}
         savingBodyWeight={savingBodyWeight}
         bodyWeightDraft={bodyWeightDraft}

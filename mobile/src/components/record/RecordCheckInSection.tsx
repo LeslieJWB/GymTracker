@@ -10,6 +10,7 @@ type RecordCheckInSectionProps = {
   recordThemeDraft: string;
   setRecordThemeDraft: (value: string) => void;
   themeDirty: boolean;
+  themePlaceholder?: string;
   saveRecordTheme: () => void;
   savingBodyWeight: boolean;
   bodyWeightDraft: string;
@@ -33,6 +34,7 @@ export function RecordCheckInSection({
   recordThemeDraft,
   setRecordThemeDraft,
   themeDirty,
+  themePlaceholder = "e.g. pull, push, leg",
   saveRecordTheme,
   savingBodyWeight,
   bodyWeightDraft,
@@ -73,7 +75,7 @@ export function RecordCheckInSection({
               saveRecordTheme();
             }
           }}
-          placeholder="e.g. pull, push, leg"
+          placeholder={themePlaceholder}
           placeholderTextColor="#78786C"
           editable={Boolean(user) && !loading}
           maxLength={30}

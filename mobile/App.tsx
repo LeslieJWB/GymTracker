@@ -2033,10 +2033,7 @@ function AppContent() {
       return;
     }
     const trimmedTheme = dailyCheckInThemeDraft.trim();
-    if (!trimmedTheme) {
-      Alert.alert("Theme required", "Please provide today's theme before continuing.");
-      return;
-    }
+    const themeToPersist = trimmedTheme.length > 0 ? trimmedTheme : null;
 
     let weightToPersist: number | null = null;
     let bodyFatToPersist: number | null = null;
@@ -2088,7 +2085,7 @@ function AppContent() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             date: selectedDate,
-            theme: trimmedTheme
+            theme: themeToPersist
           })
         }
       );
@@ -2904,10 +2901,10 @@ function AppContent() {
             <View style={styles.dailyGateCard}>
               <Text style={styles.dailyGateTitle}>Today&apos;s check-in</Text>
               <Text style={styles.dailyGateHint}>
-                Add your theme and weight to unlock your daily nutrition targets. Body fat is optional.
+                Log your weight to unlock daily nutrition targets. Theme and body fat are optional.
               </Text>
               <View style={styles.dailyGateField}>
-                <Text style={styles.dailyGateLabel}>Theme</Text>
+                <Text style={styles.dailyGateLabel}>Theme (optional)</Text>
                 <TextInput
                   style={styles.dailyGateInput}
                   value={dailyCheckInThemeDraft}
@@ -2918,7 +2915,7 @@ function AppContent() {
                   autoComplete="off"
                   textContentType="none"
                   keyboardType={Platform.OS === "ios" ? "ascii-capable" : "default"}
-                  placeholder="e.g. push, pull, rest"
+                  placeholder="Optional — e.g. push, pull, rest"
                   placeholderTextColor="#78786C"
                   editable={!dailyCheckInSubmitting}
                   maxLength={30}
