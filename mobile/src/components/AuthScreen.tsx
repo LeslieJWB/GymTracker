@@ -18,11 +18,13 @@ type AuthScreenProps = {
   error: string | null;
   message: string | null;
   canResendConfirmation: boolean;
+  needsPasswordUpdate?: boolean;
   onGoogle: () => void;
   onApple: () => void;
   onEmailSignIn: (email: string, password: string) => Promise<boolean>;
   onEmailSignUp: (email: string, password: string) => Promise<boolean>;
   onForgotPassword: (email: string) => Promise<boolean>;
+  onUpdatePassword: (password: string) => Promise<boolean>;
   onResendConfirmation: () => Promise<boolean>;
 };
 
@@ -39,16 +41,19 @@ export function AuthScreen({
   error,
   message,
   canResendConfirmation,
+  needsPasswordUpdate = false,
   onGoogle,
   onApple,
   onEmailSignIn,
   onEmailSignUp,
   onForgotPassword,
+  onUpdatePassword,
   onResendConfirmation
 }: AuthScreenProps) {
   const [mode, setMode] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const actionLabel = useMemo(() => (mode === "signIn" ? "Sign in with Email" : "Sign up with Email"), [mode]);
@@ -95,6 +100,68 @@ export function AuthScreen({
     setLocalError(null);
     await onForgotPassword(normalizedEmail);
   };
+
+  const handleUpdatePassword = async () => {
+    if (!password || !confirmPassword) {
+      setLocalError("Enter and confirm your new password.");
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setLocalError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setLocalError("Passwords do not match.");
+      return;
+    }
+    setLocalError(null);
+    await onUpdatePassword(password);
+  };
+
+  if (needsPasswordUpdate) {
+    return (
+      <KeyboardScreen style={styles.flex}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <View pointerEvents="none" style={styles.blob} />
+          <AppCard style={styles.authCard}>
+            <Text style={styles.title}>Set a new password</Text>
+            <Text style={styles.subtitle}>Choose a new password for your IntelliFit account.</Text>
+            <AppTextInput
+              secureTextEntry
+              textContentType="newPassword"
+              autoComplete="new-password"
+              placeholder="New password"
+              placeholderTextColor={palette.mutedForeground}
+              value={password}
+              onChangeText={setPassword}
+              editable={!loading}
+            />
+            <AppTextInput
+              secureTextEntry
+              textContentType="newPassword"
+              autoComplete="new-password"
+              placeholder="Confirm new password"
+              placeholderTextColor={palette.mutedForeground}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              editable={!loading}
+            />
+            <AppButton onPress={handleUpdatePassword} disabled={loading}>
+              Update password
+            </AppButton>
+            {loading ? <ActivityIndicator size="small" color={palette.primary} style={styles.loader} /> : null}
+            {message ? <Text style={styles.message}>{message}</Text> : null}
+            {localError ? <Text style={styles.error}>{localError}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+          </AppCard>
+        </ScrollView>
+      </KeyboardScreen>
+    );
+  }
 
   return (
     <KeyboardScreen style={styles.flex}>

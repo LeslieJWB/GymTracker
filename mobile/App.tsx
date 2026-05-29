@@ -213,10 +213,12 @@ function AppContent() {
     authError,
     authMessage,
     pendingConfirmationEmail,
+    needsPasswordUpdate,
     signInWithProvider,
     signInWithEmail,
     signUpWithEmail,
     requestPasswordReset,
+    updatePassword,
     resendEmailConfirmation,
     signOut
   } = useAuthSession();
@@ -748,7 +750,9 @@ function AppContent() {
       bootstrappedForRef.current = null;
       const message = error instanceof Error ? error.message : String(error);
       setBootstrapError(message);
-      Alert.alert("Failed to bootstrap", message);
+      if (!needsPasswordUpdate) {
+        Alert.alert("Failed to bootstrap", message);
+      }
     } finally {
       setLoading(false);
     }
@@ -2429,13 +2433,16 @@ function AppContent() {
       bootstrap().catch(() => {});
       return;
     }
+    if (needsPasswordUpdate) {
+      return;
+    }
     const bootstrapKey = `${session.user?.id ?? ""}:${normalizedUrl}`;
     if (bootstrappedForRef.current === bootstrapKey) {
       return;
     }
     bootstrap().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkingSession, normalizedUrl, session?.access_token, session?.user?.id]);
+  }, [checkingSession, normalizedUrl, needsPasswordUpdate, session?.access_token, session?.user?.id]);
 
   useAppLifecycleEffects({
     user,
@@ -2541,7 +2548,7 @@ function AppContent() {
     );
   }
 
-  if (!session) {
+  if (!session || needsPasswordUpdate) {
     return (
       <SafeAreaView style={appStyles.safeArea}>
         <StatusBar style="dark" />
@@ -2550,6 +2557,7 @@ function AppContent() {
           error={authError}
           message={authMessage}
           canResendConfirmation={Boolean(pendingConfirmationEmail)}
+          needsPasswordUpdate={needsPasswordUpdate}
           onResendConfirmation={() => {
             setAuthActionLoading(true);
             return resendEmailConfirmation().finally(() => setAuthActionLoading(false));
@@ -2565,6 +2573,10 @@ function AppContent() {
           onForgotPassword={(email) => {
             setAuthActionLoading(true);
             return requestPasswordReset(email).finally(() => setAuthActionLoading(false));
+          }}
+          onUpdatePassword={(password) => {
+            setAuthActionLoading(true);
+            return updatePassword(password).finally(() => setAuthActionLoading(false));
           }}
           onGoogle={() => {
             setAuthActionLoading(true);

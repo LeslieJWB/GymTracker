@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { AppState } from "react-native";
+import { AppState, Linking } from "react-native";
+import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { makeRedirectUri } from "expo-auth-session";
@@ -11,9 +12,50 @@ WebBrowser.maybeCompleteAuthSession();
 
 type Provider = "google" | "apple";
 
-function parseFragmentParams(url: string): URLSearchParams {
-  const fragment = url.split("#")[1] ?? "";
-  return new URLSearchParams(fragment);
+const PENDING_PASSWORD_RECOVERY_KEY = "gymtracker_pending_password_recovery";
+
+async function setPendingPasswordRecovery(pending: boolean): Promise<void> {
+  if (pending) {
+    await SecureStore.setItemAsync(PENDING_PASSWORD_RECOVERY_KEY, "true");
+    return;
+  }
+  await SecureStore.deleteItemAsync(PENDING_PASSWORD_RECOVERY_KEY).catch(() => {});
+}
+
+function parseAuthParamsFromUrl(url: string): URLSearchParams {
+  const hashIndex = url.indexOf("#");
+  if (hashIndex >= 0) {
+    return new URLSearchParams(url.slice(hashIndex + 1));
+  }
+  const queryIndex = url.indexOf("?");
+  if (queryIndex >= 0) {
+    return new URLSearchParams(url.slice(queryIndex + 1));
+  }
+  return new URLSearchParams();
+}
+
+async function createSessionFromAuthUrl(url: string): Promise<string | null> {
+  const params = parseAuthParamsFromUrl(url);
+  const authError = params.get("error");
+  if (authError) {
+    const errorCode = params.get("error_code");
+    const errorDescription = params.get("error_description");
+    if (errorCode === "otp_expired") {
+      return "This reset link has expired or was already used. Request a new one from Forgot password?";
+    }
+    return errorDescription ?? authError;
+  }
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+  if (!accessToken || !refreshToken) {
+    return null;
+  }
+
+  const { error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken
+  });
+  return error?.message ?? null;
 }
 
 function resolveAuthRedirectUri(): string {
@@ -33,14 +75,17 @@ export function useAuthSession() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null);
+  const [needsPasswordUpdate, setNeedsPasswordUpdate] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
+    Promise.all([supabase.auth.getSession(), SecureStore.getItemAsync(PENDING_PASSWORD_RECOVERY_KEY)])
+      .then(([{ data }, pendingRecovery]) => {
         if (mounted) {
           setSession(data.session ?? null);
+          if (pendingRecovery === "true" && data.session) {
+            setNeedsPasswordUpdate(true);
+          }
         }
       })
       .finally(() => {
@@ -49,8 +94,12 @@ export function useAuthSession() {
         }
       });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession ?? null);
+      if (event === "PASSWORD_RECOVERY") {
+        setNeedsPasswordUpdate(true);
+        setPendingPasswordRecovery(true).catch(() => {});
+      }
       if (nextSession) {
         setAuthError(null);
         setPendingConfirmationEmail(null);
@@ -60,6 +109,35 @@ export function useAuthSession() {
     return () => {
       mounted = false;
       subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    async function handleIncomingUrl(url: string | null) {
+      if (!url || !url.includes("auth/callback")) {
+        return;
+      }
+      const params = parseAuthParamsFromUrl(url);
+      const isRecovery = params.get("type") === "recovery";
+      if (isRecovery) {
+        setNeedsPasswordUpdate(true);
+        await setPendingPasswordRecovery(true);
+      }
+      const sessionError = await createSessionFromAuthUrl(url);
+      if (sessionError) {
+        setAuthError(sessionError);
+      }
+    }
+
+    Linking.getInitialURL()
+      .then(handleIncomingUrl)
+      .catch(() => {});
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      handleIncomingUrl(url).catch(() => {});
+    });
+
+    return () => {
+      subscription.remove();
     };
   }, []);
 
@@ -121,7 +199,7 @@ export function useAuthSession() {
       return false;
     }
 
-    const params = parseFragmentParams(result.url);
+    const params = parseAuthParamsFromUrl(result.url);
     const accessToken = params.get("access_token");
     const refreshToken = params.get("refresh_token");
     if (!accessToken || !refreshToken) {
@@ -212,12 +290,27 @@ export function useAuthSession() {
     }
     setAuthError(null);
     setAuthMessage(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    const redirectTo = resolveAuthRedirectUri();
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
     if (error) {
       setAuthError(error.message);
       return false;
     }
-    setAuthMessage("Password reset email sent. Open the link in your inbox to set a new password.");
+    setAuthMessage("Password reset email sent. Open the link on this device to set a new password.");
+    return true;
+  }, []);
+
+  const updatePassword = useCallback(async (password: string): Promise<boolean> => {
+    setAuthError(null);
+    setAuthMessage(null);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      setAuthError(error.message);
+      return false;
+    }
+    setNeedsPasswordUpdate(false);
+    await setPendingPasswordRecovery(false);
+    setAuthMessage("Password updated. You are signed in.");
     return true;
   }, []);
 
@@ -245,8 +338,10 @@ export function useAuthSession() {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    await setPendingPasswordRecovery(false);
     setAuthMessage(null);
     setPendingConfirmationEmail(null);
+    setNeedsPasswordUpdate(false);
   }, []);
 
   return {
@@ -255,10 +350,12 @@ export function useAuthSession() {
     authError,
     authMessage,
     pendingConfirmationEmail,
+    needsPasswordUpdate,
     signInWithProvider,
     signInWithEmail,
     signUpWithEmail,
     requestPasswordReset,
+    updatePassword,
     resendEmailConfirmation,
     signOut
   };
