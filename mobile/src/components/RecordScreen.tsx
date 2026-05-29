@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import {
   Alert,
@@ -75,7 +75,7 @@ type RecordScreenProps = {
   exerciseNotesDraftById: Record<string, string>;
   savingExerciseNotesById: Record<string, boolean>;
   updateExerciseNotesDraft: (exerciseId: string, value: string) => void;
-  saveExerciseNotes: (exerciseId: string) => void;
+  saveExerciseNotes: (exerciseId: string, notesOverride?: string) => Promise<void>;
   setDraftsByExerciseId: Record<string, SetDrafts>;
   savingSetIdsByExerciseId: Record<string, Record<string, boolean>>;
   toggleExerciseExpanded: (exerciseId: string) => void;
@@ -233,6 +233,7 @@ export function RecordScreen({
     exerciseId: string;
     exerciseName: string;
   } | null>(null);
+  const exerciseNotesDraftRef = useRef("");
   const { keyboardVisible, focusedInputCurrent, setToolbarSuppressed } = useKeyboardSystem();
   const keyboardAccessoryVisible = keyboardVisible || focusedInputCurrent >= 0;
   const foodComposerToolbarEnabled = showFoodComposerModal && keyboardAccessoryVisible;
@@ -690,6 +691,7 @@ export function RecordScreen({
       exerciseDetailsById[target.id]?.notes ??
       (recordDetail?.exercises.find((item) => item.id === target.id)?.notes ?? "") ??
       "";
+    exerciseNotesDraftRef.current = initialNotes;
     updateExerciseNotesDraft(target.id, initialNotes);
     setExerciseNotesTarget({
       exerciseId: target.id,
@@ -1617,7 +1619,10 @@ export function RecordScreen({
                   multiline
                   numberOfLines={4}
                   value={exerciseNotesDraftById[exerciseNotesTarget.exerciseId] ?? ""}
-                  onChangeText={(value) => updateExerciseNotesDraft(exerciseNotesTarget.exerciseId, value)}
+                  onChangeText={(value) => {
+                    exerciseNotesDraftRef.current = value;
+                    updateExerciseNotesDraft(exerciseNotesTarget.exerciseId, value);
+                  }}
                   placeholder="e.g. Keep elbows tucked and control eccentric"
                   placeholderTextColor="#78786C"
                   editable={!loading && !savingExerciseNotesById[exerciseNotesTarget.exerciseId]}
@@ -1631,8 +1636,14 @@ export function RecordScreen({
                   <TouchableOpacity
                     style={styles.composerSaveButton}
                     onPress={() => {
-                      saveExerciseNotes(exerciseNotesTarget.exerciseId);
-                      closeExerciseNotesSheet();
+                      const target = exerciseNotesTarget;
+                      if (!target) {
+                        return;
+                      }
+                      void (async () => {
+                        await saveExerciseNotes(target.exerciseId, exerciseNotesDraftRef.current);
+                        closeExerciseNotesSheet();
+                      })();
                     }}
                     disabled={loading || Boolean(savingExerciseNotesById[exerciseNotesTarget.exerciseId])}
                   >

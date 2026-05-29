@@ -1254,14 +1254,20 @@ function AppContent() {
     setExerciseNotesDraftById((current) => ({ ...current, [exerciseId]: value }));
   }
 
-  async function saveExerciseNotes(exerciseId: string): Promise<void> {
+  async function saveExerciseNotes(exerciseId: string, notesOverride?: string): Promise<void> {
     const detail = exerciseDetailsById[exerciseId];
-    if (!detail || loading || savingExerciseNotesById[exerciseId]) {
+    const recordNotes = recordDetail?.exercises.find((item) => item.id === exerciseId)?.notes ?? null;
+    if (loading || savingExerciseNotesById[exerciseId]) {
       return;
     }
     setSavingExerciseNotesById((current) => ({ ...current, [exerciseId]: true }));
     try {
-      const notesDraft = exerciseNotesDraftById[exerciseId] ?? detail.notes ?? "";
+      const notesDraft =
+        notesOverride ??
+        exerciseNotesDraftById[exerciseId] ??
+        detail?.notes ??
+        recordNotes ??
+        "";
       const normalizedNotes = notesDraft.trim();
       const updatedExercise = await apiJson<{ id: string; notes: string | null }>(`/exercises/${exerciseId}`, {
         method: "PATCH",
@@ -1271,13 +1277,19 @@ function AppContent() {
         })
       });
       setExerciseNotesDraftById((current) => ({ ...current, [exerciseId]: updatedExercise.notes ?? "" }));
-      setExerciseDetailsById((current) => ({
-        ...current,
-        [exerciseId]: {
-          ...current[exerciseId],
-          notes: updatedExercise.notes
+      setExerciseDetailsById((current) => {
+        const existing = current[exerciseId];
+        if (!existing) {
+          return current;
         }
-      }));
+        return {
+          ...current,
+          [exerciseId]: {
+            ...existing,
+            notes: updatedExercise.notes
+          }
+        };
+      });
       setRecordDetail((current) => {
         if (!current) {
           return current;
@@ -2833,8 +2845,8 @@ function AppContent() {
               exerciseNotesDraftById={exerciseNotesDraftById}
               savingExerciseNotesById={savingExerciseNotesById}
               updateExerciseNotesDraft={updateExerciseNotesDraft}
-              saveExerciseNotes={(exerciseId: string) => {
-                saveExerciseNotes(exerciseId).catch(() => {});
+              saveExerciseNotes={(exerciseId: string, notesOverride?: string) => {
+                return saveExerciseNotes(exerciseId, notesOverride);
               }}
               setDraftsByExerciseId={setDraftsByExerciseId}
               savingSetIdsByExerciseId={savingSetIdsByExerciseId}
