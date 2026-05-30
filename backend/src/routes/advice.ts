@@ -200,6 +200,203 @@ function parseDailyNutritionTargets(raw: string): {
   }
 }
 
+type ExercisePlanHistoryRow = {
+  record_date: string;
+  reps: number;
+  weight: string;
+  set_order: number;
+  exercise_notes: string | null;
+  set_notes: string | null;
+};
+
+type RelatedExercisePlanHistoryRow = ExercisePlanHistoryRow & {
+  exercise_item_id: string;
+  exercise_name: string;
+};
+
+type SessionHistory = {
+  exerciseNotes: string | null;
+  sets: { reps: number; weight: string; notes: string | null }[];
+};
+
+type ExercisePlanHistoryContext =
+  | { kind: "direct"; historyText: string }
+  | { kind: "related"; muscleGroup: string; historyText: string }
+  | { kind: "none" };
+
+function groupRowsByDate(rows: ExercisePlanHistoryRow[], sessionsLimit: number): Map<string, SessionHistory> {
+  const byDate = new Map<string, SessionHistory>();
+  for (const row of rows) {
+    if (!byDate.has(row.record_date)) {
+      if (byDate.size >= sessionsLimit) {
+        continue;
+      }
+      byDate.set(row.record_date, { exerciseNotes: normalizeAdviceNote(row.exercise_notes), sets: [] });
+    }
+    const session = byDate.get(row.record_date)!;
+    if (!session.exerciseNotes) {
+      session.exerciseNotes = normalizeAdviceNote(row.exercise_notes);
+    }
+    session.sets.push({ reps: row.reps, weight: row.weight, notes: normalizeAdviceNote(row.set_notes) });
+  }
+  return byDate;
+}
+
+function formatSessionHistoryLines(byDate: Map<string, SessionHistory>): string[] {
+  const historyLines: string[] = [];
+  for (const [d, session] of byDate) {
+    const setParts = session.sets
+      .map((s, index) => {
+        const notesSuffix = s.notes ? ` (set note: ${s.notes})` : "";
+        return `set ${index + 1}: ${s.reps} reps @ ${s.weight} kg${notesSuffix}`;
+      })
+      .join(", ");
+    const exerciseNotesPart = session.exerciseNotes ? `exercise note: ${session.exerciseNotes}` : "exercise note: none";
+    historyLines.push(`${d} | ${exerciseNotesPart} | ${setParts}`);
+  }
+  return historyLines;
+}
+
+async function fetchDirectExerciseHistory(
+  userId: string,
+  exerciseItemId: string,
+  date: string
+): Promise<ExercisePlanHistoryRow[]> {
+  const result = await pool.query<ExercisePlanHistoryRow>(
+    `
+      SELECT r.record_date::text, es.reps, es.weight::text, es.set_order, e.notes AS exercise_notes, es.notes AS set_notes
+      FROM records r
+      JOIN exercises e ON e.record_id = r.id AND e.exercise_item_id = $2
+      JOIN exercise_sets es ON es.exercise_id = e.id
+      WHERE r.user_id = $1
+        AND r.record_date < $3::date
+        AND es.is_completed = TRUE
+      ORDER BY r.record_date DESC, es.set_order ASC
+    `,
+    [userId, exerciseItemId, date]
+  );
+  return result.rows;
+}
+
+async function fetchRelatedMuscleGroupHistory(
+  userId: string,
+  exerciseItemId: string,
+  date: string
+): Promise<{ muscleGroup: string; rows: RelatedExercisePlanHistoryRow[] } | null> {
+  const muscleGroupResult = await pool.query<{ muscle_group: string | null }>(
+    `
+      SELECT muscle_group
+      FROM exercise_items
+      WHERE id = $1
+    `,
+    [exerciseItemId]
+  );
+  const muscleGroup = muscleGroupResult.rows[0]?.muscle_group?.trim();
+  if (!muscleGroup) {
+    return null;
+  }
+
+  const result = await pool.query<RelatedExercisePlanHistoryRow>(
+    `
+      SELECT
+        r.record_date::text,
+        e.exercise_item_id,
+        ei.name AS exercise_name,
+        e.notes AS exercise_notes,
+        es.reps,
+        es.weight::text,
+        es.set_order,
+        es.notes AS set_notes
+      FROM records r
+      JOIN exercises e ON e.record_id = r.id
+      JOIN exercise_items ei ON ei.id = e.exercise_item_id
+      JOIN exercise_sets es ON es.exercise_id = e.id
+      WHERE r.user_id = $1
+        AND r.record_date < $3::date
+        AND es.is_completed = TRUE
+        AND e.exercise_item_id <> $2
+        AND lower(ei.muscle_group) = lower($4)
+      ORDER BY e.exercise_item_id, r.record_date DESC, es.set_order ASC
+    `,
+    [userId, exerciseItemId, date, muscleGroup]
+  );
+  if (result.rows.length === 0) {
+    return null;
+  }
+  return { muscleGroup, rows: result.rows };
+}
+
+function formatRelatedExerciseHistory(rows: RelatedExercisePlanHistoryRow[], sessionsLimit: number): string {
+  const byExercise = new Map<string, { exerciseName: string; rows: RelatedExercisePlanHistoryRow[] }>();
+  for (const row of rows) {
+    if (!byExercise.has(row.exercise_item_id)) {
+      byExercise.set(row.exercise_item_id, { exerciseName: row.exercise_name, rows: [] });
+    }
+    byExercise.get(row.exercise_item_id)!.rows.push(row);
+  }
+
+  const exercises = Array.from(byExercise.values()).map(({ exerciseName, rows: exerciseRows }) => {
+    const byDate = groupRowsByDate(exerciseRows, sessionsLimit);
+    const mostRecentDate = byDate.keys().next().value ?? "";
+    return { exerciseName, byDate, mostRecentDate };
+  });
+
+  exercises.sort((a, b) => b.mostRecentDate.localeCompare(a.mostRecentDate));
+
+  return exercises
+    .map(({ exerciseName, byDate }) => {
+      const lines = formatSessionHistoryLines(byDate);
+      return `${exerciseName}:\n${lines.join("\n")}`;
+    })
+    .join("\n\n");
+}
+
+async function buildExercisePlanHistoryContext(
+  userId: string,
+  exerciseItemId: string,
+  date: string
+): Promise<ExercisePlanHistoryContext> {
+  const directRows = await fetchDirectExerciseHistory(userId, exerciseItemId, date);
+  const directLines = formatSessionHistoryLines(groupRowsByDate(directRows, EXERCISE_PLAN_SESSIONS_LIMIT));
+  if (directLines.length > 0) {
+    return { kind: "direct", historyText: directLines.join("\n") };
+  }
+
+  const related = await fetchRelatedMuscleGroupHistory(userId, exerciseItemId, date);
+  if (related) {
+    return {
+      kind: "related",
+      muscleGroup: related.muscleGroup,
+      historyText: formatRelatedExerciseHistory(related.rows, EXERCISE_PLAN_SESSIONS_LIMIT)
+    };
+  }
+
+  return { kind: "none" };
+}
+
+function buildExercisePlanHistoryPromptSection(
+  historyContext: ExercisePlanHistoryContext,
+  exerciseName: string
+): string {
+  if (historyContext.kind === "direct") {
+    return `The user's past sessions for this exercise (date | exercise-level note | per-set logs with set-level notes):
+${historyContext.historyText}`;
+  }
+
+  if (historyContext.kind === "related") {
+    return `The user has no prior logs for this exercise.
+Related history from other exercises targeting the same muscle group (${historyContext.muscleGroup}):
+${historyContext.historyText}
+
+Use this related history to estimate appropriate sets and weights for ${exerciseName}.
+Adjust for differences between exercises (equipment, leverage, bodyweight vs loaded, etc.).
+Do not copy weights blindly if the movement pattern differs significantly.`;
+  }
+
+  return `The user's past sessions for this exercise (date | exercise-level note | per-set logs with set-level notes):
+No prior logs for this exercise.`;
+}
+
 adviceRouter.post("/advice/exercise-plan", async (req, res) => {
   if (!req.auth) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -218,63 +415,8 @@ adviceRouter.post("/advice/exercise-plan", async (req, res) => {
     const promptProfile = await getPromptProfile(appUser.id, date);
     const todayTheme = await getTodayTheme(appUser.id, date);
     const themeContext = themeContextBlock(todayTheme);
-    const rows = await pool.query<{
-      record_date: string;
-      reps: number;
-      weight: string;
-      set_order: number;
-      exercise_notes: string | null;
-      set_notes: string | null;
-    }>(
-      `
-      SELECT r.record_date::text, es.reps, es.weight::text, es.set_order, e.notes AS exercise_notes, es.notes AS set_notes
-      FROM records r
-      JOIN exercises e ON e.record_id = r.id AND e.exercise_item_id = $2
-      JOIN exercise_sets es ON es.exercise_id = e.id
-      WHERE r.user_id = $1
-        AND r.record_date < $3::date
-        AND es.is_completed = TRUE
-      ORDER BY r.record_date DESC, es.set_order ASC
-      `,
-      [appUser.id, exerciseItemId, date]
-    );
-
-    const normalizeNote = (value: string | null): string | null => {
-      if (!value) {
-        return null;
-      }
-      const normalized = value.replace(/\s+/g, " ").trim();
-      if (!normalized) {
-        return null;
-      }
-      return normalized.slice(0, 220);
-    };
-
-    const byDate = new Map<string, { exerciseNotes: string | null; sets: { reps: number; weight: string; notes: string | null }[] }>();
-    for (const row of rows.rows) {
-      if (!byDate.has(row.record_date)) {
-        if (byDate.size >= EXERCISE_PLAN_SESSIONS_LIMIT) continue;
-        byDate.set(row.record_date, { exerciseNotes: normalizeNote(row.exercise_notes), sets: [] });
-      }
-      const session = byDate.get(row.record_date)!;
-      if (!session.exerciseNotes) {
-        session.exerciseNotes = normalizeNote(row.exercise_notes);
-      }
-      session.sets.push({ reps: row.reps, weight: row.weight, notes: normalizeNote(row.set_notes) });
-    }
-
-    const historyLines: string[] = [];
-    for (const [d, session] of byDate) {
-      const setParts = session.sets
-        .map((s, index) => {
-          const notesSuffix = s.notes ? ` (set note: ${s.notes})` : "";
-          return `set ${index + 1}: ${s.reps} reps @ ${s.weight} kg${notesSuffix}`;
-        })
-        .join(", ");
-      const exerciseNotesPart = session.exerciseNotes ? `exercise note: ${session.exerciseNotes}` : "exercise note: none";
-      historyLines.push(`${d} | ${exerciseNotesPart} | ${setParts}`);
-    }
-    const historyText = historyLines.length > 0 ? historyLines.join("\n") : "No prior logs for this exercise.";
+    const historyContext = await buildExercisePlanHistoryContext(appUser.id, exerciseItemId, date);
+    const historyPromptSection = buildExercisePlanHistoryPromptSection(historyContext, exerciseName);
 
     if (!llmProvider) {
       return fallback(
@@ -290,8 +432,7 @@ Exercise: ${exerciseName}
 Today's date: ${date}
 ${themeContext}
 Priority rule: Treat today's theme as the user's intent for this day and align set recommendations and advice with it.
-The user's past sessions for this exercise (date | exercise-level note | per-set logs with set-level notes):
-${historyText}
+${historyPromptSection}
 
 Respond with ONLY a single JSON object, no other text. Use this exact shape:
 {"sets":[{"reps":<number>,"weight":<number>},{"reps":<number>,"weight":<number>},...],"advice":"<short paragraph of advice>"}
