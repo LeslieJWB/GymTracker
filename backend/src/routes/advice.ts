@@ -397,6 +397,29 @@ Do not copy weights blindly if the movement pattern differs significantly.`;
 No prior logs for this exercise.`;
 }
 
+function buildExerciseFeedbackPastPromptSection(
+  historyContext: ExercisePlanHistoryContext,
+  exerciseName: string
+): string {
+  if (historyContext.kind === "direct") {
+    return `Past ${EXERCISE_FEEDBACK_HISTORY_LIMIT} completed records for this exercise (with dates):
+${historyContext.historyText}`;
+  }
+
+  if (historyContext.kind === "related") {
+    return `The user has no prior logs for this exercise.
+Related history from other exercises targeting the same muscle group (${historyContext.muscleGroup}):
+${historyContext.historyText}
+
+Use this related history to contextualize today's performance on ${exerciseName}.
+Adjust for differences between exercises (equipment, leverage, bodyweight vs loaded, etc.).
+Do not copy weights blindly if the movement pattern differs significantly.`;
+  }
+
+  return `Past ${EXERCISE_FEEDBACK_HISTORY_LIMIT} completed records for this exercise (with dates):
+No prior completed records for this exercise.`;
+}
+
 adviceRouter.post("/advice/exercise-plan", async (req, res) => {
   if (!req.auth) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -1194,33 +1217,8 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
       [appUser.id, date, exerciseId]
     );
 
-    const pastRows = await pool.query<{
-      record_date: string;
-      exercise_notes: string | null;
-      reps: number;
-      weight: string;
-      set_order: number;
-      set_notes: string | null;
-    }>(
-      `
-        SELECT
-          r.record_date::text,
-          e.notes AS exercise_notes,
-          es.reps,
-          es.weight::text,
-          es.set_order,
-          es.notes AS set_notes
-        FROM records r
-        JOIN exercises e ON e.record_id = r.id
-        JOIN exercise_sets es ON es.exercise_id = e.id
-        WHERE r.user_id = $1
-          AND e.exercise_item_id = $2
-          AND r.record_date < $3::date
-          AND es.is_completed = TRUE
-        ORDER BY r.record_date DESC, es.set_order ASC
-      `,
-      [appUser.id, exerciseItemId, date]
-    );
+    const historyContext = await buildExercisePlanHistoryContext(appUser.id, exerciseItemId, date);
+    const pastPromptSection = buildExerciseFeedbackPastPromptSection(historyContext, exerciseName);
 
     const todaySetsText =
       todaySetRows.rows.length > 0
@@ -1236,33 +1234,6 @@ adviceRouter.post("/advice/exercise-feedback", async (req, res) => {
       otherTodayCompletedRows.rows.length > 0
         ? groupedExerciseSetLines(otherTodayCompletedRows.rows).join("\n")
         : "No other completed exercises logged today.";
-
-    const pastByDate = new Map<string, { exerciseNotes: string | null; sets: string[] }>();
-    for (const row of pastRows.rows) {
-      if (!pastByDate.has(row.record_date)) {
-        if (pastByDate.size >= EXERCISE_FEEDBACK_HISTORY_LIMIT) {
-          continue;
-        }
-        pastByDate.set(row.record_date, {
-          exerciseNotes: normalizeAdviceNote(row.exercise_notes),
-          sets: []
-        });
-      }
-      const notesSuffix = row.set_notes ? ` (set note: ${normalizeAdviceNote(row.set_notes)})` : "";
-      pastByDate
-        .get(row.record_date)!
-        .sets.push(`set ${row.set_order + 1}: ${row.reps} reps @ ${row.weight} kg${notesSuffix}`);
-    }
-
-    const pastText =
-      pastByDate.size > 0
-        ? Array.from(pastByDate.entries())
-            .map(
-              ([recordDate, session]) =>
-                `${recordDate} | exercise note: ${session.exerciseNotes ?? "none"} | ${session.sets.join(", ")}`
-            )
-            .join("\n")
-        : "No prior completed records for this exercise.";
 
     if (!llmProvider) {
       return fallback(
@@ -1287,8 +1258,7 @@ Today's exercise note: ${todayExerciseNotes}
 Other completed exercises today:
 ${otherTodayExercisesText}
 
-Past ${EXERCISE_FEEDBACK_HISTORY_LIMIT} completed records for this exercise (with dates):
-${pastText}
+${pastPromptSection}
 
 Respond with ONLY JSON:
 {"review":"<concise feedback on incremental progress, form/load management, and next-step suggestion>"}`
