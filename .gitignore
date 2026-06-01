@@ -15,3 +15,5 @@ mobile/.env
 backend/.env
 
 .cursor/*
+
+.idea

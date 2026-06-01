@@ -7,6 +7,7 @@ import { pool } from "../db.js";
 type SourceExercise = {
   id: string;
   name: string;
+  category?: string;
   primaryMuscles?: string[];
   images?: string[];
 };
@@ -17,14 +18,13 @@ type ExerciseSeedRow = {
   name: string;
   muscleGroup: string | null;
   imagePath: string | null;
+  category: string | null;
 };
 
 const SOURCE_DATA_URL =
   "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json";
 const SOURCE_IMAGE_BASE_URL =
   "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises";
-const BENCH_PRESS_ID = "20000000-0000-0000-0000-000000000001";
-const SQUAT_ID = "20000000-0000-0000-0000-000000000003";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,21 +47,21 @@ function mapRows(sourceRows: SourceExercise[]): ExerciseSeedRow[] {
   return sourceRows.map((row) => {
     const imagePath = row.images?.[0] ? `/exercises/${row.images[0]}` : null;
     const muscleGroup = row.primaryMuscles?.[0] ?? null;
-    let id = toDeterministicUuid(`free-exercise-db:${row.id}`);
-    if (row.name === "Bench Press") {
-      id = BENCH_PRESS_ID;
-    } else if (row.name === "Squat") {
-      id = SQUAT_ID;
-    }
+    const id = toDeterministicUuid(`free-exercise-db:${row.id}`);
 
     return {
       id,
       sourceId: row.id,
       name: row.name,
       muscleGroup,
-      imagePath
+      imagePath,
+      category: row.category ?? null
     };
   });
+}
+
+function cacheNeedsRefresh(rows: ExerciseSeedRow[] | null): boolean {
+  return !rows || rows.length === 0 || rows.some((row) => !row.category);
 }
 
 async function fetchSourceRows(): Promise<SourceExercise[]> {
@@ -127,11 +127,16 @@ export async function syncExerciseDb(options?: {
   const shouldDownloadImages = options?.downloadImages ?? false;
   const imageLimit = options?.imageLimit ?? Number.POSITIVE_INFINITY;
 
-  const cached = preferCache ? await readCachedRows() : null;
+  let cached = preferCache ? await readCachedRows() : null;
+  if (cacheNeedsRefresh(cached)) {
+    cached = null;
+  }
+
+  const shouldWriteCache = !cached || cached.length === 0;
   const rows =
     cached && cached.length > 0 ? cached : mapRows(await fetchSourceRows());
 
-  if (!cached || cached.length === 0) {
+  if (shouldWriteCache) {
     await writeCache(rows);
   }
 
@@ -139,7 +144,8 @@ export async function syncExerciseDb(options?: {
     ALTER TABLE exercise_items
       ALTER COLUMN name TYPE VARCHAR(255),
       ADD COLUMN IF NOT EXISTS source_id VARCHAR(150),
-      ADD COLUMN IF NOT EXISTS image_path VARCHAR(255)
+      ADD COLUMN IF NOT EXISTS image_path VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS category VARCHAR(60)
   `);
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS exercise_items_source_id_unique
@@ -157,23 +163,24 @@ export async function syncExerciseDb(options?: {
         source_id VARCHAR(150) NOT NULL,
         name VARCHAR(255) NOT NULL,
         muscle_group VARCHAR(60),
-        image_path VARCHAR(255)
+        image_path VARCHAR(255),
+        category VARCHAR(60)
       ) ON COMMIT DROP
     `);
 
     for (const row of rows) {
       await client.query(
         `
-          INSERT INTO _incoming_exercise_items (id, source_id, name, muscle_group, image_path)
-          VALUES ($1::uuid, $2, $3, $4, $5)
+          INSERT INTO _incoming_exercise_items (id, source_id, name, muscle_group, image_path, category)
+          VALUES ($1::uuid, $2, $3, $4, $5, $6)
         `,
-        [row.id, row.sourceId, row.name, row.muscleGroup, row.imagePath]
+        [row.id, row.sourceId, row.name, row.muscleGroup, row.imagePath, row.category]
       );
     }
 
     await client.query(`
-      INSERT INTO exercise_items (id, source_id, name, muscle_group, image_path)
-      SELECT id, source_id, name, muscle_group, image_path
+      INSERT INTO exercise_items (id, source_id, name, muscle_group, image_path, category)
+      SELECT id, source_id, name, muscle_group, image_path, category
       FROM _incoming_exercise_items
       ON CONFLICT (id) DO UPDATE
       SET
@@ -181,21 +188,8 @@ export async function syncExerciseDb(options?: {
         name = EXCLUDED.name,
         muscle_group = EXCLUDED.muscle_group,
         image_path = EXCLUDED.image_path,
+        category = EXCLUDED.category,
         updated_at = now()
-    `);
-
-    await client.query(`
-      UPDATE exercises e
-      SET exercise_item_id = incoming.id
-      FROM exercise_items legacy
-      JOIN _incoming_exercise_items incoming
-        ON lower(incoming.name) = lower(legacy.name)
-        OR (
-          lower(legacy.name) = 'barbell row'
-          AND lower(incoming.name) = 'bent over barbell row'
-        )
-      WHERE e.exercise_item_id = legacy.id
-        AND legacy.id <> incoming.id
     `);
 
     await client.query(`
@@ -258,4 +252,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       await pool.end();
     });
 }
-

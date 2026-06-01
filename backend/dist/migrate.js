@@ -45,13 +45,15 @@ async function run() {
     const exerciseItemsStats = await pool.query(`
     SELECT
       COUNT(*)::text AS total,
-      COUNT(*) FILTER (WHERE source_id IS NOT NULL)::text AS seeded
+      COUNT(*) FILTER (WHERE source_id IS NOT NULL)::text AS seeded,
+      COUNT(*) FILTER (WHERE source_id IS NOT NULL AND category IS NULL)::text AS missing_category
     FROM exercise_items
   `);
     const stats = exerciseItemsStats.rows[0];
     const total = Number(stats?.total ?? "0");
     const seeded = Number(stats?.seeded ?? "0");
-    if (total < 700 || seeded < 700) {
+    const missingCategory = Number(stats?.missing_category ?? "0");
+    if (total < 700 || seeded < 700 || missingCategory > 0) {
         const result = await syncExerciseDb({ preferCache: true, downloadImages: false });
         console.log(`Synced exercise DB dataset: ${result.totalRows} rows, ${result.downloadedImages} images downloaded`);
     }
