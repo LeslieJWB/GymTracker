@@ -30,6 +30,7 @@ export type RecordSummary = {
   theme: string | null;
   exerciseCount: number;
   setCount: number;
+  sessionCount: number;
 };
 
 export type RecordExerciseSummary = {
@@ -37,10 +38,14 @@ export type RecordExerciseSummary = {
   exerciseItemId: string;
   exerciseItemName: string;
   exerciseItemImageUrl: string | null;
+  exerciseItemCategory: string | null;
   notes: string | null;
   sortOrder: number;
   setCount: number;
   completedVolume: number;
+  sessionCount: number;
+  completedDurationSeconds: number;
+  completedDistanceKm: number;
   updatedAt: string;
 };
 
@@ -103,6 +108,13 @@ export type ExerciseDailyMetricsPoint = {
   topSetVolume: number;
 };
 
+export type CardioDailyMetricsPoint = {
+  date: string;
+  dailyDurationSeconds: number;
+  dailyDistanceKm: number;
+  longestSessionSeconds: number;
+};
+
 export type NutritionDailyPoint = {
   date: string;
   totalCaloriesKcal: number;
@@ -115,6 +127,7 @@ export type ExerciseItem = {
   name: string;
   muscleGroup: string | null;
   imageUrl: string | null;
+  category: string | null;
 };
 
 export type ExerciseSet = {
@@ -126,16 +139,27 @@ export type ExerciseSet = {
   isCompleted: boolean;
 };
 
+export type CardioSession = {
+  id: string;
+  durationSeconds: number;
+  distanceKm: number | null;
+  sessionOrder: number;
+  notes: string | null;
+  isCompleted: boolean;
+};
+
 export type ExerciseDetail = {
   id: string;
   recordId: string;
   exerciseItemId: string;
   exerciseItemName: string;
   exerciseItemImageUrl: string | null;
+  exerciseItemCategory: string | null;
   notes: string | null;
   sortOrder: number;
   updatedAt: string;
   sets: ExerciseSet[];
+  sessions: CardioSession[];
 };
 
 export type WorkoutTemplateSummary = {
@@ -173,3 +197,5 @@ export type WorkoutTemplateDetail = {
 
 export type SetDraft = { reps: string; weight: string; notes: string };
 export type SetDrafts = Record<string, SetDraft>;
+export type CardioSessionDraft = { duration: string; distance: string; notes: string };
+export type CardioSessionDrafts = Record<string, CardioSessionDraft>;

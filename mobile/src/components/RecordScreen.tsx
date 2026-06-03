@@ -23,18 +23,29 @@ import { appStyles } from "../styles/appStyles";
 import { RecordCheckInSection } from "./record/RecordCheckInSection";
 import { RecordDailyOverviewSection } from "./record/RecordDailyOverviewSection";
 import { RecordTemplateActionsSection } from "./record/RecordTemplateActionsSection";
+import { StrengthExerciseCard } from "./record/StrengthExerciseCard";
+import { CardioExerciseCard } from "./record/CardioExerciseCard";
 import { SwipeActionRow } from "./SwipeActionRow";
 import {
   AdviceReviewResult,
+  CardioSessionDraft,
+  CardioSessionDrafts,
   DailyNutritionTargets,
   ExerciseDetail,
   ExerciseItem,
   RecordDetail,
+  RecordExerciseSummary,
   SetDraft,
   SetDrafts,
   User,
   WorkoutTemplateSummary
 } from "../types/workout";
+import {
+  categoryMatchesLoggingMode,
+  isCardioCategory,
+  isStrengthCategory,
+  type LoggingMode
+} from "../utils/exerciseCategories";
 import { normalizeSearchText, sanitizeBodyFatInput, sanitizeIntegerInput, sanitizeWeightInput } from "../utils/inputSanitizers";
 
 export type NewExerciseSetDraft = {
@@ -46,6 +57,7 @@ export type NewExerciseSetDraft = {
 
 export type NewExerciseDraft = {
   exerciseItemId: string;
+  loggingMode?: LoggingMode;
   notes?: string;
   initialSets: NewExerciseSetDraft[];
 };
@@ -91,6 +103,13 @@ type RecordScreenProps = {
   ) => Promise<{ sets: { reps: number; weight: number }[]; advice: string }>;
   deleteSet: (exerciseId: string, setId: string) => void;
   toggleSetCompleted: (exerciseId: string, setId: string) => void;
+  cardioSessionDraftsByExerciseId: Record<string, CardioSessionDrafts>;
+  savingCardioSessionIdsByExerciseId: Record<string, Record<string, boolean>>;
+  setCardioSessionDraft: (exerciseId: string, sessionId: string, draft: CardioSessionDraft) => void;
+  saveCardioSession: (exerciseId: string, sessionId: string) => Promise<void>;
+  addCardioSession: (exerciseId: string) => Promise<boolean>;
+  deleteCardioSession: (exerciseId: string, sessionId: string) => Promise<void>;
+  toggleCardioSessionCompleted: (exerciseId: string, sessionId: string) => Promise<void>;
   user: User | null;
   savingFoodConsumption: boolean;
   deletingFoodIds: Record<string, boolean>;
@@ -152,6 +171,13 @@ export function RecordScreen({
   fetchExercisePlan,
   deleteSet,
   toggleSetCompleted,
+  cardioSessionDraftsByExerciseId,
+  savingCardioSessionIdsByExerciseId,
+  setCardioSessionDraft,
+  saveCardioSession,
+  addCardioSession,
+  deleteCardioSession,
+  toggleCardioSessionCompleted,
   user,
   savingFoodConsumption,
   deletingFoodIds,
@@ -176,6 +202,7 @@ export function RecordScreen({
   llmQuota
 }: RecordScreenProps) {
   const [showExerciseSearchModal, setShowExerciseSearchModal] = useState(false);
+  const [exerciseSearchMode, setExerciseSearchMode] = useState<LoggingMode>("strength");
   const [exerciseSearchTerm, setExerciseSearchTerm] = useState("");
   const [showTemplateSaveModal, setShowTemplateSaveModal] = useState(false);
   const [templateNameDraft, setTemplateNameDraft] = useState("");
@@ -192,6 +219,7 @@ export function RecordScreen({
     id: string;
     exerciseItemId: string;
     exerciseItemName: string;
+    isCardio: boolean;
   } | null>(null);
   const [adviceTarget, setAdviceTarget] = useState<{
     exerciseId: string;
@@ -218,7 +246,8 @@ export function RecordScreen({
   const [feedbackResult, setFeedbackResult] = useState<AdviceReviewResult | null>(null);
   const [recordDetailTab, setRecordDetailTab] = useState<"exercise" | "food">("exercise");
   const [foodSectionExpanded, setFoodSectionExpanded] = useState(false);
-  const [exerciseSectionExpanded, setExerciseSectionExpanded] = useState(true);
+  const [strengthSectionExpanded, setStrengthSectionExpanded] = useState(true);
+  const [cardioSectionExpanded, setCardioSectionExpanded] = useState(true);
   const [showFoodComposerModal, setShowFoodComposerModal] = useState(false);
   const [foodTextDraft, setFoodTextDraft] = useState("");
   const [foodImageDraft, setFoodImageDraft] = useState<FoodImageDraft | null>(null);
@@ -229,6 +258,13 @@ export function RecordScreen({
     setNumber: number;
     exerciseName: string;
   } | null>(null);
+  const [sessionNotesTarget, setSessionNotesTarget] = useState<{
+    exerciseId: string;
+    sessionId: string;
+    sessionNumber: number;
+    exerciseName: string;
+  } | null>(null);
+  const sessionNotesDraftRef = useRef("");
   const [exerciseNotesTarget, setExerciseNotesTarget] = useState<{
     exerciseId: string;
     exerciseName: string;
@@ -238,9 +274,13 @@ export function RecordScreen({
   const keyboardAccessoryVisible = keyboardVisible || focusedInputCurrent >= 0;
   const foodComposerToolbarEnabled = showFoodComposerModal && keyboardAccessoryVisible;
   const setNotesToolbarEnabled = setNotesTarget !== null && keyboardAccessoryVisible;
+  const sessionNotesToolbarEnabled = sessionNotesTarget !== null && keyboardAccessoryVisible;
   const exerciseNotesToolbarEnabled = exerciseNotesTarget !== null && keyboardAccessoryVisible;
   const keyboardModalOpen =
-    showFoodComposerModal || setNotesTarget !== null || exerciseNotesTarget !== null;
+    showFoodComposerModal ||
+    setNotesTarget !== null ||
+    sessionNotesTarget !== null ||
+    exerciseNotesTarget !== null;
 
   useEffect(() => {
     setToolbarSuppressed(keyboardModalOpen);
@@ -248,13 +288,17 @@ export function RecordScreen({
   }, [keyboardModalOpen, setToolbarSuppressed]);
 
   const expandedIds = useMemo(() => new Set(expandedExerciseIds), [expandedExerciseIds]);
+  const searchableExerciseItems = useMemo(
+    () => exerciseItems.filter((item) => categoryMatchesLoggingMode(item.category, exerciseSearchMode)),
+    [exerciseItems, exerciseSearchMode]
+  );
   const filteredExerciseItems = useMemo(() => {
     const normalizedQuery = normalizeSearchText(exerciseSearchTerm);
     if (!normalizedQuery) {
-      return exerciseItems;
+      return searchableExerciseItems;
     }
     const queryTerms = normalizedQuery.split(" ").filter(Boolean);
-    return exerciseItems
+    return searchableExerciseItems
       .map((item) => {
         const normalizedName = normalizeSearchText(item.name);
         const nameTerms = normalizedName.split(" ").filter(Boolean);
@@ -282,7 +326,21 @@ export function RecordScreen({
       .filter((entry): entry is { item: ExerciseItem; score: number } => entry !== null)
       .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name))
       .map((entry) => entry.item);
-  }, [exerciseItems, exerciseSearchTerm]);
+  }, [searchableExerciseItems, exerciseSearchTerm]);
+  const strengthExercises = useMemo(
+    () =>
+      (recordDetail?.exercises ?? []).filter((item) =>
+        isStrengthCategory(item.exerciseItemCategory ?? exerciseItems.find((e) => e.id === item.exerciseItemId)?.category)
+      ),
+    [recordDetail?.exercises, exerciseItems]
+  );
+  const cardioExercises = useMemo(
+    () =>
+      (recordDetail?.exercises ?? []).filter((item) =>
+        isCardioCategory(item.exerciseItemCategory ?? exerciseItems.find((e) => e.id === item.exerciseItemId)?.category)
+      ),
+    [recordDetail?.exercises, exerciseItems]
+  );
   const filteredTemplateOptions = useMemo(() => {
     const normalizedQuery = normalizeSearchText(templateSearchTerm);
     if (!normalizedQuery) {
@@ -321,23 +379,33 @@ export function RecordScreen({
 
   const completedSetCountByExerciseId = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const exercise of recordDetail?.exercises ?? []) {
+    for (const exercise of strengthExercises) {
       const detail = exerciseDetailsById[exercise.id];
       counts[exercise.id] = detail
         ? detail.sets.reduce((sum, setItem) => sum + (setItem.isCompleted ? 1 : 0), 0)
         : exercise.setCount;
     }
     return counts;
-  }, [recordDetail?.exercises, exerciseDetailsById]);
-  const totalSetCount = useMemo(
-    () => Object.values(completedSetCountByExerciseId).reduce((sum, setCount) => sum + setCount, 0),
-    [completedSetCountByExerciseId]
-  );
+  }, [strengthExercises, exerciseDetailsById]);
+  const totalCardioSeconds = useMemo(() => {
+    return cardioExercises.reduce((sum, item) => {
+      const detail = exerciseDetailsById[item.id];
+      if (detail) {
+        return (
+          sum +
+          detail.sessions.reduce(
+            (sessionSum, session) => sessionSum + (session.isCompleted ? session.durationSeconds : 0),
+            0
+          )
+        );
+      }
+      return sum + (item.completedDurationSeconds ?? 0);
+    }, 0);
+  }, [cardioExercises, exerciseDetailsById]);
   const totalVolume = useMemo(
     () => {
-      const exercises = recordDetail?.exercises ?? [];
       const missingDetailIds: string[] = [];
-      const total = exercises.reduce((sum, item) => {
+      const total = strengthExercises.reduce((sum, item) => {
         const detail = exerciseDetailsById[item.id];
         if (!detail) {
           missingDetailIds.push(item.id);
@@ -354,7 +422,7 @@ export function RecordScreen({
       }, 0);
       return total;
     },
-    [recordDetail?.exercises, exerciseDetailsById]
+    [strengthExercises, exerciseDetailsById]
   );
   const trimmedThemeDraft = recordThemeDraft.trim();
   const savedTheme = (recordDetail?.theme ?? "").trim();
@@ -512,7 +580,8 @@ export function RecordScreen({
     });
   }
 
-  function openExerciseSearchModal(): void {
+  function openExerciseSearchModal(mode: LoggingMode): void {
+    setExerciseSearchMode(mode);
     setExerciseSearchTerm("");
     setShowExerciseSearchModal(true);
   }
@@ -641,8 +710,13 @@ export function RecordScreen({
     setExerciseSearchTerm("");
     await addExercise({
       exerciseItemId: exerciseItem.id,
+      loggingMode: exerciseSearchMode,
       initialSets: []
     });
+  }
+
+  async function addCardioSessionForExercise(exerciseId: string): Promise<void> {
+    await addCardioSession(exerciseId);
   }
 
   async function addSetForExercise(exerciseId: string): Promise<void> {
@@ -660,8 +734,15 @@ export function RecordScreen({
     });
   }
 
-  function openExerciseMenu(item: { id: string; exerciseItemId: string; exerciseItemName: string }): void {
-    setExerciseMenuTarget({ id: item.id, exerciseItemId: item.exerciseItemId, exerciseItemName: item.exerciseItemName });
+  function openExerciseMenu(item: RecordExerciseSummary): void {
+    const category =
+      item.exerciseItemCategory ?? exerciseItems.find((entry) => entry.id === item.exerciseItemId)?.category ?? null;
+    setExerciseMenuTarget({
+      id: item.id,
+      exerciseItemId: item.exerciseItemId,
+      exerciseItemName: item.exerciseItemName,
+      isCardio: isCardioCategory(category)
+    });
   }
 
   function closeExerciseMenu(): void {
@@ -679,6 +760,21 @@ export function RecordScreen({
 
   function closeSetNotesSheet(): void {
     setSetNotesTarget(null);
+  }
+
+  function openSessionNotesSheet(input: {
+    exerciseId: string;
+    sessionId: string;
+    sessionNumber: number;
+    exerciseName: string;
+  }): void {
+    const draft = cardioSessionDraftsByExerciseId[input.exerciseId]?.[input.sessionId];
+    sessionNotesDraftRef.current = draft?.notes ?? "";
+    setSessionNotesTarget(input);
+  }
+
+  function closeSessionNotesSheet(): void {
+    setSessionNotesTarget(null);
   }
 
   function openExerciseNotesSheet(): void {
@@ -821,7 +917,7 @@ export function RecordScreen({
       <RecordDailyOverviewSection
         styles={styles}
         totalVolume={totalVolume}
-        totalSetCount={totalSetCount}
+        totalCardioSeconds={totalCardioSeconds}
         totalCaloriesKcal={totalCaloriesKcal}
         calorieTarget={calorieTarget}
         calorieOverflow={calorieOverflow}
@@ -879,7 +975,8 @@ export function RecordScreen({
           ]}
           onPress={() => {
             setRecordDetailTab("exercise");
-            setExerciseSectionExpanded(true);
+            setStrengthSectionExpanded(true);
+            setCardioSectionExpanded(true);
           }}
         >
           <Text
@@ -969,218 +1066,129 @@ export function RecordScreen({
 
       {recordDetailTab === "exercise" ? (
         <>
-          <Pressable
-            style={styles.exerciseLogHeader}
-            onPress={() => setExerciseSectionExpanded((current) => !current)}
-          >
-            <View>
-              <Text style={styles.exerciseLogTitle}>Exercise Log</Text>
-            </View>
-            <Text style={styles.foodCardChevron}>{exerciseSectionExpanded ? "▾" : "▸"}</Text>
-          </Pressable>
-          {exerciseSectionExpanded ? (
-            <>
-          {(recordDetail?.exercises ?? []).length === 0 ? (
-            <View style={styles.emptyStateCard}>
-              <Text style={styles.emptyStateTitle}>No exercises yet</Text>
-              <Text style={appStyles.emptyText}>Tap Add Exercise to start your workout log.</Text>
-            </View>
-          ) : (
-            (recordDetail?.exercises ?? []).map((item) => {
-              const detail = exerciseDetailsById[item.id];
-              const setDrafts = setDraftsByExerciseId[item.id] ?? {};
-              const savingSetIds = savingSetIdsByExerciseId[item.id] ?? {};
-              const isExpanded = expandedIds.has(item.id);
-
-              return (
-                <View key={item.id} style={styles.exerciseCard}>
-                  <View style={styles.exerciseCardHeader}>
-                    <Pressable
-                      style={styles.exerciseHeaderTapArea}
-                      onPress={() => toggleExerciseExpanded(item.id)}
-                    >
-                      <View style={styles.exerciseHeaderLeft}>
-                        {item.exerciseItemImageUrl ? (
-                          <Image source={{ uri: item.exerciseItemImageUrl }} style={styles.exerciseThumb} />
-                        ) : (
-                          <View style={styles.exerciseThumbPlaceholder}>
-                            <Text style={styles.exerciseThumbPlaceholderText}>No Image</Text>
-                          </View>
-                        )}
-                        <View style={styles.exerciseHeaderText}>
-                          <Text style={styles.exerciseTitle}>{item.exerciseItemName}</Text>
-                          <Text style={styles.exerciseSubtitle}>
-                            {completedSetCountByExerciseId[item.id] ?? 0} sets
-                          </Text>
-                        </View>
-                      </View>
-                    </Pressable>
-                    <TouchableOpacity
-                      style={styles.exerciseMenuButton}
-                      onPress={() => openExerciseMenu(item)}
-                      disabled={loading}
-                    >
-                      <Text style={styles.exerciseMenuButtonText}>⋮</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {isExpanded ? (
-                    <>
-                      {!detail ? (
-                        <View style={styles.loadingExerciseCard}>
-                          <Text style={styles.statusText}>Loading sets...</Text>
-                        </View>
-                      ) : (
-                        <>
-                          <View style={styles.setTableHeader}>
-                            <Text style={[styles.setHeaderText, styles.colSet]}>SET</Text>
-                            <Text style={[styles.setHeaderText, styles.colWeight]}>KG</Text>
-                            <Text style={[styles.setHeaderText, styles.colReps]}>REPS</Text>
-                            <Text style={[styles.setHeaderText, styles.colNotes]}>NOTES</Text>
-                            <Text style={[styles.setHeaderText, styles.colCheck]}>✓</Text>
-                          </View>
-
-                          {detail.sets.length === 0 ? (
-                            <View style={styles.emptySetCard}>
-                              <Text style={appStyles.emptyText}>No sets yet.</Text>
-                            </View>
-                          ) : (
-                            detail.sets.map((setItem, index) => {
-                              const draft = setDrafts[setItem.id] ?? {
-                                reps: String(setItem.reps),
-                                weight: String(setItem.weight),
-                                notes: setItem.notes ?? ""
-                              };
-                              const isCompleted = setItem.isCompleted;
-                              return (
-                                <View key={setItem.id} style={styles.setRowSwipeWrap}>
-                                  <SwipeActionRow
-                                    onAction={() => deleteSet(item.id, setItem.id)}
-                                    disabled={loading || Boolean(savingSetIds[setItem.id])}
-                                    borderRadius={0}
-                                    marginBottom={0}
-                                    actionLabel="Delete"
-                                  >
-                                    <View
-                                      style={[
-                                        styles.setRowWrap,
-                                        index % 2 === 0 ? styles.setRowEven : styles.setRowOdd,
-                                        isCompleted ? styles.setRowCompleted : null
-                                      ]}
-                                    >
-                                      <View style={styles.setRow}>
-                                        <Text style={[styles.setCellText, styles.colSet, isCompleted ? styles.setCellTextCompleted : null]}>
-                                          {index + 1}
-                                        </Text>
-                                        <TextInput
-                                          style={[styles.setRowInput, styles.colWeight, isCompleted ? styles.setRowInputCompleted : null]}
-                                          value={draft.weight}
-                                          onChangeText={(text) =>
-                                            setSetDraft(item.id, setItem.id, {
-                                              reps: draft.reps,
-                                              weight: sanitizeWeightInput(text),
-                                              notes: draft.notes
-                                            })
-                                          }
-                                          keyboardType="decimal-pad"
-                              
-                                          placeholder="0"
-                                          placeholderTextColor="#78786C"
-                                          onBlur={() => saveSet(item.id, setItem.id)}
-                                        />
-                                        <TextInput
-                                          style={[styles.setRowInput, styles.colReps, isCompleted ? styles.setRowInputCompleted : null]}
-                                          value={draft.reps}
-                                          onChangeText={(text) =>
-                                            setSetDraft(item.id, setItem.id, {
-                                              reps: sanitizeIntegerInput(text),
-                                              weight: draft.weight,
-                                              notes: draft.notes
-                                            })
-                                          }
-                                          keyboardType="numeric"
-                              
-                                          placeholder="0"
-                                          placeholderTextColor="#78786C"
-                                          onBlur={() => saveSet(item.id, setItem.id)}
-                                        />
-                                        <View style={styles.colNotes}>
-                                          <TouchableOpacity
-                                            style={styles.notePill}
-                                            onPress={() =>
-                                              openSetNotesSheet({
-                                                exerciseId: item.id,
-                                                setId: setItem.id,
-                                                setNumber: index + 1,
-                                                exerciseName: item.exerciseItemName
-                                              })
-                                            }
-                                            disabled={loading || Boolean(savingSetIds[setItem.id])}
-                                          >
-                                            <Text style={styles.notePillText}>
-                                              {draft.notes.trim().length > 0 ? "View" : "Add"}
-                                            </Text>
-                                          </TouchableOpacity>
-                                        </View>
-                                        <View style={styles.colCheck}>
-                                          <Pressable
-                                            style={[styles.checkPill, isCompleted ? styles.checkPillCompleted : null]}
-                                            onPress={() => toggleSetCompleted(item.id, setItem.id)}
-                                            disabled={loading || Boolean(savingSetIds[setItem.id])}
-                                          >
-                                            <Text style={styles.checkPillText}>
-                                              {savingSetIds[setItem.id] ? "..." : "✓"}
-                                            </Text>
-                                          </Pressable>
-                                        </View>
-                                      </View>
-                                    </View>
-                                  </SwipeActionRow>
-                                </View>
-                              );
-                            })
-                          )}
-
-                          <TouchableOpacity
-                            style={styles.addSetSimpleButton}
-                            onPress={() => {
-                              addSetForExercise(item.id).catch(() => {});
-                            }}
-                            disabled={loading || !user}
-                          >
-                            <Text style={styles.addSetSimpleButtonText}>+ Add Set</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.addSetSimpleButton}
-                            onPress={() => {
-                              openAdviceSheetForExercise(item);
-                            }}
-                            disabled={loading || !user}
-                          >
-                            <Text style={styles.addSetSimpleButtonText}>Add AI Recommended Sets</Text>
-                          </TouchableOpacity>
-                        </>
-                      )}
-                    </>
-                  ) : null}
+          <View style={styles.exerciseLogHeader}>
+            <Text style={styles.exerciseLogTitle}>Exercise Log</Text>
+          </View>
+          <View style={styles.exerciseSectionBlock}>
+            <Pressable
+              style={styles.exerciseSectionHeader}
+              onPress={() => setStrengthSectionExpanded((current) => !current)}
+            >
+              <Text style={styles.exerciseSectionLabel}>Strength Training</Text>
+              <Text style={styles.foodCardChevron}>{strengthSectionExpanded ? "▾" : "▸"}</Text>
+            </Pressable>
+            {strengthSectionExpanded ? (
+              strengthExercises.length === 0 ? (
+                <View style={styles.sectionEmptyStateCard}>
+                  <Text style={appStyles.emptyText}>No strength exercises yet.</Text>
                 </View>
-              );
-            })
-          )}
-          </>
-          ) : null}
-          <RecordTemplateActionsSection
-            styles={styles}
-            loading={loading}
-            user={user}
-            canSaveTemplate={canSaveTemplate}
-            canLoadTemplate={canLoadTemplate}
-            openExerciseSearchModal={openExerciseSearchModal}
-            openTemplateSaveModal={openTemplateSaveModal}
-            openTemplateLoadModal={() => {
-              openTemplateLoadModal().catch(() => {});
-            }}
-          />
+              ) : (
+                strengthExercises.map((item) => (
+                  <StrengthExerciseCard
+                    key={item.id}
+                    styles={styles}
+                    item={item}
+                    detail={exerciseDetailsById[item.id]}
+                    setDrafts={setDraftsByExerciseId[item.id] ?? {}}
+                    savingSetIds={savingSetIdsByExerciseId[item.id] ?? {}}
+                    isExpanded={expandedIds.has(item.id)}
+                    completedSetCount={completedSetCountByExerciseId[item.id] ?? 0}
+                    loading={loading}
+                    user={user}
+                    toggleExerciseExpanded={toggleExerciseExpanded}
+                    openExerciseMenu={openExerciseMenu}
+                    setSetDraft={setSetDraft}
+                    saveSet={saveSet}
+                    deleteSet={deleteSet}
+                    toggleSetCompleted={toggleSetCompleted}
+                    addSetForExercise={(exerciseId) => {
+                      addSetForExercise(exerciseId).catch(() => {});
+                    }}
+                    openAdviceSheetForExercise={openAdviceSheetForExercise}
+                    openSetNotesSheet={openSetNotesSheet}
+                  />
+                ))
+              )
+            ) : null}
+            <TouchableOpacity
+              style={[
+                styles.openAddModalButton,
+                styles.openAddStrengthButton,
+                loading || !user ? styles.primaryActionButtonDisabled : null
+              ]}
+              onPress={() => openExerciseSearchModal("strength")}
+              disabled={loading || !user}
+            >
+              <Text style={styles.openAddModalButtonText}>+ Add Strength Exercise</Text>
+            </TouchableOpacity>
+            <RecordTemplateActionsSection
+              styles={styles}
+              canSaveTemplate={canSaveTemplate}
+              canLoadTemplate={canLoadTemplate}
+              openTemplateSaveModal={openTemplateSaveModal}
+              openTemplateLoadModal={() => {
+                openTemplateLoadModal().catch(() => {});
+              }}
+            />
+          </View>
+
+          <View style={styles.exerciseSectionBlock}>
+            <Pressable
+              style={styles.exerciseSectionHeader}
+              onPress={() => setCardioSectionExpanded((current) => !current)}
+            >
+              <Text style={styles.exerciseSectionLabel}>Cardio</Text>
+              <Text style={styles.foodCardChevron}>{cardioSectionExpanded ? "▾" : "▸"}</Text>
+            </Pressable>
+            {cardioSectionExpanded ? (
+              cardioExercises.length === 0 ? (
+                <View style={styles.sectionEmptyStateCard}>
+                  <Text style={appStyles.emptyText}>No cardio exercises yet.</Text>
+                </View>
+              ) : (
+                cardioExercises.map((item) => (
+                  <CardioExerciseCard
+                    key={item.id}
+                    styles={styles}
+                    item={item}
+                    detail={exerciseDetailsById[item.id]}
+                    sessionDrafts={cardioSessionDraftsByExerciseId[item.id] ?? {}}
+                    savingSessionIds={savingCardioSessionIdsByExerciseId[item.id] ?? {}}
+                    isExpanded={expandedIds.has(item.id)}
+                    loading={loading}
+                    user={user}
+                    toggleExerciseExpanded={toggleExerciseExpanded}
+                    openExerciseMenu={openExerciseMenu}
+                    setCardioSessionDraft={setCardioSessionDraft}
+                    saveCardioSession={(exerciseId, sessionId) => {
+                      void saveCardioSession(exerciseId, sessionId);
+                    }}
+                    deleteCardioSession={(exerciseId, sessionId) => {
+                      void deleteCardioSession(exerciseId, sessionId);
+                    }}
+                    toggleCardioSessionCompleted={(exerciseId, sessionId) => {
+                      void toggleCardioSessionCompleted(exerciseId, sessionId);
+                    }}
+                    addCardioSessionForExercise={(exerciseId) => {
+                      addCardioSessionForExercise(exerciseId).catch(() => {});
+                    }}
+                    openSessionNotesSheet={openSessionNotesSheet}
+                  />
+                ))
+              )
+            ) : null}
+            <TouchableOpacity
+              style={[
+                styles.openAddModalButton,
+                styles.openAddCardioButton,
+                loading || !user ? styles.cardioActionButtonDisabled : null
+              ]}
+              onPress={() => openExerciseSearchModal("cardio")}
+              disabled={loading || !user}
+            >
+              <Text style={styles.openAddModalButtonText}>+ Add Cardio Exercise</Text>
+            </TouchableOpacity>
+          </View>
         </>
       ) : null}
 
@@ -1418,12 +1426,18 @@ export function RecordScreen({
           <Pressable style={styles.modalBackdropTapTarget} onPress={closeExerciseSearchModal} />
           <View style={styles.modalCard}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Find Exercise</Text>
+              <Text style={styles.modalTitle}>
+                {exerciseSearchMode === "cardio" ? "Find Cardio Exercise" : "Find Strength Exercise"}
+              </Text>
               <TouchableOpacity style={styles.modalCloseButton} onPress={closeExerciseSearchModal}>
                 <Text style={styles.modalCloseButtonText}>x</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>Search and pick an exercise to start logging.</Text>
+            <Text style={styles.modalSubtitle}>
+              {exerciseSearchMode === "cardio"
+                ? "Search and pick a cardio exercise to log duration and distance."
+                : "Search and pick a strength exercise to start logging sets."}
+            </Text>
             <TextInput
               style={styles.searchInput}
               value={exerciseSearchTerm}
@@ -1449,7 +1463,9 @@ export function RecordScreen({
                     }}
                   >
                     <Text style={styles.searchResultName}>{item.name}</Text>
-                    <Text style={styles.searchResultMeta}>{item.muscleGroup ?? "General"}</Text>
+                    <Text style={styles.searchResultMeta}>
+                      {exerciseSearchMode === "cardio" ? "Cardio" : item.muscleGroup ?? "General"}
+                    </Text>
                   </Pressable>
                 ))
               )}
@@ -1477,36 +1493,40 @@ export function RecordScreen({
             >
               <Text style={styles.menuRowText}>View / Edit Exercise Notes</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuRow}
-              onPress={() => {
-                const target = exerciseMenuTarget;
-                closeExerciseMenu();
-                if (target) {
-                  openAdviceSheetForExercise(target);
-                }
-              }}
-            >
-              <Text style={styles.menuRowText}>Add AI Recommended Sets</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuRow}
-              onPress={() => {
-                const target = exerciseMenuTarget;
-                closeExerciseMenu();
-                if (target) {
-                  tryStartAiFeature(() => {
-                    setFeedbackTarget({
-                      exerciseId: target.id,
-                      exerciseItemId: target.exerciseItemId,
-                      exerciseItemName: target.exerciseItemName
-                    });
-                  });
-                }
-              }}
-            >
-              <Text style={styles.menuRowText}>Get AI Feedback</Text>
-            </TouchableOpacity>
+            {!exerciseMenuTarget?.isCardio ? (
+              <>
+                <TouchableOpacity
+                  style={styles.menuRow}
+                  onPress={() => {
+                    const target = exerciseMenuTarget;
+                    closeExerciseMenu();
+                    if (target) {
+                      openAdviceSheetForExercise(target);
+                    }
+                  }}
+                >
+                  <Text style={styles.menuRowText}>Add AI Recommended Sets</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuRow}
+                  onPress={() => {
+                    const target = exerciseMenuTarget;
+                    closeExerciseMenu();
+                    if (target) {
+                      tryStartAiFeature(() => {
+                        setFeedbackTarget({
+                          exerciseId: target.id,
+                          exerciseItemId: target.exerciseItemId,
+                          exerciseItemName: target.exerciseItemName
+                        });
+                      });
+                    }
+                  }}
+                >
+                  <Text style={styles.menuRowText}>Get AI Feedback</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
             <TouchableOpacity
               style={styles.menuRow}
               onPress={() => {
@@ -1590,6 +1610,91 @@ export function RecordScreen({
             </View>
           </KeyboardAvoidingView>
           <AppKeyboardToolbar enabled={setNotesToolbarEnabled} />
+        </View>
+      </Modal>
+
+      <Modal
+        visible={sessionNotesTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeSessionNotesSheet}
+      >
+        <View style={styles.keyboardModalRoot}>
+          <KeyboardAvoidingView
+            style={styles.menuBackdrop}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={16 + keyboardToolbarBottomInset()}
+          >
+            <Pressable style={styles.modalBackdropTapTarget} onPress={closeSessionNotesSheet} />
+            <View style={styles.notesSheet}>
+              <View style={styles.menuHandle} />
+              {sessionNotesTarget ? (
+                <>
+                  <Text style={styles.notesSheetTitle}>
+                    Session {sessionNotesTarget.sessionNumber} Notes - {sessionNotesTarget.exerciseName}
+                  </Text>
+                  <Text style={styles.notesSheetSubtitle}>
+                    Notes are saved to this session and included in AI summary context.
+                  </Text>
+                  <TextInput
+                    style={styles.notesInput}
+                    multiline
+                    numberOfLines={4}
+                    value={
+                      cardioSessionDraftsByExerciseId[sessionNotesTarget.exerciseId]?.[sessionNotesTarget.sessionId]
+                        ?.notes ?? sessionNotesDraftRef.current
+                    }
+                    onChangeText={(value) => {
+                      sessionNotesDraftRef.current = value;
+                      const draft =
+                        cardioSessionDraftsByExerciseId[sessionNotesTarget.exerciseId]?.[sessionNotesTarget.sessionId];
+                      if (!draft) {
+                        return;
+                      }
+                      setCardioSessionDraft(sessionNotesTarget.exerciseId, sessionNotesTarget.sessionId, {
+                        duration: draft.duration,
+                        distance: draft.distance,
+                        notes: value
+                      });
+                    }}
+                    placeholder="e.g. Felt strong on the last 5 minutes"
+                    placeholderTextColor="#78786C"
+                    editable={
+                      !loading &&
+                      !savingCardioSessionIdsByExerciseId[sessionNotesTarget.exerciseId]?.[sessionNotesTarget.sessionId]
+                    }
+                    textAlignVertical="top"
+                    maxLength={400}
+                  />
+                  <View style={styles.notesActions}>
+                    <TouchableOpacity style={styles.composerCancelButton} onPress={closeSessionNotesSheet}>
+                      <Text style={styles.composerCancelButtonText}>Close</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.composerSaveButton}
+                      onPress={() => {
+                        saveCardioSession(sessionNotesTarget.exerciseId, sessionNotesTarget.sessionId);
+                        closeSessionNotesSheet();
+                      }}
+                      disabled={
+                        loading ||
+                        Boolean(
+                          savingCardioSessionIdsByExerciseId[sessionNotesTarget.exerciseId]?.[sessionNotesTarget.sessionId]
+                        )
+                      }
+                    >
+                      <Text style={styles.composerSaveButtonText}>
+                        {savingCardioSessionIdsByExerciseId[sessionNotesTarget.exerciseId]?.[sessionNotesTarget.sessionId]
+                          ? "Saving..."
+                          : "Save"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : null}
+            </View>
+          </KeyboardAvoidingView>
+          <AppKeyboardToolbar enabled={sessionNotesToolbarEnabled} />
         </View>
       </Modal>
 
@@ -2212,6 +2317,36 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#2C2C24"
   },
+  exerciseSectionBlock: {
+    marginTop: 12,
+    gap: 10
+  },
+  exerciseSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#DED8CF"
+  },
+  exerciseSectionLabel: {
+    color: "#78786C",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+    textTransform: "uppercase"
+  },
+  sectionEmptyStateCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    backgroundColor: "#F8F5EE",
+    paddingHorizontal: 14,
+    paddingVertical: 16
+  },
+  cardioThumbPlaceholder: {
+    backgroundColor: "#F1E4C8"
+  },
   foodCardHeader: {
     marginTop: 8,
     flexDirection: "row",
@@ -2458,6 +2593,12 @@ const styles = StyleSheet.create({
   colReps: {
     flex: 1.2
   },
+  colCardioTime: {
+    flex: 1.3
+  },
+  colCardioDistance: {
+    flex: 1
+  },
   colNotes: {
     flex: 1.1,
     alignItems: "center"
@@ -2511,47 +2652,34 @@ const styles = StyleSheet.create({
     fontWeight: "600"
   },
   templateActionStack: {
-    marginTop: 8,
-    gap: 8
-  },
-  templateActionCard: {
-    borderRadius: 22,
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 26,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 30,
-    borderWidth: 1,
-    borderColor: "#DED8CF",
-    backgroundColor: "#FEFEFA",
-    padding: 10
+    marginTop: 8
   },
   openAddModalButton: {
     borderRadius: 999,
-    paddingVertical: 11,
-    paddingHorizontal: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#5D7052",
-    shadowColor: "#5D7052",
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: {
-      width: 0,
-      height: 6
-    },
-    elevation: 4
+    backgroundColor: "#5D7052"
+  },
+  openAddStrengthButton: {
+    backgroundColor: "#5D7052"
+  },
+  openAddCardioButton: {
+    backgroundColor: "#A65D47"
   },
   openAddModalButtonText: {
     color: "#FEFEFA",
     fontSize: 16,
-    fontWeight: "800"
+    fontWeight: "600"
   },
   primaryActionButtonDisabled: {
-    backgroundColor: "#9CA796",
-    shadowOpacity: 0
+    backgroundColor: "#9CA796"
+  },
+  cardioActionButtonDisabled: {
+    backgroundColor: "#C9A59A"
   },
   templateSecondaryActionRow: {
-    marginTop: 8,
     flexDirection: "row",
     gap: 8
   },

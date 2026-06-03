@@ -39,6 +39,10 @@ import { appStyles } from "./src/styles/appStyles";
 import {
   AdviceReviewResult,
   BodyWeightRecord,
+  CardioDailyMetricsPoint,
+  CardioSession,
+  CardioSessionDraft,
+  CardioSessionDrafts,
   DailyNutritionTargets,
   ExerciseDailyMetricsPoint,
   ExerciseDetail,
@@ -59,6 +63,8 @@ import {
 } from "./src/types/workout";
 import { DATE_PATTERN, daysAgo, todayDate } from "./src/utils/date";
 import { parseDateValue, toDateString } from "./src/utils/dateInput";
+import { formatDuration, parseDurationInput } from "./src/utils/duration";
+import { isCardioCategory, isStrengthCategory } from "./src/utils/exerciseCategories";
 import { digitsOnly, sanitizeBodyFatInput, sanitizeWeightInput } from "./src/utils/inputSanitizers";
 import { requestKey } from "./src/utils/request";
 import { organicShapes, palette, radius, shadows, textStyles, withPressScale } from "./src/styles/theme";
@@ -81,6 +87,15 @@ const DEFAULT_BACKEND_URL = normalizeBackendBaseUrl(
 const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? "";
 const REVENUECAT_ENTITLEMENT_ID = process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID ?? "pro";
 type ExerciseDetailsById = Record<string, ExerciseDetail>;
+type CardioSessionDraftsByExerciseId = Record<string, CardioSessionDrafts>;
+type SavingCardioSessionIdsByExerciseId = Record<string, Record<string, boolean>>;
+
+function normalizeRecordSummaries(rows: RecordSummary[]): RecordSummary[] {
+  return rows.map((row) => ({
+    ...row,
+    sessionCount: row.sessionCount ?? 0
+  }));
+}
 
 function patchExerciseSetInState(
   current: ExerciseDetailsById,
@@ -97,6 +112,27 @@ function patchExerciseSetInState(
     [exerciseId]: {
       ...detail,
       sets: detail.sets.map((setItem) => (setItem.id === setId ? mapSet(setItem) : setItem))
+    }
+  };
+}
+
+function patchCardioSessionInState(
+  current: ExerciseDetailsById,
+  exerciseId: string,
+  sessionId: string,
+  mapSession: (session: CardioSession) => CardioSession
+): ExerciseDetailsById {
+  const detail = current[exerciseId];
+  if (!detail) {
+    return current;
+  }
+  return {
+    ...current,
+    [exerciseId]: {
+      ...detail,
+      sessions: detail.sessions.map((session) =>
+        session.id === sessionId ? mapSession(session) : session
+      )
     }
   };
 }
@@ -247,6 +283,10 @@ function AppContent() {
   const [savingExerciseNotesById, setSavingExerciseNotesById] = useState<SavingExerciseNotesById>({});
   const [setDraftsByExerciseId, setSetDraftsByExerciseId] = useState<SetDraftsByExerciseId>({});
   const [savingSetIdsByExerciseId, setSavingSetIdsByExerciseId] = useState<SavingSetIdsByExerciseId>({});
+  const [cardioSessionDraftsByExerciseId, setCardioSessionDraftsByExerciseId] =
+    useState<CardioSessionDraftsByExerciseId>({});
+  const [savingCardioSessionIdsByExerciseId, setSavingCardioSessionIdsByExerciseId] =
+    useState<SavingCardioSessionIdsByExerciseId>({});
   const [savingFoodConsumption, setSavingFoodConsumption] = useState(false);
   const [deletingFoodIds, setDeletingFoodIds] = useState<DeletingFoodIds>({});
   const [bodyWeightDraft, setBodyWeightDraft] = useState("");
@@ -259,6 +299,7 @@ function AppContent() {
   const [nutritionHistory, setNutritionHistory] = useState<NutritionDailyPoint[]>([]);
   const [statisticsExerciseItemId, setStatisticsExerciseItemId] = useState<string | null>(null);
   const [exerciseMetricHistory, setExerciseMetricHistory] = useState<ExerciseDailyMetricsPoint[]>([]);
+  const [cardioMetricHistory, setCardioMetricHistory] = useState<CardioDailyMetricsPoint[]>([]);
   const [statisticsGranularity, setStatisticsGranularity] = useState<StatisticsGranularity>("day");
   const [dailyNutritionTargets, setDailyNutritionTargets] = useState<DailyNutritionTargets | null>(null);
   const [dailyTargetsDate, setDailyTargetsDate] = useState<string | null>(null);
@@ -585,15 +626,23 @@ function AppContent() {
     setSavingExerciseNotesById({});
     setSetDraftsByExerciseId({});
     setSavingSetIdsByExerciseId({});
+    setCardioSessionDraftsByExerciseId({});
+    setSavingCardioSessionIdsByExerciseId({});
   }
 
   function applyExerciseImageFallback(detail: RecordDetail, itemsSource: ExerciseItem[] = exerciseItems): RecordDetail {
     const imageByExerciseItemId = new Map(itemsSource.map((item) => [item.id, item.imageUrl ?? null]));
+    const categoryByExerciseItemId = new Map(itemsSource.map((item) => [item.id, item.category ?? null]));
     return {
       ...detail,
       exercises: detail.exercises.map((exercise) => ({
         ...exercise,
-        exerciseItemImageUrl: exercise.exerciseItemImageUrl ?? imageByExerciseItemId.get(exercise.exerciseItemId) ?? null
+        exerciseItemImageUrl: exercise.exerciseItemImageUrl ?? imageByExerciseItemId.get(exercise.exerciseItemId) ?? null,
+        exerciseItemCategory:
+          exercise.exerciseItemCategory ?? categoryByExerciseItemId.get(exercise.exerciseItemId) ?? null,
+        sessionCount: exercise.sessionCount ?? 0,
+        completedDurationSeconds: exercise.completedDurationSeconds ?? 0,
+        completedDistanceKm: exercise.completedDistanceKm ?? 0
       }))
     };
   }
@@ -634,6 +683,7 @@ function AppContent() {
       setNutritionHistory([]);
       setStatisticsExerciseItemId(null);
       setExerciseMetricHistory([]);
+      setCardioMetricHistory([]);
       setDailyNutritionTargets(null);
       setDailyTargetsDate(null);
       setDailyCheckInThemeDraft("");
@@ -847,7 +897,7 @@ function AppContent() {
       const rows = await apiJson<RecordSummary[]>(
         `/records?userId=${encodeURIComponent(user.id)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
       );
-      setRecordSummaries(rows);
+      setRecordSummaries(normalizeRecordSummaries(rows));
     } catch (error) {
       Alert.alert("Failed to load history", String(error));
     } finally {
@@ -870,7 +920,7 @@ function AppContent() {
       const rows = await apiJson<RecordSummary[]>(
         `/records?userId=${encodeURIComponent(user.id)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
       );
-      setCalendarSummaries(rows);
+      setCalendarSummaries(normalizeRecordSummaries(rows));
     } catch (error) {
       Alert.alert("Failed to load calendar", String(error));
     } finally {
@@ -965,9 +1015,16 @@ function AppContent() {
     const detail = await apiJson<ExerciseDetail>(`/exercises/${exerciseId}`);
     const fallbackImageUrl =
       detail.exerciseItemImageUrl ?? exerciseItems.find((item) => item.id === detail.exerciseItemId)?.imageUrl ?? null;
+    const fallbackCategory =
+      detail.exerciseItemCategory ??
+      exerciseItems.find((item) => item.id === detail.exerciseItemId)?.category ??
+      null;
     const detailWithImage: ExerciseDetail = {
       ...detail,
-      exerciseItemImageUrl: fallbackImageUrl
+      exerciseItemImageUrl: fallbackImageUrl,
+      exerciseItemCategory: fallbackCategory,
+      sets: detail.sets ?? [],
+      sessions: detail.sessions ?? []
     };
     const drafts: SetDrafts = {};
     for (const setItem of detailWithImage.sets) {
@@ -977,9 +1034,18 @@ function AppContent() {
         notes: setItem.notes ?? ""
       };
     }
+    const cardioDrafts: CardioSessionDrafts = {};
+    for (const session of detailWithImage.sessions) {
+      cardioDrafts[session.id] = {
+        duration: formatDuration(session.durationSeconds),
+        distance: session.distanceKm !== null ? String(session.distanceKm) : "",
+        notes: session.notes ?? ""
+      };
+    }
     setExerciseDetailsById((current) => ({ ...current, [exerciseId]: detailWithImage }));
     setExerciseNotesDraftById((current) => ({ ...current, [exerciseId]: detailWithImage.notes ?? "" }));
     setSetDraftsByExerciseId((current) => ({ ...current, [exerciseId]: drafts }));
+    setCardioSessionDraftsByExerciseId((current) => ({ ...current, [exerciseId]: cardioDrafts }));
     setSavingSetIdsByExerciseId((current) => ({
       ...current,
       [exerciseId]: current[exerciseId] ?? {}
@@ -1044,6 +1110,7 @@ function AppContent() {
             userId: user.id,
             date: selectedDate,
             exerciseItemId: draft.exerciseItemId,
+            loggingMode: draft.loggingMode,
             notes: draft.notes?.trim() || undefined,
             initialSets: draft.initialSets.map((setItem: NewExerciseSetDraft, index: number) => ({
               reps: setItem.reps,
@@ -1745,6 +1812,298 @@ function AppContent() {
     }
   }
 
+  function setCardioSessionDraft(exerciseId: string, sessionId: string, draft: CardioSessionDraft): void {
+    setCardioSessionDraftsByExerciseId((current) => ({
+      ...current,
+      [exerciseId]: {
+        ...(current[exerciseId] ?? {}),
+        [sessionId]: draft
+      }
+    }));
+  }
+
+  function bumpSummarySessionCount(delta: number): void {
+    if (delta === 0) {
+      return;
+    }
+    setRecordSummaries((rows) =>
+      rows.map((row) =>
+        row.date === selectedDate
+          ? { ...row, sessionCount: Math.max(0, row.sessionCount + delta) }
+          : row
+      )
+    );
+    setCalendarSummaries((rows) =>
+      rows.map((row) =>
+        row.date === selectedDate
+          ? { ...row, sessionCount: Math.max(0, row.sessionCount + delta) }
+          : row
+      )
+    );
+  }
+
+  async function addCardioSession(exerciseId: string): Promise<boolean> {
+    const detail = exerciseDetailsById[exerciseId];
+    if (!detail || !user) {
+      return false;
+    }
+    const previousSession = detail.sessions[detail.sessions.length - 1];
+    const durationSeconds =
+      previousSession && previousSession.durationSeconds > 0 ? previousSession.durationSeconds : 60;
+    const distanceKm =
+      previousSession && previousSession.distanceKm !== null && previousSession.distanceKm >= 0
+        ? previousSession.distanceKm
+        : null;
+    setLoading(true);
+    const saveGeneration = exerciseStateGenerationRef.current;
+    try {
+      const createdSession = await apiJson<CardioSession>(`/exercises/${exerciseId}/cardio-sessions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": requestKey()
+        },
+        body: JSON.stringify({
+          durationSeconds,
+          distanceKm,
+          sessionOrder: detail.sessions.length
+        })
+      });
+      if (isSetSaveStale(saveGeneration)) {
+        return false;
+      }
+      setExerciseDetailsById((current) => {
+        const currentDetail = current[exerciseId];
+        if (!currentDetail) {
+          return current;
+        }
+        return {
+          ...current,
+          [exerciseId]: {
+            ...currentDetail,
+            sessions: [...currentDetail.sessions, createdSession].sort(
+              (a, b) => a.sessionOrder - b.sessionOrder
+            )
+          }
+        };
+      });
+      setCardioSessionDraftsByExerciseId((current) => ({
+        ...current,
+        [exerciseId]: {
+          ...(current[exerciseId] ?? {}),
+          [createdSession.id]: {
+            duration: formatDuration(createdSession.durationSeconds),
+            distance: createdSession.distanceKm !== null ? String(createdSession.distanceKm) : "",
+            notes: createdSession.notes ?? ""
+          }
+        }
+      }));
+      return true;
+    } catch (error) {
+      Alert.alert("Failed to add session", String(error));
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveCardioSession(exerciseId: string, sessionId: string): Promise<void> {
+    const draft = cardioSessionDraftsByExerciseId[exerciseId]?.[sessionId];
+    const detail = exerciseDetailsById[exerciseId];
+    const currentSession = detail?.sessions.find((session) => session.id === sessionId);
+    if (!draft || !currentSession || savingCardioSessionIdsByExerciseId[exerciseId]?.[sessionId]) {
+      return;
+    }
+    const durationSeconds = parseDurationInput(draft.duration);
+    if (durationSeconds === null) {
+      return;
+    }
+    const trimmedDistance = draft.distance.trim();
+    const distanceKm =
+      trimmedDistance.length === 0
+        ? null
+        : Number(trimmedDistance.replace(",", "."));
+    if (trimmedDistance.length > 0 && (!Number.isFinite(distanceKm!) || distanceKm! < 0)) {
+      return;
+    }
+    const saveGeneration = exerciseStateGenerationRef.current;
+    setSavingCardioSessionIdsByExerciseId((current) => ({
+      ...current,
+      [exerciseId]: {
+        ...(current[exerciseId] ?? {}),
+        [sessionId]: true
+      }
+    }));
+    try {
+      const updatedSession = await apiJson<CardioSession & { updatedAt?: string }>(
+        `/cardio-sessions/${sessionId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            durationSeconds,
+            distanceKm,
+            notes: draft.notes.trim().length > 0 ? draft.notes.trim() : null
+          })
+        }
+      );
+      if (isSetSaveStale(saveGeneration)) {
+        return;
+      }
+      setExerciseDetailsById((current) =>
+        patchCardioSessionInState(current, exerciseId, sessionId, (session) => ({
+          ...session,
+          durationSeconds: updatedSession.durationSeconds,
+          distanceKm: updatedSession.distanceKm,
+          notes: updatedSession.notes,
+          isCompleted: updatedSession.isCompleted
+        }))
+      );
+    } catch (error) {
+      if (!isSetSaveStale(saveGeneration)) {
+        Alert.alert("Failed to save session", String(error));
+      }
+    } finally {
+      setSavingCardioSessionIdsByExerciseId((current) => ({
+        ...current,
+        [exerciseId]: {
+          ...(current[exerciseId] ?? {}),
+          [sessionId]: false
+        }
+      }));
+    }
+  }
+
+  async function toggleCardioSessionCompleted(exerciseId: string, sessionId: string): Promise<void> {
+    if (loading || savingCardioSessionIdsByExerciseId[exerciseId]?.[sessionId]) {
+      return;
+    }
+    const detail = exerciseDetailsById[exerciseId];
+    const currentSession = detail?.sessions.find((session) => session.id === sessionId);
+    if (!currentSession) {
+      return;
+    }
+    const nextIsCompleted = !currentSession.isCompleted;
+    const saveGeneration = exerciseStateGenerationRef.current;
+    const draft = cardioSessionDraftsByExerciseId[exerciseId]?.[sessionId];
+    const patchBody: {
+      isCompleted: boolean;
+      durationSeconds?: number;
+      distanceKm?: number | null;
+      notes?: string | null;
+    } = { isCompleted: nextIsCompleted };
+    if (draft) {
+      const durationSeconds = parseDurationInput(draft.duration);
+      if (durationSeconds !== null) {
+        patchBody.durationSeconds = durationSeconds;
+      }
+      const trimmedDistance = draft.distance.trim();
+      if (trimmedDistance.length === 0) {
+        patchBody.distanceKm = null;
+      } else {
+        const distanceKm = Number(trimmedDistance.replace(",", "."));
+        if (Number.isFinite(distanceKm) && distanceKm >= 0) {
+          patchBody.distanceKm = distanceKm;
+        }
+      }
+      patchBody.notes = draft.notes.trim().length > 0 ? draft.notes.trim() : null;
+    }
+
+    setExerciseDetailsById((current) =>
+      patchCardioSessionInState(current, exerciseId, sessionId, (session) => ({
+        ...session,
+        isCompleted: nextIsCompleted
+      }))
+    );
+    bumpSummarySessionCount(nextIsCompleted ? 1 : -1);
+    setSavingCardioSessionIdsByExerciseId((current) => ({
+      ...current,
+      [exerciseId]: {
+        ...(current[exerciseId] ?? {}),
+        [sessionId]: true
+      }
+    }));
+
+    try {
+      const updatedSession = await apiJson<CardioSession>(`/cardio-sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patchBody)
+      });
+      if (isSetSaveStale(saveGeneration)) {
+        return;
+      }
+      setExerciseDetailsById((current) =>
+        patchCardioSessionInState(current, exerciseId, sessionId, (session) => ({
+          ...session,
+          durationSeconds: updatedSession.durationSeconds,
+          distanceKm: updatedSession.distanceKm,
+          notes: updatedSession.notes,
+          isCompleted: updatedSession.isCompleted
+        }))
+      );
+    } catch (error) {
+      if (!isSetSaveStale(saveGeneration)) {
+        setExerciseDetailsById((current) =>
+          patchCardioSessionInState(current, exerciseId, sessionId, (session) => ({
+            ...session,
+            isCompleted: currentSession.isCompleted
+          }))
+        );
+        bumpSummarySessionCount(nextIsCompleted ? -1 : 1);
+        Alert.alert("Failed to update session completion", String(error));
+      }
+    } finally {
+      setSavingCardioSessionIdsByExerciseId((current) => ({
+        ...current,
+        [exerciseId]: {
+          ...(current[exerciseId] ?? {}),
+          [sessionId]: false
+        }
+      }));
+    }
+  }
+
+  async function deleteCardioSession(exerciseId: string, sessionId: string): Promise<void> {
+    invalidateInFlightSetSaves();
+    const detail = exerciseDetailsById[exerciseId];
+    const removedSession = detail?.sessions.find((session) => session.id === sessionId);
+    setLoading(true);
+    try {
+      await apiJson(`/cardio-sessions/${sessionId}`, { method: "DELETE" });
+      if (removedSession?.isCompleted) {
+        bumpSummarySessionCount(-1);
+      }
+      setExerciseDetailsById((current) => {
+        const currentDetail = current[exerciseId];
+        if (!currentDetail) {
+          return current;
+        }
+        return {
+          ...current,
+          [exerciseId]: {
+            ...currentDetail,
+            sessions: currentDetail.sessions
+              .filter((session) => session.id !== sessionId)
+              .map((session, index) => ({ ...session, sessionOrder: index }))
+          }
+        };
+      });
+      setCardioSessionDraftsByExerciseId((current) => {
+        const currentDrafts = current[exerciseId] ?? {};
+        const { [sessionId]: _removed, ...rest } = currentDrafts;
+        return {
+          ...current,
+          [exerciseId]: rest
+        };
+      });
+    } catch (error) {
+      Alert.alert("Failed to delete session", String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function deleteExerciseById(exerciseId: string): Promise<void> {
     if (loading) {
       return;
@@ -1753,7 +2112,9 @@ function AppContent() {
     setLoading(true);
     try {
       await apiJson(`/exercises/${exerciseId}`, { method: "DELETE" });
-      const removedSetCount = recordDetail?.exercises.find((item) => item.id === exerciseId)?.setCount ?? 0;
+      const removedExercise = recordDetail?.exercises.find((item) => item.id === exerciseId);
+      const removedSetCount = removedExercise?.setCount ?? 0;
+      const removedSessionCount = removedExercise?.sessionCount ?? 0;
       const nextExerciseCount = Math.max(0, (recordDetail?.exercises.length ?? 0) - 1);
       setRecordDetail((current) => {
         if (!current) {
@@ -1770,7 +2131,8 @@ function AppContent() {
             ? {
                 ...row,
                 exerciseCount: nextExerciseCount,
-                setCount: Math.max(0, row.setCount - removedSetCount)
+                setCount: Math.max(0, row.setCount - removedSetCount),
+                sessionCount: Math.max(0, row.sessionCount - removedSessionCount)
               }
             : row
         )
@@ -1781,7 +2143,8 @@ function AppContent() {
             ? {
                 ...row,
                 exerciseCount: nextExerciseCount,
-                setCount: Math.max(0, row.setCount - removedSetCount)
+                setCount: Math.max(0, row.setCount - removedSetCount),
+                sessionCount: Math.max(0, row.sessionCount - removedSessionCount)
               }
             : row
         )
@@ -1804,6 +2167,14 @@ function AppContent() {
         return rest;
       });
       setSavingSetIdsByExerciseId((current) => {
+        const { [exerciseId]: _removed, ...rest } = current;
+        return rest;
+      });
+      setCardioSessionDraftsByExerciseId((current) => {
+        const { [exerciseId]: _removed, ...rest } = current;
+        return rest;
+      });
+      setSavingCardioSessionIdsByExerciseId((current) => {
         const { [exerciseId]: _removed, ...rest } = current;
         return rest;
       });
@@ -2234,11 +2605,24 @@ function AppContent() {
     const g = overrideGranularity ?? statisticsGranularity;
     setStatisticsExerciseItemId(exerciseItemId);
     setStatisticsLoading(true);
+    const category = exerciseItems.find((item) => item.id === exerciseItemId)?.category ?? null;
     try {
-      const payload = await apiJson<{ records: ExerciseDailyMetricsPoint[] }>(
-        `/statistics/exercise-history?exerciseItemId=${encodeURIComponent(exerciseItemId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&granularity=${encodeURIComponent(g)}`
-      );
-      setExerciseMetricHistory(payload.records ?? []);
+      if (isCardioCategory(category)) {
+        const payload = await apiJson<{ records: CardioDailyMetricsPoint[] }>(
+          `/statistics/cardio-history?exerciseItemId=${encodeURIComponent(exerciseItemId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&granularity=${encodeURIComponent(g)}`
+        );
+        setCardioMetricHistory(payload.records ?? []);
+        setExerciseMetricHistory([]);
+      } else if (isStrengthCategory(category)) {
+        const payload = await apiJson<{ records: ExerciseDailyMetricsPoint[] }>(
+          `/statistics/exercise-history?exerciseItemId=${encodeURIComponent(exerciseItemId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&granularity=${encodeURIComponent(g)}`
+        );
+        setExerciseMetricHistory(payload.records ?? []);
+        setCardioMetricHistory([]);
+      } else {
+        setExerciseMetricHistory([]);
+        setCardioMetricHistory([]);
+      }
     } catch (error) {
       Alert.alert("Failed to load exercise metrics", String(error));
     } finally {
@@ -2866,6 +3250,19 @@ function AppContent() {
               toggleSetCompleted={(exerciseId: string, setId: string) => {
                 toggleSetCompleted(exerciseId, setId).catch(() => {});
               }}
+              cardioSessionDraftsByExerciseId={cardioSessionDraftsByExerciseId}
+              savingCardioSessionIdsByExerciseId={savingCardioSessionIdsByExerciseId}
+              setCardioSessionDraft={setCardioSessionDraft}
+              saveCardioSession={(exerciseId: string, sessionId: string) => {
+                return saveCardioSession(exerciseId, sessionId);
+              }}
+              addCardioSession={addCardioSession}
+              deleteCardioSession={(exerciseId: string, sessionId: string) => {
+                return deleteCardioSession(exerciseId, sessionId);
+              }}
+              toggleCardioSessionCompleted={(exerciseId: string, sessionId: string) => {
+                return toggleCardioSessionCompleted(exerciseId, sessionId);
+              }}
               savingFoodConsumption={savingFoodConsumption}
               deletingFoodIds={deletingFoodIds}
               addFoodConsumption={addFoodConsumption}
@@ -2924,6 +3321,7 @@ function AppContent() {
               nutritionRecords={nutritionHistory}
               selectedExerciseItemId={statisticsExerciseItemId}
               exerciseMetricRecords={exerciseMetricHistory}
+              cardioMetricRecords={cardioMetricHistory}
               granularity={statisticsGranularity}
               onGranularityChange={(g) => {
                 setStatisticsGranularity(g);

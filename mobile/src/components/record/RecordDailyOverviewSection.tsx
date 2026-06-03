@@ -4,7 +4,7 @@ import type { DailyNutritionTargets } from "../../types/workout";
 type RecordDailyOverviewSectionProps = {
   styles: any;
   totalVolume: number;
-  totalSetCount: number;
+  totalCardioSeconds: number;
   totalCaloriesKcal: number;
   calorieTarget: number | null;
   calorieOverflow: number;
@@ -23,7 +23,7 @@ type RecordDailyOverviewSectionProps = {
 export function RecordDailyOverviewSection({
   styles,
   totalVolume,
-  totalSetCount,
+  totalCardioSeconds,
   totalCaloriesKcal,
   calorieTarget,
   calorieOverflow,
@@ -38,6 +38,13 @@ export function RecordDailyOverviewSection({
   fatProgress,
   dailyNutritionTargets
 }: RecordDailyOverviewSectionProps) {
+  const cardioTimeLabel =
+    totalCardioSeconds >= 3600
+      ? `${Math.floor(totalCardioSeconds / 3600)}h ${Math.round((totalCardioSeconds % 3600) / 60)}m`
+      : totalCardioSeconds > 0
+        ? `${Math.round(totalCardioSeconds / 60)} min`
+        : "0 min";
+
   return (
     <View style={styles.dailyMetricsSection}>
       <View style={styles.dailyMetricsHeader}>
@@ -53,8 +60,8 @@ export function RecordDailyOverviewSection({
           <Text style={styles.statsValue}>{Math.round(totalVolume)} kg</Text>
         </View>
         <View style={styles.statsItem}>
-          <Text style={styles.statsLabel}>Completed Sets</Text>
-          <Text style={styles.statsValue}>{totalSetCount}</Text>
+          <Text style={styles.statsLabel}>Cardio Time</Text>
+          <Text style={styles.statsValue}>{cardioTimeLabel}</Text>
         </View>
       </View>
       <View style={styles.nutritionProgressCard}>

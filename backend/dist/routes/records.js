@@ -6,6 +6,27 @@ import { upsertUserFromAuth } from "../shared/authUsers.js";
 import { daysAgo, todayDate } from "../shared/dates.js";
 import { findIdempotentResponse, idempotencyHeader, saveIdempotentResponse } from "../shared/idempotency.js";
 import { byDateNoUserSchema, createExerciseByDateSchema, createExerciseSchema, dateRangeNoUserSchema, idSchema, patchRecordThemeByDateSchema } from "../shared/validation.js";
+import { categoryMatchesLoggingMode, loggingModeErrorMessage } from "../shared/exerciseLoggingMode.js";
+import { mapRecordExerciseRow, RECORD_EXERCISE_DETAIL_SQL } from "../shared/recordExercises.js";
+async function validateExerciseItemLoggingMode(exerciseItemId, loggingMode) {
+    if (!loggingMode) {
+        return { ok: true };
+    }
+    const itemResult = await pool.query(`
+      SELECT category
+      FROM exercise_items
+      WHERE id = $1
+      LIMIT 1
+    `, [exerciseItemId]);
+    if (itemResult.rowCount === 0) {
+        return { ok: false, message: "Exercise item not found" };
+    }
+    const category = itemResult.rows[0].category;
+    if (!categoryMatchesLoggingMode(category, loggingMode)) {
+        return { ok: false, message: loggingModeErrorMessage(loggingMode) };
+    }
+    return { ok: true };
+}
 export const recordsRouter = Router();
 recordsRouter.use(requireAuth);
 recordsRouter.get("/records", async (req, res) => {
@@ -31,10 +52,20 @@ recordsRouter.get("/records", async (req, res) => {
           r.record_date::text AS record_date,
           r.theme,
           COUNT(DISTINCT e.id)::text AS exercise_count,
-          COUNT(es.id)::text AS set_count
+          COALESCE((
+            SELECT COUNT(*)
+            FROM exercises e2
+            JOIN exercise_sets es ON es.exercise_id = e2.id AND es.is_completed = TRUE
+            WHERE e2.record_id = r.id
+          ), 0)::text AS set_count,
+          COALESCE((
+            SELECT COUNT(*)
+            FROM exercises e2
+            JOIN cardio_sessions cs ON cs.exercise_id = e2.id AND cs.is_completed = TRUE
+            WHERE e2.record_id = r.id
+          ), 0)::text AS session_count
         FROM records r
         LEFT JOIN exercises e ON e.record_id = r.id
-        LEFT JOIN exercise_sets es ON es.exercise_id = e.id AND es.is_completed = TRUE
         WHERE r.user_id = $1
           AND r.record_date >= $2::date
           AND r.record_date <= $3::date
@@ -46,7 +77,8 @@ recordsRouter.get("/records", async (req, res) => {
             date: row.record_date,
             theme: row.theme,
             exerciseCount: Number(row.exercise_count),
-            setCount: Number(row.set_count)
+            setCount: Number(row.set_count),
+            sessionCount: Number(row.session_count)
         })));
     }
     catch (error) {
@@ -83,23 +115,7 @@ recordsRouter.get("/records/by-date", async (req, res) => {
             return res.json(null);
         }
         const recordId = recordResult.rows[0].id;
-        const detail = await pool.query(`
-        SELECT
-          e.id AS exercise_id,
-          e.exercise_item_id,
-          ei.name AS exercise_item_name,
-          e.notes,
-          e.sort_order,
-          COUNT(es.id)::text AS set_count,
-          COALESCE(SUM(CASE WHEN es.is_completed THEN es.reps * es.weight ELSE 0 END), 0)::double precision AS completed_volume,
-          e.updated_at::text
-        FROM exercises e
-        JOIN exercise_items ei ON ei.id = e.exercise_item_id
-        LEFT JOIN exercise_sets es ON es.exercise_id = e.id AND es.is_completed = TRUE
-        WHERE e.record_id = $1
-        GROUP BY e.id, e.exercise_item_id, ei.name, e.notes, e.sort_order, e.updated_at
-        ORDER BY e.sort_order ASC, e.created_at ASC
-      `, [recordId]);
+        const detail = await pool.query(RECORD_EXERCISE_DETAIL_SQL, [recordId]);
         return res.json({
             recordId,
             date,
@@ -117,16 +133,7 @@ recordsRouter.get("/records/by-date", async (req, res) => {
                 : null,
             dailyTargetSource: recordResult.rows[0].daily_target_source,
             dailyTargetComment: recordResult.rows[0].daily_target_comment,
-            exercises: detail.rows.map((row) => ({
-                id: row.exercise_id,
-                exerciseItemId: row.exercise_item_id,
-                exerciseItemName: row.exercise_item_name,
-                notes: row.notes,
-                sortOrder: row.sort_order,
-                setCount: Number(row.set_count),
-                completedVolume: Number(row.completed_volume),
-                updatedAt: row.updated_at
-            }))
+            exercises: detail.rows.map(mapRecordExerciseRow)
         });
     }
     catch (error) {
@@ -162,23 +169,7 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
             return res.status(404).json({ error: "Record not found" });
         }
         const base = result.rows[0];
-        const detail = await pool.query(`
-        SELECT
-          e.id AS exercise_id,
-          e.exercise_item_id,
-          ei.name AS exercise_item_name,
-          e.notes,
-          e.sort_order,
-          COUNT(es.id)::text AS set_count,
-          COALESCE(SUM(CASE WHEN es.is_completed THEN es.reps * es.weight ELSE 0 END), 0)::double precision AS completed_volume,
-          e.updated_at::text
-        FROM exercises e
-        JOIN exercise_items ei ON ei.id = e.exercise_item_id
-        LEFT JOIN exercise_sets es ON es.exercise_id = e.id AND es.is_completed = TRUE
-        WHERE e.record_id = $1
-        GROUP BY e.id, e.exercise_item_id, ei.name, e.notes, e.sort_order, e.updated_at
-        ORDER BY e.sort_order ASC, e.created_at ASC
-      `, [recordId]);
+        const detail = await pool.query(RECORD_EXERCISE_DETAIL_SQL, [recordId]);
         return res.json({
             recordId,
             userId: appUser.id,
@@ -190,16 +181,7 @@ recordsRouter.get("/records/:recordId", async (req, res) => {
             dailyFatTargetG: base.daily_fat_target_g ? Number(base.daily_fat_target_g) : null,
             dailyTargetSource: base.daily_target_source,
             dailyTargetComment: base.daily_target_comment,
-            exercises: detail.rows.map((row) => ({
-                id: row.exercise_id,
-                exerciseItemId: row.exercise_item_id,
-                exerciseItemName: row.exercise_item_name,
-                notes: row.notes,
-                sortOrder: row.sort_order,
-                setCount: Number(row.set_count),
-                completedVolume: Number(row.completed_volume),
-                updatedAt: row.updated_at
-            }))
+            exercises: detail.rows.map(mapRecordExerciseRow)
         });
     }
     catch (error) {
@@ -258,7 +240,7 @@ recordsRouter.post("/records/by-date/exercises", async (req, res) => {
     if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const { date, exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+    const { date, exerciseItemId, loggingMode, notes, sortOrder, initialSets } = parsed.data;
     const appUser = await upsertUserFromAuth(req.auth);
     const key = idempotencyHeader(req);
     const endpoint = "POST /records/by-date/exercises";
@@ -269,6 +251,10 @@ recordsRouter.post("/records/by-date/exercises", async (req, res) => {
         }
     }
     try {
+        const modeCheck = await validateExerciseItemLoggingMode(exerciseItemId, loggingMode);
+        if (!modeCheck.ok) {
+            return res.status(400).json({ error: modeCheck.message });
+        }
         const payload = await withTransaction(async (client) => {
             const recordResult = await client.query(`
           INSERT INTO records (id, user_id, record_date)
@@ -333,7 +319,7 @@ recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
     if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const { exerciseItemId, notes, sortOrder, initialSets } = parsed.data;
+    const { exerciseItemId, loggingMode, notes, sortOrder, initialSets } = parsed.data;
     const appUser = await upsertUserFromAuth(req.auth);
     const endpoint = "POST /records/:recordId/exercises";
     const key = idempotencyHeader(req);
@@ -344,6 +330,10 @@ recordsRouter.post("/records/:recordId/exercises", async (req, res) => {
         }
     }
     try {
+        const modeCheck = await validateExerciseItemLoggingMode(exerciseItemId, loggingMode);
+        if (!modeCheck.ok) {
+            return res.status(400).json({ error: modeCheck.message });
+        }
         const recordCheck = await pool.query(`
         SELECT id
         FROM records

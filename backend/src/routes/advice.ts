@@ -7,6 +7,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { getPromptProfile, upsertUserFromAuth } from "../shared/authUsers.js";
 import { reserveLlmQuota, sendLlmQuotaExceeded } from "../shared/llmQuota.js";
 import { buildStructuredPrompt } from "../shared/llmPrompt.js";
+import { CARDIO_CATEGORY } from "../shared/exerciseCategories.js";
 import { datePattern, idSchema } from "../shared/validation.js";
 
 const EXERCISE_PLAN_SESSIONS_LIMIT = 10;
@@ -87,6 +88,176 @@ function groupedExerciseSetLines(rows: CompletedSetRow[]): string[] {
     lines.push(`${row.exercise_name} | exercise note: ${exerciseNotes} | ${setLines}`);
   }
   return lines;
+}
+
+type CompletedCardioSessionRow = {
+  exercise_id: string;
+  exercise_item_id: string;
+  exercise_name: string;
+  exercise_notes: string | null;
+  duration_seconds: number;
+  distance_km: string | null;
+  session_order: number;
+  session_notes: string | null;
+};
+
+function formatAdviceDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function formatCardioSessionLine(row: {
+  session_order: number;
+  duration_seconds: number;
+  distance_km: string | null;
+  session_notes: string | null;
+}): string {
+  const notesSuffix = row.session_notes ? ` (session note: ${normalizeAdviceNote(row.session_notes)})` : "";
+  const distanceSuffix =
+    row.distance_km !== null && row.distance_km.trim().length > 0
+      ? `, ${Number(row.distance_km)} km`
+      : "";
+  return `session ${row.session_order + 1}: ${formatAdviceDuration(row.duration_seconds)}${distanceSuffix}${notesSuffix}`;
+}
+
+function groupedCardioSessionLines(rows: CompletedCardioSessionRow[]): string[] {
+  const linesByExercise = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!linesByExercise.has(row.exercise_id)) {
+      linesByExercise.set(row.exercise_id, []);
+    }
+    linesByExercise.get(row.exercise_id)!.push(formatCardioSessionLine(row));
+  }
+
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.exercise_id)) {
+      continue;
+    }
+    seen.add(row.exercise_id);
+    const exerciseNotes = normalizeAdviceNote(row.exercise_notes) ?? "none";
+    const sessionLines = linesByExercise.get(row.exercise_id)?.join(", ") ?? "no completed sessions";
+    lines.push(`${row.exercise_name} | exercise note: ${exerciseNotes} | ${sessionLines}`);
+  }
+  return lines;
+}
+
+function formatPastExerciseHistoryByItem(
+  pastRows: Array<{
+    exercise_item_id: string;
+    exercise_name: string;
+    record_date: string;
+    exercise_notes: string | null;
+    reps: number;
+    weight: string;
+    set_order: number;
+    set_notes: string | null;
+  }>
+): Map<string, string[]> {
+  const byItem = new Map<
+    string,
+    Map<string, { exerciseName: string; exerciseNotes: string | null; sets: string[] }>
+  >();
+  for (const row of pastRows) {
+    if (!byItem.has(row.exercise_item_id)) {
+      byItem.set(row.exercise_item_id, new Map());
+    }
+    const perDate = byItem.get(row.exercise_item_id)!;
+    if (!perDate.has(row.record_date)) {
+      if (perDate.size >= DAILY_SUMMARY_PAST_EXERCISE_LIMIT) {
+        continue;
+      }
+      perDate.set(row.record_date, {
+        exerciseName: row.exercise_name,
+        exerciseNotes: normalizeAdviceNote(row.exercise_notes),
+        sets: []
+      });
+    }
+    const session = perDate.get(row.record_date)!;
+    const notesSuffix = row.set_notes ? ` (set note: ${normalizeAdviceNote(row.set_notes)})` : "";
+    session.sets.push(`set ${row.set_order + 1}: ${row.reps} reps @ ${row.weight} kg${notesSuffix}`);
+  }
+
+  const pastExerciseByItem = new Map<string, string[]>();
+  for (const [exerciseItemId, perDate] of byItem) {
+    const lines: string[] = [];
+    for (const [recordDate, session] of perDate) {
+      lines.push(
+        `${recordDate} | exercise note: ${session.exerciseNotes ?? "none"} | ${session.sets.join(", ")}`
+      );
+    }
+    pastExerciseByItem.set(exerciseItemId, lines);
+  }
+  return pastExerciseByItem;
+}
+
+function formatPastCardioHistoryByItem(
+  pastRows: Array<{
+    exercise_item_id: string;
+    exercise_name: string;
+    record_date: string;
+    exercise_notes: string | null;
+    duration_seconds: number;
+    distance_km: string | null;
+    session_order: number;
+    session_notes: string | null;
+  }>
+): Map<string, string[]> {
+  const byItem = new Map<
+    string,
+    Map<string, { exerciseName: string; exerciseNotes: string | null; sessions: string[] }>
+  >();
+  for (const row of pastRows) {
+    if (!byItem.has(row.exercise_item_id)) {
+      byItem.set(row.exercise_item_id, new Map());
+    }
+    const perDate = byItem.get(row.exercise_item_id)!;
+    if (!perDate.has(row.record_date)) {
+      if (perDate.size >= DAILY_SUMMARY_PAST_EXERCISE_LIMIT) {
+        continue;
+      }
+      perDate.set(row.record_date, {
+        exerciseName: row.exercise_name,
+        exerciseNotes: normalizeAdviceNote(row.exercise_notes),
+        sessions: []
+      });
+    }
+    const session = perDate.get(row.record_date)!;
+    session.sessions.push(formatCardioSessionLine(row));
+  }
+
+  const pastExerciseByItem = new Map<string, string[]>();
+  for (const [exerciseItemId, perDate] of byItem) {
+    const lines: string[] = [];
+    for (const [recordDate, session] of perDate) {
+      lines.push(
+        `${recordDate} | exercise note: ${session.exerciseNotes ?? "none"} | ${session.sessions.join(", ")}`
+      );
+    }
+    pastExerciseByItem.set(exerciseItemId, lines);
+  }
+  return pastExerciseByItem;
+}
+
+function formatPastExerciseText(
+  exerciseItemIds: string[],
+  todayRows: Array<{ exercise_item_id: string; exercise_name: string }>,
+  pastExerciseByItem: Map<string, string[]>,
+  emptyMessage: string
+): string {
+  if (exerciseItemIds.length === 0) {
+    return emptyMessage;
+  }
+  return exerciseItemIds
+    .map((exerciseItemId) => {
+      const lines = pastExerciseByItem.get(exerciseItemId);
+      const exerciseName =
+        todayRows.find((row) => row.exercise_item_id === exerciseItemId)?.exercise_name ?? "Exercise";
+      return `${exerciseName}:\n${lines && lines.length > 0 ? lines.join("\n") : "No prior completed records."}`;
+    })
+    .join("\n\n");
 }
 
 function formatNowContext(): string {
@@ -528,7 +699,7 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
     const todayTheme = await getTodayTheme(appUser.id, date);
     const themeContext = themeContextBlock(todayTheme);
 
-    const todayCompletedResult = await pool.query<CompletedSetRow>(
+    const todayStrengthResult = await pool.query<CompletedSetRow>(
       `
         SELECT
           e.id AS exercise_id,
@@ -546,17 +717,48 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
         WHERE r.user_id = $1
           AND r.record_date = $2::date
           AND es.is_completed = TRUE
+          AND COALESCE(ei.category, '') <> $3
         ORDER BY e.sort_order ASC, es.set_order ASC
       `,
-      [appUser.id, date]
+      [appUser.id, date, CARDIO_CATEGORY]
     );
 
-    const todayExerciseLines = groupedExerciseSetLines(todayCompletedResult.rows);
-    const exerciseItemIds = Array.from(new Set(todayCompletedResult.rows.map((row) => row.exercise_item_id)));
+    const todayCardioResult = await pool.query<CompletedCardioSessionRow>(
+      `
+        SELECT
+          e.id AS exercise_id,
+          e.exercise_item_id,
+          ei.name AS exercise_name,
+          e.notes AS exercise_notes,
+          cs.duration_seconds,
+          cs.distance_km::text,
+          cs.session_order,
+          cs.notes AS session_notes
+        FROM records r
+        JOIN exercises e ON e.record_id = r.id
+        JOIN exercise_items ei ON ei.id = e.exercise_item_id
+        JOIN cardio_sessions cs ON cs.exercise_id = e.id
+        WHERE r.user_id = $1
+          AND r.record_date = $2::date
+          AND cs.is_completed = TRUE
+          AND ei.category = $3
+        ORDER BY e.sort_order ASC, cs.session_order ASC
+      `,
+      [appUser.id, date, CARDIO_CATEGORY]
+    );
 
-    const pastExerciseByItem = new Map<string, string[]>();
-    if (exerciseItemIds.length > 0) {
-      const pastExerciseRows = await pool.query<{
+    const todayStrengthLines = groupedExerciseSetLines(todayStrengthResult.rows);
+    const todayCardioLines = groupedCardioSessionLines(todayCardioResult.rows);
+    const strengthExerciseItemIds = Array.from(
+      new Set(todayStrengthResult.rows.map((row) => row.exercise_item_id))
+    );
+    const cardioExerciseItemIds = Array.from(
+      new Set(todayCardioResult.rows.map((row) => row.exercise_item_id))
+    );
+
+    const pastStrengthByItem = new Map<string, string[]>();
+    if (strengthExerciseItemIds.length > 0) {
+      const pastStrengthRows = await pool.query<{
         exercise_item_id: string;
         exercise_name: string;
         record_date: string;
@@ -584,43 +786,53 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
             AND e.exercise_item_id = ANY($2::uuid[])
             AND r.record_date < $3::date
             AND es.is_completed = TRUE
+            AND COALESCE(ei.category, '') <> $4
           ORDER BY e.exercise_item_id, r.record_date DESC, es.set_order ASC
         `,
-        [appUser.id, exerciseItemIds, date]
+        [appUser.id, strengthExerciseItemIds, date, CARDIO_CATEGORY]
       );
-
-      const byItem = new Map<
-        string,
-        Map<string, { exerciseName: string; exerciseNotes: string | null; sets: string[] }>
-      >();
-      for (const row of pastExerciseRows.rows) {
-        if (!byItem.has(row.exercise_item_id)) {
-          byItem.set(row.exercise_item_id, new Map());
-        }
-        const perDate = byItem.get(row.exercise_item_id)!;
-        if (!perDate.has(row.record_date)) {
-          if (perDate.size >= DAILY_SUMMARY_PAST_EXERCISE_LIMIT) {
-            continue;
-          }
-          perDate.set(row.record_date, {
-            exerciseName: row.exercise_name,
-            exerciseNotes: normalizeAdviceNote(row.exercise_notes),
-            sets: []
-          });
-        }
-        const session = perDate.get(row.record_date)!;
-        const notesSuffix = row.set_notes ? ` (set note: ${normalizeAdviceNote(row.set_notes)})` : "";
-        session.sets.push(`set ${row.set_order + 1}: ${row.reps} reps @ ${row.weight} kg${notesSuffix}`);
+      for (const [exerciseItemId, lines] of formatPastExerciseHistoryByItem(pastStrengthRows.rows)) {
+        pastStrengthByItem.set(exerciseItemId, lines);
       }
+    }
 
-      for (const [exerciseItemId, perDate] of byItem) {
-        const lines: string[] = [];
-        for (const [recordDate, session] of perDate) {
-          lines.push(
-            `${recordDate} | exercise note: ${session.exerciseNotes ?? "none"} | ${session.sets.join(", ")}`
-          );
-        }
-        pastExerciseByItem.set(exerciseItemId, lines);
+    const pastCardioByItem = new Map<string, string[]>();
+    if (cardioExerciseItemIds.length > 0) {
+      const pastCardioRows = await pool.query<{
+        exercise_item_id: string;
+        exercise_name: string;
+        record_date: string;
+        exercise_notes: string | null;
+        duration_seconds: number;
+        distance_km: string | null;
+        session_order: number;
+        session_notes: string | null;
+      }>(
+        `
+          SELECT
+            e.exercise_item_id,
+            ei.name AS exercise_name,
+            r.record_date::text,
+            e.notes AS exercise_notes,
+            cs.duration_seconds,
+            cs.distance_km::text,
+            cs.session_order,
+            cs.notes AS session_notes
+          FROM records r
+          JOIN exercises e ON e.record_id = r.id
+          JOIN exercise_items ei ON ei.id = e.exercise_item_id
+          JOIN cardio_sessions cs ON cs.exercise_id = e.id
+          WHERE r.user_id = $1
+            AND e.exercise_item_id = ANY($2::uuid[])
+            AND r.record_date < $3::date
+            AND cs.is_completed = TRUE
+            AND ei.category = $4
+          ORDER BY e.exercise_item_id, r.record_date DESC, cs.session_order ASC
+        `,
+        [appUser.id, cardioExerciseItemIds, date, CARDIO_CATEGORY]
+      );
+      for (const [exerciseItemId, lines] of formatPastCardioHistoryByItem(pastCardioRows.rows)) {
+        pastCardioByItem.set(exerciseItemId, lines);
       }
     }
 
@@ -717,23 +929,27 @@ adviceRouter.post("/advice/daily-summary", async (req, res) => {
       [appUser.id, date, DAILY_SUMMARY_PAST_WEIGHT_LIMIT]
     );
 
-    const todayExerciseText =
-      todayExerciseLines.length > 0
-        ? todayExerciseLines.join("\n")
-        : "No completed exercises logged yet for today.";
+    const todayStrengthText =
+      todayStrengthLines.length > 0
+        ? todayStrengthLines.join("\n")
+        : "No completed strength exercises logged yet for today.";
+    const todayCardioText =
+      todayCardioLines.length > 0
+        ? todayCardioLines.join("\n")
+        : "No completed cardio logged yet for today.";
 
-    const pastExerciseText =
-      exerciseItemIds.length > 0
-        ? exerciseItemIds
-            .map((exerciseItemId) => {
-              const lines = pastExerciseByItem.get(exerciseItemId);
-              const exerciseName =
-                todayCompletedResult.rows.find((row) => row.exercise_item_id === exerciseItemId)?.exercise_name ??
-                "Exercise";
-              return `${exerciseName}:\n${lines && lines.length > 0 ? lines.join("\n") : "No prior completed records."}`;
-            })
-            .join("\n\n")
-        : "No exercise history context (no completed exercise for today).";
+    const pastStrengthText = formatPastExerciseText(
+      strengthExerciseItemIds,
+      todayStrengthResult.rows,
+      pastStrengthByItem,
+      "No strength exercise history context (no completed strength exercise for today)."
+    );
+    const pastCardioText = formatPastExerciseText(
+      cardioExerciseItemIds,
+      todayCardioResult.rows,
+      pastCardioByItem,
+      "No cardio history context (no completed cardio for today)."
+    );
 
     const todayFoodRows = todayFoodEntriesResult.rows;
     const todayFoodDetailsText =
@@ -791,11 +1007,17 @@ ${themeContext}
 Current request timestamp and daypart: ${formatNowContext()}
 The user might indicate he/she does not plan to exercise today by setting the theme as "rest" or other words, in which case you should not ask the user to log exercises.
 
-Today's completed exercises details:
-${todayExerciseText}
+Today's completed strength exercises:
+${todayStrengthText}
 
-Past 3 completed records for each exercise from today (with dates):
-${pastExerciseText}
+Today's completed cardio:
+${todayCardioText}
+
+Past 3 completed strength records for each strength exercise from today (with dates):
+${pastStrengthText}
+
+Past 3 completed cardio records for each cardio exercise from today (with dates):
+${pastCardioText}
 
 Today's diet detail:
 ${todayFoodDetailsText}

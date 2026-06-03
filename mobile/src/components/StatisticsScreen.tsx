@@ -5,11 +5,13 @@ import { AppTextInput } from "./ui/AppTextInput";
 import { palette, radius, shadows, textStyles, withPressScale } from "../styles/theme";
 import {
   BodyWeightRecord,
+  CardioDailyMetricsPoint,
   ExerciseDailyMetricsPoint,
   ExerciseItem,
   NutritionDailyPoint,
   StatisticsGranularity
 } from "../types/workout";
+import { hasExerciseMetrics, isCardioCategory } from "../utils/exerciseCategories";
 import { normalizeSearchText } from "../utils/inputSanitizers";
 
 const GRANULARITY_OPTIONS: { value: StatisticsGranularity; label: string }[] = [
@@ -26,6 +28,7 @@ type StatisticsScreenProps = {
   nutritionRecords: NutritionDailyPoint[];
   selectedExerciseItemId: string | null;
   exerciseMetricRecords: ExerciseDailyMetricsPoint[];
+  cardioMetricRecords: CardioDailyMetricsPoint[];
   granularity: StatisticsGranularity;
   onGranularityChange: (granularity: StatisticsGranularity) => void;
   refreshStatistics: () => Promise<void> | void;
@@ -212,6 +215,7 @@ export function StatisticsScreen({
   nutritionRecords,
   selectedExerciseItemId,
   exerciseMetricRecords,
+  cardioMetricRecords,
   granularity,
   onGranularityChange,
   refreshStatistics,
@@ -226,14 +230,21 @@ export function StatisticsScreen({
     () => exerciseItems.find((item) => item.id === selectedExerciseItemId) ?? null,
     [exerciseItems, selectedExerciseItemId]
   );
+  const selectedExerciseIsCardio = isCardioCategory(selectedExercise?.category);
+  const selectedExerciseHasMetrics = hasExerciseMetrics(selectedExercise?.category);
+
+  const metricExerciseItems = useMemo(
+    () => exerciseItems.filter((item) => hasExerciseMetrics(item.category)),
+    [exerciseItems]
+  );
 
   const filteredExerciseItems = useMemo(() => {
     const normalizedQuery = normalizeSearchText(exerciseSearchTerm);
     if (!normalizedQuery) {
-      return exerciseItems.slice(0, 8);
+      return metricExerciseItems.slice(0, 8);
     }
     const queryTerms = normalizedQuery.split(" ").filter(Boolean);
-    return exerciseItems
+    return metricExerciseItems
       .map((item) => {
         const normalizedName = normalizeSearchText(item.name);
         const nameTerms = normalizedName.split(" ").filter(Boolean);
@@ -256,7 +267,7 @@ export function StatisticsScreen({
       .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name))
       .slice(0, 8)
       .map((entry) => entry.item);
-  }, [exerciseItems, exerciseSearchTerm]);
+  }, [metricExerciseItems, exerciseSearchTerm]);
 
   const nutritionCaloriesPoints = nutritionRecords
     .filter((row) => row.totalCaloriesKcal > 0)
@@ -428,6 +439,9 @@ export function StatisticsScreen({
                       >
                         {item.name}
                       </Text>
+                      <Text style={styles.searchResultMeta}>
+                        {isCardioCategory(item.category) ? "Cardio" : item.muscleGroup ?? "General"}
+                      </Text>
                     </Pressable>
                   ))
                 )}
@@ -440,31 +454,80 @@ export function StatisticsScreen({
             )}
           </View>
 
-          <SingleLineCard
-            title="Exercise Daily Volume"
-            emptyText="No completed volume records for selected exercise."
-            unitSuffix=""
-            lineColor={palette.secondary}
-            granularity={granularity}
-            points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.dailyVolume }))}
-          />
-          <SingleLineCard
-            title="Exercise Top Set Weight"
-            emptyText="No top set weight records for selected exercise."
-            unitSuffix=" kg"
-            decimalPlaces={1}
-            lineColor={palette.primary}
-            granularity={granularity}
-            points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetWeight }))}
-          />
-          <SingleLineCard
-            title="Exercise Top Set Volume"
-            emptyText="No top set volume records for selected exercise."
-            unitSuffix=""
-            lineColor={palette.secondary}
-            granularity={granularity}
-            points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetVolume }))}
-          />
+          {selectedExercise && !selectedExerciseHasMetrics ? (
+            <View style={styles.chartCard}>
+              <Text style={styles.emptyText}>
+                Trend charts are only available for strength and cardio exercises.
+              </Text>
+            </View>
+          ) : selectedExerciseIsCardio ? (
+            <>
+              <SingleLineCard
+                title="Daily Duration"
+                emptyText="No completed duration records for selected exercise."
+                unitSuffix=" min"
+                decimalPlaces={0}
+                lineColor={palette.secondary}
+                granularity={granularity}
+                points={cardioMetricRecords.map((row) => ({
+                  date: row.date,
+                  value: row.dailyDurationSeconds / 60
+                }))}
+              />
+              <SingleLineCard
+                title="Daily Distance"
+                emptyText="No completed distance records for selected exercise."
+                unitSuffix=" km"
+                decimalPlaces={1}
+                lineColor={palette.primary}
+                granularity={granularity}
+                points={cardioMetricRecords.map((row) => ({
+                  date: row.date,
+                  value: row.dailyDistanceKm
+                }))}
+              />
+              <SingleLineCard
+                title="Longest Session"
+                emptyText="No completed session records for selected exercise."
+                unitSuffix=" min"
+                decimalPlaces={0}
+                lineColor={palette.destructive}
+                granularity={granularity}
+                points={cardioMetricRecords.map((row) => ({
+                  date: row.date,
+                  value: row.longestSessionSeconds / 60
+                }))}
+              />
+            </>
+          ) : (
+            <>
+              <SingleLineCard
+                title="Exercise Daily Volume"
+                emptyText="No completed volume records for selected exercise."
+                unitSuffix=""
+                lineColor={palette.secondary}
+                granularity={granularity}
+                points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.dailyVolume }))}
+              />
+              <SingleLineCard
+                title="Exercise Top Set Weight"
+                emptyText="No top set weight records for selected exercise."
+                unitSuffix=" kg"
+                decimalPlaces={1}
+                lineColor={palette.primary}
+                granularity={granularity}
+                points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetWeight }))}
+              />
+              <SingleLineCard
+                title="Exercise Top Set Volume"
+                emptyText="No top set volume records for selected exercise."
+                unitSuffix=""
+                lineColor={palette.secondary}
+                granularity={granularity}
+                points={exerciseMetricRecords.map((row) => ({ date: row.date, value: row.topSetVolume }))}
+              />
+            </>
+          )}
         </>
       ) : null}
 
@@ -604,6 +667,12 @@ const styles = StyleSheet.create({
   searchResultTextActive: {
     color: palette.primary,
     fontFamily: textStyles.bodyBold.fontFamily
+  },
+  searchResultMeta: {
+    marginTop: 2,
+    fontSize: 11,
+    color: palette.mutedForeground,
+    fontFamily: textStyles.body.fontFamily
   },
   selectedExerciseLabel: {
     marginTop: 10,

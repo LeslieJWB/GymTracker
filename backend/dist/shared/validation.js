@@ -36,8 +36,10 @@ const recordThemeSchema = z
 export const patchRecordThemeByDateSchema = byDateNoUserSchema.extend({
     theme: recordThemeSchema.nullable()
 });
+export const loggingModeSchema = z.enum(["strength", "cardio"]);
 export const createExerciseSchema = z.object({
     exerciseItemId: idSchema,
+    loggingMode: loggingModeSchema.optional(),
     notes: z.string().max(1000).optional(),
     sortOrder: z.number().int().min(0).optional(),
     initialSets: z
@@ -68,6 +70,20 @@ export const patchSetSchema = z.object({
     reps: z.number().int().positive().optional(),
     weight: z.number().nonnegative().optional(),
     setOrder: z.number().int().min(0).optional(),
+    notes: z.string().max(1000).nullable().optional(),
+    isCompleted: z.boolean().optional()
+});
+export const createCardioSessionSchema = z.object({
+    durationSeconds: z.number().int().positive(),
+    distanceKm: z.number().nonnegative().nullable().optional(),
+    sessionOrder: z.number().int().min(0).optional(),
+    notes: z.string().max(1000).optional(),
+    isCompleted: z.boolean().optional()
+});
+export const patchCardioSessionSchema = z.object({
+    durationSeconds: z.number().int().positive().optional(),
+    distanceKm: z.number().nonnegative().nullable().optional(),
+    sessionOrder: z.number().int().min(0).optional(),
     notes: z.string().max(1000).nullable().optional(),
     isCompleted: z.boolean().optional()
 });

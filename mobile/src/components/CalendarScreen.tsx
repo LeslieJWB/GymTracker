@@ -54,7 +54,11 @@ export function CalendarScreen({
 
   const markedDates = useMemo(
     () =>
-      new Set(recordSummaries.filter((item) => item.setCount > 0).map((item) => item.date)),
+      new Set(
+        recordSummaries
+          .filter((item) => item.setCount > 0 || item.sessionCount > 0)
+          .map((item) => item.date)
+      ),
     [recordSummaries]
   );
   const activeDays = markedDates.size;

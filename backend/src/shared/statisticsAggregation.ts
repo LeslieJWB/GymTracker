@@ -186,3 +186,48 @@ export function aggregateExerciseHistory(
   out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return out;
 }
+
+type CardioDaily = {
+  date: string;
+  dailyDurationSeconds: number;
+  dailyDistanceKm: number;
+  longestSessionSeconds: number;
+};
+
+export function aggregateCardioHistory(rows: CardioDaily[], g: Granularity): CardioDaily[] {
+  if (g === "day") {
+    return rows;
+  }
+  const groups = new Map<
+    string,
+    {
+      durations: number[];
+      distances: number[];
+      longestSessions: number[];
+    }
+  >();
+  for (const row of rows) {
+    const key = bucketStartDate(row.date, g);
+    let bucket = groups.get(key);
+    if (!bucket) {
+      bucket = { durations: [], distances: [], longestSessions: [] };
+      groups.set(key, bucket);
+    }
+    bucket.durations.push(row.dailyDurationSeconds);
+    bucket.distances.push(row.dailyDistanceKm);
+    bucket.longestSessions.push(row.longestSessionSeconds);
+  }
+  const out: CardioDaily[] = [];
+  for (const [bucketStart, bucket] of groups) {
+    const n = bucket.durations.length;
+    if (n === 0) continue;
+    out.push({
+      date: bucketStart,
+      dailyDurationSeconds: bucket.durations.reduce((a, b) => a + b, 0) / n,
+      dailyDistanceKm: bucket.distances.reduce((a, b) => a + b, 0) / n,
+      longestSessionSeconds: Math.max(...bucket.longestSessions)
+    });
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
+}

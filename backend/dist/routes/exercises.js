@@ -3,6 +3,8 @@ import { Router } from "express";
 import { pool } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { upsertUserFromAuth } from "../shared/authUsers.js";
+import { isCardioCategory } from "../shared/exerciseCategories.js";
+import { toExerciseImageUrl } from "../shared/exerciseImageUrl.js";
 import { findIdempotentResponse, idempotencyHeader, saveIdempotentResponse } from "../shared/idempotency.js";
 import { createSetSchema, idSchema, patchExerciseSchema, patchSetSchema } from "../shared/validation.js";
 export const exercisesRouter = Router();
@@ -23,6 +25,8 @@ exercisesRouter.get("/exercises/:exerciseId", async (req, res) => {
           e.record_id,
           e.exercise_item_id,
           ei.name AS exercise_item_name,
+          ei.category AS exercise_item_category,
+          ei.image_path AS exercise_item_image_path,
           e.notes,
           e.sort_order,
           e.updated_at::text
@@ -37,6 +41,35 @@ exercisesRouter.get("/exercises/:exerciseId", async (req, res) => {
             return res.status(404).json({ error: "Exercise not found" });
         }
         const exercise = exerciseResult.rows[0];
+        const isCardio = isCardioCategory(exercise.exercise_item_category);
+        if (isCardio) {
+            const sessionsResult = await pool.query(`
+          SELECT id, duration_seconds, distance_km::text, session_order, notes, is_completed
+          FROM cardio_sessions
+          WHERE exercise_id = $1
+          ORDER BY session_order ASC, created_at ASC
+        `, [exerciseId]);
+            return res.json({
+                id: exercise.id,
+                recordId: exercise.record_id,
+                exerciseItemId: exercise.exercise_item_id,
+                exerciseItemName: exercise.exercise_item_name,
+                exerciseItemCategory: exercise.exercise_item_category,
+                exerciseItemImageUrl: toExerciseImageUrl(exercise.exercise_item_image_path),
+                notes: exercise.notes,
+                sortOrder: exercise.sort_order,
+                updatedAt: exercise.updated_at,
+                sets: [],
+                sessions: sessionsResult.rows.map((sessionRow) => ({
+                    id: sessionRow.id,
+                    durationSeconds: sessionRow.duration_seconds,
+                    distanceKm: sessionRow.distance_km !== null ? Number(sessionRow.distance_km) : null,
+                    sessionOrder: sessionRow.session_order,
+                    notes: sessionRow.notes,
+                    isCompleted: sessionRow.is_completed
+                }))
+            });
+        }
         const setsResult = await pool.query(`
         SELECT id, reps, weight::text, set_order, notes, is_completed
         FROM exercise_sets
@@ -48,6 +81,8 @@ exercisesRouter.get("/exercises/:exerciseId", async (req, res) => {
             recordId: exercise.record_id,
             exerciseItemId: exercise.exercise_item_id,
             exerciseItemName: exercise.exercise_item_name,
+            exerciseItemCategory: exercise.exercise_item_category,
+            exerciseItemImageUrl: toExerciseImageUrl(exercise.exercise_item_image_path),
             notes: exercise.notes,
             sortOrder: exercise.sort_order,
             updatedAt: exercise.updated_at,
@@ -58,7 +93,8 @@ exercisesRouter.get("/exercises/:exerciseId", async (req, res) => {
                 setOrder: setRow.set_order,
                 notes: setRow.notes,
                 isCompleted: setRow.is_completed
-            }))
+            })),
+            sessions: []
         });
     }
     catch (error) {
@@ -160,14 +196,18 @@ exercisesRouter.post("/exercises/:exerciseId/sets", async (req, res) => {
     }
     try {
         const ownership = await pool.query(`
-        SELECT e.id
+        SELECT e.id, ei.category
         FROM exercises e
+        JOIN exercise_items ei ON ei.id = e.exercise_item_id
         JOIN records r ON r.id = e.record_id
         WHERE e.id = $1 AND r.user_id = $2
         LIMIT 1
       `, [exerciseId, appUser.id]);
         if (ownership.rowCount === 0) {
             return res.status(404).json({ error: "Exercise not found for user" });
+        }
+        if (isCardioCategory(ownership.rows[0].category)) {
+            return res.status(400).json({ error: "Strength sets cannot be added to cardio exercises" });
         }
         const id = randomUUID();
         const result = await pool.query(`
