@@ -263,6 +263,7 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [authActionLoading, setAuthActionLoading] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [recordSummaries, setRecordSummaries] = useState<RecordSummary[]>([]);
@@ -882,6 +883,21 @@ function AppContent() {
       Alert.alert("Failed to save profile", String(error));
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  async function deleteAccount(): Promise<void> {
+    setDeletingAccount(true);
+    try {
+      await apiJson("/me/account", { method: "DELETE" });
+      await signOut();
+      Alert.alert("Account deleted", "Your account and data have been permanently removed.");
+    } catch (error) {
+      const parsed = parseApiErrorPayload(error);
+      Alert.alert("Could not delete account", parsed.message);
+      throw error;
+    } finally {
+      setDeletingAccount(false);
     }
   }
 
@@ -3309,6 +3325,8 @@ function AppContent() {
               onSignOut={() => {
                 signOut().catch(() => {});
               }}
+              onDeleteAccount={deleteAccount}
+              deletingAccount={deletingAccount}
             />
           </View>
         ) : null}

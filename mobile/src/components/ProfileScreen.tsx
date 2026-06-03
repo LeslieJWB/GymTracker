@@ -55,6 +55,8 @@ type ProfileScreenProps = {
     globalLlmPrompt: string | null;
   }) => Promise<void>;
   onSignOut: () => void;
+  onDeleteAccount: () => Promise<void>;
+  deletingAccount: boolean;
 };
 
 function toInput(profile: UserProfile | null): ProfileInput {
@@ -142,11 +144,15 @@ export function ProfileScreen({
   onOpenSubscription,
   onRestoreSubscription,
   onSave,
-  onSignOut
+  onSignOut,
+  onDeleteAccount,
+  deletingAccount
 }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<ProfileInput>(() => toInput(profile));
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [pendingDate, setPendingDate] = useState<Date>(() => parseDateValue(profile?.dateOfBirth ?? "") ?? new Date());
 
   useEffect(() => {
@@ -183,6 +189,24 @@ export function ProfileScreen({
   };
 
   const avatarColor = getAvatarColor(profile);
+  const deleteConfirmed = deleteConfirmText.trim().toLowerCase() === "delete";
+
+  const closeDeleteModal = () => {
+    if (deletingAccount) {
+      return;
+    }
+    setShowDeleteModal(false);
+    setDeleteConfirmText("");
+  };
+
+  const handleDeleteAccount = () => {
+    onDeleteAccount()
+      .then(() => {
+        setShowDeleteModal(false);
+        setDeleteConfirmText("");
+      })
+      .catch(() => {});
+  };
 
   return (
     <KeyboardAwareScrollView
@@ -216,6 +240,16 @@ export function ProfileScreen({
           <View style={styles.providerBadge}>
             <Text style={styles.providerBadgeText}>{formatProvider(profile?.authProvider)}</Text>
           </View>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.infoRow}>
+          <Pressable
+            onPress={() => setShowDeleteModal(true)}
+            hitSlop={8}
+            disabled={deletingAccount}
+          >
+            <Text style={styles.deleteAccountLinkText}>Delete account</Text>
+          </Pressable>
         </View>
       </AppCard>
 
@@ -473,6 +507,41 @@ export function ProfileScreen({
           </View>
         </ModalShell>
       ) : null}
+      <ModalShell visible={showDeleteModal} animationType="slide" onRequestClose={closeDeleteModal}>
+        <View style={styles.modalHeader}>
+          <Pressable hitSlop={12} onPress={closeDeleteModal} disabled={deletingAccount}>
+            <Text style={[styles.modalCancel, deletingAccount && styles.modalActionDisabled]}>Cancel</Text>
+          </Pressable>
+          <Text style={styles.modalTitle}>Delete Account</Text>
+          <View style={styles.modalHeaderSpacer} />
+        </View>
+        <View style={styles.deleteModalBody}>
+          <Text style={styles.deleteModalWarning}>
+            This permanently removes your account, workouts, exercises, nutrition logs, body metrics, templates, and AI
+            history. You will not be able to sign in again.
+          </Text>
+          <Text style={styles.deleteModalPrompt}>Type delete to confirm:</Text>
+          <AppTextInput
+            style={styles.deleteConfirmInput}
+            value={deleteConfirmText}
+            onChangeText={setDeleteConfirmText}
+            placeholder="delete"
+            placeholderTextColor="#A29F94"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!deletingAccount}
+          />
+          <AppButton
+            style={styles.deleteConfirmButton}
+            textStyle={styles.signOutLabel}
+            variant="danger"
+            disabled={!deleteConfirmed || deletingAccount}
+            onPress={handleDeleteAccount}
+          >
+            {deletingAccount ? "Deleting..." : "Delete permanently"}
+          </AppButton>
+        </View>
+      </ModalShell>
     </KeyboardAwareScrollView>
   );
 }
@@ -612,6 +681,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#5D7052"
+  },
+  deleteAccountLinkText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#A85448"
   },
 
   fieldGroup: {
@@ -781,5 +855,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#5D7052",
     fontWeight: "700"
+  },
+  modalHeaderSpacer: {
+    width: 52
+  },
+  modalActionDisabled: {
+    opacity: 0.4
+  },
+  deleteModalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 32
+  },
+  deleteModalWarning: {
+    fontSize: 15,
+    color: "#2C2C24",
+    lineHeight: 22,
+    marginBottom: 20
+  },
+  deleteModalPrompt: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#475569",
+    marginBottom: 8
+  },
+  deleteConfirmInput: {
+    backgroundColor: "#FFFFFFCC",
+    borderRadius: radius.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: "#2C2C24",
+    borderWidth: 1,
+    borderColor: "#DED8CF",
+    marginBottom: 16
+  },
+  deleteConfirmButton: {
+    backgroundColor: "#A85448",
+    borderColor: "#A85448"
   }
 });

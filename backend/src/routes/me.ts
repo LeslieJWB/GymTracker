@@ -5,6 +5,7 @@ import { pool } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { upsertUserFromAuth } from "../shared/authUsers.js";
 import { getLlmQuotaStatus } from "../shared/llmQuota.js";
+import { deleteAccount } from "../shared/deleteAccount.js";
 import { syncSubscriberFromRevenueCat } from "../shared/revenueCatSync.js";
 
 const subscriptionSyncSchema = z.object({
@@ -155,6 +156,20 @@ meRouter.get("/me/profile", async (req, res) => {
       globalLlmPrompt: row?.global_llm_prompt ?? null,
       profileInitialized: row?.profile_initialized ?? false
     });
+  } catch (error) {
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+meRouter.delete("/me/account", async (req, res) => {
+  if (!req.auth) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const user = await upsertUserFromAuth(req.auth);
+    await deleteAccount(user.id, req.auth.supabaseUserId);
+    return res.status(204).send();
   } catch (error) {
     return res.status(500).json({ error: String(error) });
   }
