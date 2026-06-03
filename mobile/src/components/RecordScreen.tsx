@@ -273,11 +273,13 @@ export function RecordScreen({
   const { keyboardVisible, focusedInputCurrent, setToolbarSuppressed } = useKeyboardSystem();
   const keyboardAccessoryVisible = keyboardVisible || focusedInputCurrent >= 0;
   const foodComposerToolbarEnabled = showFoodComposerModal && keyboardAccessoryVisible;
+  const exerciseSearchToolbarEnabled = showExerciseSearchModal && keyboardAccessoryVisible;
   const setNotesToolbarEnabled = setNotesTarget !== null && keyboardAccessoryVisible;
   const sessionNotesToolbarEnabled = sessionNotesTarget !== null && keyboardAccessoryVisible;
   const exerciseNotesToolbarEnabled = exerciseNotesTarget !== null && keyboardAccessoryVisible;
   const keyboardModalOpen =
     showFoodComposerModal ||
+    showExerciseSearchModal ||
     setNotesTarget !== null ||
     sessionNotesTarget !== null ||
     exerciseNotesTarget !== null;
@@ -1422,58 +1424,64 @@ export function RecordScreen({
         animationType="fade"
         onRequestClose={closeExerciseSearchModal}
       >
-        <View style={styles.modalBackdrop}>
-          <Pressable style={styles.modalBackdropTapTarget} onPress={closeExerciseSearchModal} />
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>
-                {exerciseSearchMode === "cardio" ? "Find Cardio Exercise" : "Find Strength Exercise"}
+        <View style={styles.keyboardModalRoot}>
+          <KeyboardAvoidingView
+            style={styles.modalBackdrop}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={16 + keyboardToolbarBottomInset()}
+          >
+            <Pressable style={styles.modalBackdropTapTarget} onPress={closeExerciseSearchModal} />
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>
+                  {exerciseSearchMode === "cardio" ? "Find Cardio Exercise" : "Find Strength Exercise"}
+                </Text>
+                <TouchableOpacity style={styles.modalCloseButton} onPress={closeExerciseSearchModal}>
+                  <Text style={styles.modalCloseButtonText}>x</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.modalSubtitle}>
+                {exerciseSearchMode === "cardio"
+                  ? "Search and pick a cardio exercise to log duration and distance."
+                  : "Search and pick a strength exercise to start logging sets."}
               </Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={closeExerciseSearchModal}>
-                <Text style={styles.modalCloseButtonText}>x</Text>
+              <TextInput
+                style={styles.searchInput}
+                value={exerciseSearchTerm}
+                onChangeText={setExerciseSearchTerm}
+                placeholder="Search exercises..."
+                placeholderTextColor="#78786C"
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              <ScrollView style={styles.searchList} keyboardShouldPersistTaps="handled">
+                {filteredExerciseItems.length === 0 ? (
+                  <View style={styles.emptySetCard}>
+                    <Text style={appStyles.emptyText}>No exercises match your search.</Text>
+                  </View>
+                ) : (
+                  filteredExerciseItems.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      style={styles.searchResultRow}
+                      onPress={() => {
+                        chooseExerciseForInPlaceAdd(item).catch(() => {});
+                      }}
+                    >
+                      <Text style={styles.searchResultName}>{item.name}</Text>
+                      <Text style={styles.searchResultMeta}>
+                        {exerciseSearchMode === "cardio" ? "Cardio" : item.muscleGroup ?? "General"}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </ScrollView>
+              <TouchableOpacity style={styles.cancelButton} onPress={closeExerciseSearchModal}>
+                <Text style={styles.cancelButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>
-              {exerciseSearchMode === "cardio"
-                ? "Search and pick a cardio exercise to log duration and distance."
-                : "Search and pick a strength exercise to start logging sets."}
-            </Text>
-            <TextInput
-              style={styles.searchInput}
-              value={exerciseSearchTerm}
-              onChangeText={setExerciseSearchTerm}
-  
-              placeholder="Search exercises..."
-              placeholderTextColor="#78786C"
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            <ScrollView style={styles.searchList} keyboardShouldPersistTaps="handled">
-              {filteredExerciseItems.length === 0 ? (
-                <View style={styles.emptySetCard}>
-                  <Text style={appStyles.emptyText}>No exercises match your search.</Text>
-                </View>
-              ) : (
-                filteredExerciseItems.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    style={styles.searchResultRow}
-                    onPress={() => {
-                      chooseExerciseForInPlaceAdd(item).catch(() => {});
-                    }}
-                  >
-                    <Text style={styles.searchResultName}>{item.name}</Text>
-                    <Text style={styles.searchResultMeta}>
-                      {exerciseSearchMode === "cardio" ? "Cardio" : item.muscleGroup ?? "General"}
-                    </Text>
-                  </Pressable>
-                ))
-              )}
-            </ScrollView>
-            <TouchableOpacity style={styles.cancelButton} onPress={closeExerciseSearchModal}>
-              <Text style={styles.cancelButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
+          </KeyboardAvoidingView>
+          <AppKeyboardToolbar enabled={exerciseSearchToolbarEnabled} />
         </View>
       </Modal>
 
