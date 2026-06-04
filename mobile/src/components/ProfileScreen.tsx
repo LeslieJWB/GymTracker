@@ -7,6 +7,7 @@ import { keyboardToolbarBottomInset } from "../keyboard/keyboardToolbarInset";
 import { AppButton } from "./ui/AppButton";
 import { AppCard } from "./ui/AppCard";
 import { AppTextInput } from "./ui/AppTextInput";
+import { LegalLinksRow } from "./ui/LegalLinksRow";
 import { ModalShell } from "./ui/ModalShell";
 import { radius, textStyles } from "../styles/theme";
 import type { UserProfile } from "../types/workout";
@@ -425,6 +426,8 @@ export function ProfileScreen({
               : "Subscriptions are available on iOS. Sign in on an iPhone to upgrade."}
           </Text>
         )}
+        <View style={styles.legalLinksSpacer} />
+        <LegalLinksRow />
       </AppCard>
 
       {/* LLM Prompt */}
@@ -671,6 +674,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#78786C",
     lineHeight: 20
+  },
+  legalLinksSpacer: {
+    height: 12
   },
   restoreLink: {
     alignSelf: "center",

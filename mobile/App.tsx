@@ -29,6 +29,7 @@ import { NewExerciseDraft, NewExerciseSetDraft, RecordScreen } from "./src/compo
 import { ProfileScreen, type LlmQuotaStatus } from "./src/components/ProfileScreen";
 import { StatisticsScreen } from "./src/components/StatisticsScreen";
 import { ModalShell } from "./src/components/ui/ModalShell";
+import { LegalLinksRow } from "./src/components/ui/LegalLinksRow";
 import { keyboardToolbarBottomInset } from "./src/keyboard/keyboardToolbarInset";
 import { KeyboardSystemProvider } from "./src/keyboard/KeyboardSystemProvider";
 import { useAppLifecycleEffects } from "./src/hooks/useAppLifecycleEffects";
@@ -67,6 +68,7 @@ import { formatDuration, parseDurationInput } from "./src/utils/duration";
 import { isCardioCategory, isStrengthCategory } from "./src/utils/exerciseCategories";
 import { digitsOnly, sanitizeBodyFatInput, sanitizeWeightInput } from "./src/utils/inputSanitizers";
 import { requestKey } from "./src/utils/request";
+import { formatSubscriptionPeriod, formatSubscriptionPriceLine } from "./src/utils/subscriptionDisplay";
 import { organicShapes, palette, radius, shadows, textStyles, withPressScale } from "./src/styles/theme";
 
 /** Base URL for API calls; must be absolute (include https:// or http:// for local). */
@@ -3451,13 +3453,19 @@ function AppContent() {
                 <View style={styles.subscriptionPackageTextWrap}>
                   <Text style={styles.subscriptionPackageTitle}>{pkg.product.title}</Text>
                   <Text style={styles.subscriptionPackageSubtitle}>
-                    {pkg.product.description || "Higher daily AI quota"}
+                    {formatSubscriptionPeriod(pkg)} • {pkg.product.description || "Higher daily AI quota"}
                   </Text>
                 </View>
-                <Text style={styles.subscriptionPackagePrice}>{pkg.product.priceString}</Text>
+                <Text style={styles.subscriptionPackagePrice}>{formatSubscriptionPriceLine(pkg)}</Text>
               </Pressable>
             ))}
           </View>
+          <Text style={styles.subscriptionDisclosure}>
+            Payment will be charged to your Apple ID account at confirmation of purchase. Subscription automatically
+            renews unless canceled at least 24 hours before the end of the current period. Manage or cancel anytime in
+            App Store account settings.
+          </Text>
+          <LegalLinksRow centered />
           <View style={styles.subscriptionActions}>
             <Pressable
               style={({ pressed }) => [styles.subscriptionSecondaryButton, withPressScale(pressed)]}
@@ -3892,8 +3900,15 @@ const styles = StyleSheet.create({
   },
   subscriptionPackagePrice: {
     color: palette.primary,
-    fontSize: 16,
-    fontFamily: textStyles.bodyBold.fontFamily
+    fontSize: 14,
+    fontFamily: textStyles.bodyBold.fontFamily,
+    textAlign: "right"
+  },
+  subscriptionDisclosure: {
+    color: palette.mutedForeground,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: textStyles.body.fontFamily
   },
   subscriptionActions: {
     flexDirection: "row",

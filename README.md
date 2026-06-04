@@ -57,7 +57,7 @@ Backend run mode notes:
    - Create `mobile/.env` from `mobile/.env.example` and set:
      - `EXPO_PUBLIC_SUPABASE_URL=...`
      - `EXPO_PUBLIC_SUPABASE_ANON_KEY=...`
-     - `EXPO_PUBLIC_BACKEND_URL=http://localhost:4000` (local) or your deployed backend URL
+   - `EXPO_PUBLIC_BACKEND_URL=https://intellifit.net` (production) or `http://localhost:4000` (local)
    - Start Metro: `npm run mobile`
 2. iOS simulator (development build):
    - Install/update dev build on simulator: `npm --prefix mobile run ios`
@@ -121,7 +121,7 @@ Notes:
 ### 5) Point mobile app to production backend
 
 1. In `mobile/.env`, set:
-   - `EXPO_PUBLIC_BACKEND_URL=https://<your-render-service>.onrender.com`
+   - `EXPO_PUBLIC_BACKEND_URL=https://intellifit.net`
 2. Restart Expo so the updated env var is loaded.
 3. Validate record, exercise, food, and advice flows from the mobile app.
 

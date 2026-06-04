@@ -10,6 +10,7 @@ import { exerciseItemsRouter } from "./routes/exerciseItems.js";
 import { exercisesRouter } from "./routes/exercises.js";
 import { foodRouter } from "./routes/food.js";
 import { healthRouter } from "./routes/health.js";
+import { legalRouter } from "./routes/legal.js";
 import { meRouter } from "./routes/me.js";
 import { recordsRouter } from "./routes/records.js";
 import { revenueCatRouter } from "./routes/revenuecat.js";
@@ -51,6 +52,7 @@ app.use((req, res, next) => {
 });
 
 app.use(healthRouter);
+app.use(legalRouter);
 app.use(revenueCatRouter);
 app.use(meRouter);
 app.use(exerciseItemsRouter);

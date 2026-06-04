@@ -15,7 +15,12 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://intellifit.net",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://intellifit.net/legal/privacy",
+        "EXPO_PUBLIC_TERMS_OF_USE_URL": "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+      }
     }
   },
   "submit": {
