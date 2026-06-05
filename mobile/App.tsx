@@ -379,6 +379,13 @@ function AppContent() {
   }, [session?.user.id]);
 
   useEffect(() => {
+    setSubscriptionActive(null);
+    setLlmQuota(null);
+    setLlmQuotaError(null);
+    setSubscriptionError(null);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
     if (!revenueCatConfiguredRef.current || !session?.user.id) {
       return;
     }
@@ -389,6 +396,15 @@ function AppContent() {
 
   function hasActiveSubscription(customerInfo: CustomerInfo): boolean {
     return Boolean(customerInfo.entitlements.active[REVENUECAT_ENTITLEMENT_ID]);
+  }
+
+  function subscriptionActiveFromBackend(
+    quota: LlmQuotaStatus | null,
+    backendActive?: boolean
+  ): boolean {
+    return (
+      backendActive === true || quota?.tier === "subscriber" || quota?.tier === "unlimited"
+    );
   }
 
   function buildClientSubscriptionReport(customerInfo: CustomerInfo): {
@@ -419,39 +435,43 @@ function AppContent() {
         headers: { "Content-Type": "application/json" },
         body: body ? JSON.stringify(body) : undefined
       });
-      if (typeof result.subscriptionActive === "boolean") {
-        setSubscriptionActive(result.subscriptionActive);
-      }
-      setLlmQuota({
+      const quota: LlmQuotaStatus = {
         tier: result.tier,
         limit: result.limit,
         used: result.used
-      });
+      };
+      setLlmQuota(quota);
+      if (typeof result.subscriptionActive === "boolean") {
+        setSubscriptionActive(subscriptionActiveFromBackend(quota, result.subscriptionActive));
+      }
       setLlmQuotaError(null);
     } catch {
       // Sync is best-effort; quota can still be loaded separately.
     }
   }
 
-  async function refreshSubscriptionStatus(): Promise<void> {
+  async function refreshSubscriptionStatus(quota?: LlmQuotaStatus | null): Promise<void> {
+    const resolvedQuota = quota ?? llmQuota;
+    setSubscriptionActive(subscriptionActiveFromBackend(resolvedQuota));
     if (!subscriptionAvailable || !revenueCatConfiguredRef.current) {
-      setSubscriptionActive(null);
       return;
     }
     try {
       const customerInfo = await Purchases.getCustomerInfo();
-      const active = hasActiveSubscription(customerInfo);
-      setSubscriptionActive(active);
+      const clientActive = hasActiveSubscription(customerInfo);
+      const backendActive = subscriptionActiveFromBackend(resolvedQuota);
+      // Keep device subscription flag for mismatch UI; do not mark Pro unless backend grants quota.
+      setSubscriptionActive(clientActive || backendActive);
     } catch {
-      setSubscriptionActive(null);
+      setSubscriptionActive(subscriptionActiveFromBackend(resolvedQuota));
     }
   }
 
-  async function loadLlmQuota(): Promise<void> {
+  async function loadLlmQuota(): Promise<LlmQuotaStatus | null> {
     if (!session?.access_token) {
       setLlmQuota(null);
       setLlmQuotaError(null);
-      return;
+      return null;
     }
     setLlmQuotaLoading(true);
     setLlmQuotaError(null);
@@ -459,6 +479,7 @@ function AppContent() {
       const status = await apiJson<LlmQuotaStatus>("/me/llm-quota");
       setLlmQuota(status);
       setLlmQuotaError(null);
+      return status;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       setLlmQuota(null);
@@ -467,9 +488,36 @@ function AppContent() {
       } else {
         setLlmQuotaError("Couldn't load today's AI usage. Check your connection and try again.");
       }
+      return null;
     } finally {
       setLlmQuotaLoading(false);
     }
+  }
+
+  async function refreshSubscriptionStateForSession(): Promise<void> {
+    if (!session?.access_token || !session.user.id) {
+      return;
+    }
+    if (subscriptionAvailable && revenueCatConfiguredRef.current) {
+      try {
+        await Purchases.logIn(session.user.id);
+      } catch {
+        setSubscriptionError("Could not connect to subscription service.");
+      }
+    }
+    await syncSubscriptionWithBackend();
+    const quota = await loadLlmQuota();
+    await refreshSubscriptionStatus(quota);
+  }
+
+  async function handleSignOut(): Promise<void> {
+    if (revenueCatConfiguredRef.current) {
+      await Purchases.logOut().catch(() => {});
+    }
+    setSubscriptionActive(null);
+    setLlmQuota(null);
+    setLlmQuotaError(null);
+    await signOut();
   }
 
   async function loadSubscriptionOffering(): Promise<void> {
@@ -566,12 +614,8 @@ function AppContent() {
     if (screen !== "profile" || !session?.access_token) {
       return;
     }
-    (async () => {
-      await syncSubscriptionWithBackend();
-      await refreshSubscriptionStatus();
-      await loadLlmQuota();
-    })().catch(() => {});
-  }, [screen, session?.access_token]);
+    refreshSubscriptionStateForSession().catch(() => {});
+  }, [screen, session?.access_token, session?.user?.id]);
 
   async function apiJson<T = unknown>(path: string, init?: RequestInit, authRetried = false): Promise<T> {
     const headers = new Headers(init?.headers ?? {});
@@ -592,7 +636,7 @@ function AppContent() {
         }
       }
       if (response.status === 401) {
-        signOut().catch(() => {});
+        handleSignOut().catch(() => {});
       }
       const parsed = parseApiErrorPayload(new Error(raw || `HTTP ${response.status}`));
       if (parsed.quota?.reason === "free") {
@@ -892,7 +936,7 @@ function AppContent() {
     setDeletingAccount(true);
     try {
       await apiJson("/me/account", { method: "DELETE" });
-      await signOut();
+      await handleSignOut();
       Alert.alert("Account deleted", "Your account and data have been permanently removed.");
     } catch (error) {
       const parsed = parseApiErrorPayload(error);
@@ -3325,7 +3369,7 @@ function AppContent() {
               }}
               onSave={saveProfile}
               onSignOut={() => {
-                signOut().catch(() => {});
+                handleSignOut().catch(() => {});
               }}
               onDeleteAccount={deleteAccount}
               deletingAccount={deletingAccount}
@@ -3465,7 +3509,7 @@ function AppContent() {
             renews unless canceled at least 24 hours before the end of the current period. Manage or cancel anytime in
             App Store account settings.
           </Text>
-          <LegalLinksRow centered />
+          <LegalLinksRow />
           <View style={styles.subscriptionActions}>
             <Pressable
               style={({ pressed }) => [styles.subscriptionSecondaryButton, withPressScale(pressed)]}

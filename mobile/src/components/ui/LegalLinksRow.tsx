@@ -1,9 +1,10 @@
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../config/legalUrls";
-import { palette, textStyles } from "../../styles/theme";
+import { palette, spacing, textStyles, withPressScale } from "../../styles/theme";
 
 type LegalLinksRowProps = {
   centered?: boolean;
+  showDivider?: boolean;
 };
 
 async function openLegalUrl(url: string): Promise<void> {
@@ -14,49 +15,61 @@ async function openLegalUrl(url: string): Promise<void> {
   await Linking.openURL(url);
 }
 
-export function LegalLinksRow({ centered = false }: LegalLinksRowProps) {
+function LegalLink({ label, url }: { label: string; url: string }) {
   return (
-    <View style={[styles.row, centered ? styles.rowCentered : null]}>
-      <Pressable
-        hitSlop={8}
-        onPress={() => {
-          openLegalUrl(TERMS_OF_USE_URL).catch(() => {});
-        }}
-      >
-        <Text style={styles.link}>Terms of Use</Text>
-      </Pressable>
-      <Text style={styles.separator}>•</Text>
-      <Pressable
-        hitSlop={8}
-        onPress={() => {
-          openLegalUrl(PRIVACY_POLICY_URL).catch(() => {});
-        }}
-      >
-        <Text style={styles.link}>Privacy Policy</Text>
-      </Pressable>
+    <Pressable
+      hitSlop={8}
+      style={({ pressed }) => [styles.linkButton, withPressScale(pressed)]}
+      onPress={() => {
+        openLegalUrl(url).catch(() => {});
+      }}
+    >
+      <Text style={styles.link}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export function LegalLinksRow({ centered = true, showDivider = true }: LegalLinksRowProps) {
+  return (
+    <View style={[styles.container, showDivider ? styles.containerWithDivider : null]}>
+      <View style={[styles.row, centered ? styles.rowCentered : null]}>
+        <LegalLink label="Terms of Use" url={TERMS_OF_USE_URL} />
+        <View style={styles.separator} />
+        <LegalLink label="Privacy Policy" url={PRIVACY_POLICY_URL} />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    marginTop: spacing.sm
+  },
+  containerWithDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.border,
+    paddingTop: spacing.md
+  },
   row: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: 8
+    gap: spacing.sm
   },
   rowCentered: {
     justifyContent: "center"
   },
+  linkButton: {
+    paddingVertical: 2
+  },
   link: {
     color: palette.primary,
     fontSize: 13,
-    fontFamily: textStyles.bodyBold.fontFamily,
-    textDecorationLine: "underline"
+    fontFamily: textStyles.bodySemiBold.fontFamily,
+    letterSpacing: 0.15
   },
   separator: {
-    color: palette.mutedForeground,
-    fontSize: 13,
-    fontFamily: textStyles.body.fontFamily
+    width: StyleSheet.hairlineWidth,
+    height: 14,
+    backgroundColor: palette.border
   }
 });

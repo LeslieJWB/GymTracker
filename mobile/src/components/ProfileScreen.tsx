@@ -35,6 +35,19 @@ export function isFreeTierQuotaExhausted(quota: LlmQuotaStatus | null): boolean 
   return quota?.tier === "free" && quota.limit !== null && quota.used >= quota.limit;
 }
 
+/** Pro status for UI and quota — backend tier is authoritative (what AI limits enforce). */
+export function hasProQuota(quota: LlmQuotaStatus | null): boolean {
+  return quota?.tier === "subscriber" || quota?.tier === "unlimited";
+}
+
+/** RevenueCat/Apple may still show active while backend tier is free (expired, sync lag, etc.). */
+export function hasSubscriptionMismatch(
+  quota: LlmQuotaStatus | null,
+  subscriptionActive: boolean | null
+): boolean {
+  return subscriptionActive === true && !hasProQuota(quota);
+}
+
 type ProfileScreenProps = {
   profile: UserProfile | null;
   saving: boolean;
@@ -121,15 +134,12 @@ function formatQuotaSummary(quota: LlmQuotaStatus | null, error: string | null):
   return `${quota.used} of ${quota.limit} AI calls used today`;
 }
 
-function formatPlanLabel(quota: LlmQuotaStatus | null, subscriptionActive: boolean | null): string {
-  if (subscriptionActive) {
-    return "Pro subscriber";
-  }
-  if (quota?.tier === "subscriber") {
-    return "Pro subscriber";
-  }
+function formatPlanLabel(quota: LlmQuotaStatus | null): string {
   if (quota?.tier === "unlimited") {
     return "Unlimited";
+  }
+  if (hasProQuota(quota)) {
+    return "Pro subscriber";
   }
   return "Free plan";
 }
@@ -389,7 +399,7 @@ export function ProfileScreen({
         <View style={styles.infoRow}>
           <Text style={styles.infoKey}>Plan</Text>
           <View style={styles.planBadge}>
-            <Text style={styles.planBadgeText}>{formatPlanLabel(llmQuota, subscriptionActive)}</Text>
+            <Text style={styles.planBadgeText}>{formatPlanLabel(llmQuota)}</Text>
           </View>
         </View>
         <View style={styles.divider} />
@@ -406,10 +416,22 @@ export function ProfileScreen({
         {subscriptionAvailable ? (
           <>
             <View style={styles.subscriptionSpacer} />
-            {subscriptionActive ? (
+            {subscriptionActive === null && llmQuotaLoading ? (
+              <ActivityIndicator color="#5D7052" />
+            ) : hasProQuota(llmQuota) ? (
               <Text style={styles.subscriptionFootnote}>
                 Your subscription is active. Manage or cancel it anytime in the App Store.
               </Text>
+            ) : hasSubscriptionMismatch(llmQuota, subscriptionActive) ? (
+              <>
+                <Text style={styles.subscriptionFootnote}>
+                  Your App Store subscription may still be active, but Pro AI quota is not enabled on this
+                  account yet. Try restoring purchases to sync.
+                </Text>
+                <Pressable style={styles.restoreLink} onPress={onRestoreSubscription} hitSlop={8}>
+                  <Text style={styles.restoreLinkText}>Restore purchases</Text>
+                </Pressable>
+              </>
             ) : (
               <>
                 <AppButton onPress={onOpenSubscription}>View subscription plans</AppButton>
@@ -426,7 +448,6 @@ export function ProfileScreen({
               : "Subscriptions are available on iOS. Sign in on an iPhone to upgrade."}
           </Text>
         )}
-        <View style={styles.legalLinksSpacer} />
         <LegalLinksRow />
       </AppCard>
 
@@ -674,9 +695,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#78786C",
     lineHeight: 20
-  },
-  legalLinksSpacer: {
-    height: 12
   },
   restoreLink: {
     alignSelf: "center",
