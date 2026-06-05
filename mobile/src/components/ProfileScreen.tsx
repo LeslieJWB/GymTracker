@@ -4,6 +4,7 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { keyboardToolbarBottomInset } from "../keyboard/keyboardToolbarInset";
+import { bottomNavScrollInset } from "../layout/bottomNavInset";
 import { AppButton } from "./ui/AppButton";
 import { AppCard } from "./ui/AppCard";
 import { AppTextInput } from "./ui/AppTextInput";
@@ -160,6 +161,7 @@ export function ProfileScreen({
   deletingAccount
 }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
+  const navScrollInset = bottomNavScrollInset(insets);
   const [draft, setDraft] = useState<ProfileInput>(() => toInput(profile));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -222,11 +224,11 @@ export function ProfileScreen({
   return (
     <KeyboardAwareScrollView
       style={styles.screen}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: navScrollInset }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      bottomOffset={insets.bottom + 12 + keyboardToolbarBottomInset()}
+      bottomOffset={navScrollInset + keyboardToolbarBottomInset()}
       extraKeyboardSpace={keyboardToolbarBottomInset()}
     >
       {/* Avatar Hero */}
@@ -491,8 +493,6 @@ export function ProfileScreen({
         Sign Out
       </AppButton>
 
-      <View style={styles.footer} />
-
       {/* Date Picker Modals */}
       {Platform.OS === "android" && showDatePicker ? (
         <DateTimePicker
@@ -577,8 +577,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 32,
-    paddingBottom: 40
+    paddingTop: 32
   },
 
   heroSection: {
@@ -847,10 +846,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontFamily: textStyles.bodyBold.fontFamily,
     fontSize: 15
-  },
-
-  footer: {
-    height: 20
   },
 
   modalHeader: {

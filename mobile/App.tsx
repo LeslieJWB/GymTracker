@@ -30,6 +30,7 @@ import { ProfileScreen, type LlmQuotaStatus } from "./src/components/ProfileScre
 import { StatisticsScreen } from "./src/components/StatisticsScreen";
 import { ModalShell } from "./src/components/ui/ModalShell";
 import { LegalLinksRow } from "./src/components/ui/LegalLinksRow";
+import { bottomNavBarBottomOffset, bottomNavScrollInset } from "./src/layout/bottomNavInset";
 import { keyboardToolbarBottomInset } from "./src/keyboard/keyboardToolbarInset";
 import { KeyboardSystemProvider } from "./src/keyboard/KeyboardSystemProvider";
 import { useAppLifecycleEffects } from "./src/hooks/useAppLifecycleEffects";
@@ -233,11 +234,8 @@ function fallbackNutritionTargetsFromWeight(weightKg: number | null): { calories
 function AppContent() {
   const insets = useSafeAreaInsets();
   const bottomNavHorizontalInset = 16;
-  /** Sit just above the home indicator on notched iPhones; modest offset elsewhere. */
-  const bottomNavBarBottom = insets.bottom > 0 ? Math.max(12, insets.bottom - 16) : 12;
-  const bottomNavIslandHeight = 52;
-  /** Scroll inset so the last items can clear the floating nav — not layout padding. */
-  const bottomNavScrollInset = bottomNavIslandHeight + bottomNavBarBottom + Math.max(insets.bottom, 16);
+  const bottomNavBarBottom = bottomNavBarBottomOffset(insets);
+  const bottomNavScrollInsetValue = bottomNavScrollInset(insets);
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
@@ -3264,10 +3262,10 @@ function AppContent() {
         {screen === "record" ? (
           <KeyboardAwareScrollView
             style={appStyles.flex}
-            contentContainerStyle={[styles.recordScrollContent, { paddingBottom: bottomNavScrollInset }]}
+            contentContainerStyle={[styles.recordScrollContent, { paddingBottom: bottomNavScrollInsetValue }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
-            bottomOffset={bottomNavScrollInset + keyboardToolbarBottomInset()}
+            bottomOffset={bottomNavScrollInsetValue + keyboardToolbarBottomInset()}
             extraKeyboardSpace={keyboardToolbarBottomInset()}
           >
             <RecordScreen
